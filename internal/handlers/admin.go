@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -470,6 +471,197 @@ func (h *AdminHandler) AdminDeleteDigitalCard(c *fiber.Ctx) error {
 		h.Hub.Broadcast(0, "digital_cards", fiber.Map{"action": "deleted", "id": id})
 	}
 	return c.JSON(fiber.Map{"success": true})
+}
+
+// AdminAdjustWallet atomically updates a subscriber's wallet balance.
+// POST /api/admin/users/:id/wallet or POST /api/admin/wallet/credit
+func (h *AdminHandler) AdminAdjustWallet(c *fiber.Ctx) error {
+	id, err := paramID(c)
+	if err != nil || id <= 0 {
+		// Try reading user_id or target_user_id from body
+		var b struct {
+			UserID       int64   `json:"user_id"`
+			TargetUserID string  `json:"target_user_id"`
+			Amount       float64 `json:"amount"`
+			Note         string  `json:"note"`
+		}
+		_ = c.BodyParser(&b)
+		if b.UserID > 0 {
+			id = b.UserID
+		} else if b.TargetUserID != "" {
+			if parsed, pErr := strconv.ParseInt(b.TargetUserID, 10, 64); pErr == nil {
+				id = parsed
+			}
+		}
+	}
+	if id <= 0 {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "valid user id required"})
+	}
+
+	var req struct {
+		Amount float64 `json:"amount"`
+		Note   string  `json:"note"`
+	}
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid JSON body"})
+	}
+	if req.Amount == 0 {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "amount must not be zero"})
+	}
+
+	note := strings.TrimSpace(req.Note)
+	if note == "" {
+		if req.Amount > 0 {
+			note = "شحن رصيد يدوي من الإدارة"
+		} else {
+			note = "خصم رصيد يدوي من الإدارة"
+		}
+	}
+
+	tx, err := h.Pool.Begin(c.Context())
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "database error"})
+	}
+	defer tx.Rollback(c.Context())
+
+	var newBalance float64
+	err = tx.QueryRow(c.Context(),
+		`UPDATE users
+		 SET wallet_balance = COALESCE(wallet_balance, 0) + $1,
+		     updated_at = now()
+		 WHERE id = $2
+		 RETURNING wallet_balance`, req.Amount, id,
+	).Scan(&newBalance)
+	if err == pgx.ErrNoRows {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "user not found"})
+	}
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "could not update wallet balance"})
+	}
+
+	kind := "admin_credit"
+	if req.Amount < 0 {
+		kind = "admin_debit"
+	}
+	_, _ = tx.Exec(c.Context(),
+		`INSERT INTO wallet_ledger (user_id, amount, kind, provider, status, note, completed_at)
+		 VALUES ($1, $2, $3, 'admin', 'success', $4, now())`,
+		id, req.Amount, kind, note)
+
+	if err := tx.Commit(c.Context()); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "commit failed"})
+	}
+
+	h.audit(c, "WALLET_ADJUST", "user", itoa(id), map[string]any{
+		"amount": req.Amount, "new_balance": newBalance, "note": note,
+	})
+
+	if h.Hub != nil {
+		h.Hub.Broadcast(id, "wallet_updated", fiber.Map{
+			"user_id": id, "wallet_balance": newBalance, "amount": req.Amount, "note": note,
+		})
+	}
+
+	return c.JSON(fiber.Map{
+		"success":        true,
+		"user_id":        id,
+		"wallet_balance": newBalance,
+		"amount":         req.Amount,
+		"message":        "تم تعديل الرصيد بنجاح",
+	})
+}
+
+// AdminCreateUser allows Super Admin to add another Admin or Subscriber directly.
+// POST /api/admin/users
+func (h *AdminHandler) AdminCreateUser(c *fiber.Ctx) error {
+	var req struct {
+		Email     string `json:"email"`
+		Password  string `json:"password"`
+		FullName  string `json:"full_name"`
+		StoreName string `json:"store_name"`
+		Phone     string `json:"phone"`
+		Role      string `json:"role"` // "admin" or "subscriber"
+		Plan      string `json:"plan"` // "مشترك تجريبي", "سوبر اقتصادي", "بلص", "أعمال"
+	}
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid JSON body"})
+	}
+	req.Email = strings.ToLower(strings.TrimSpace(req.Email))
+	if !validEmail(req.Email) {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid email"})
+	}
+	if !validPassword(req.Password) {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "password must be at least 6 characters"})
+	}
+
+	role := strings.ToLower(strings.TrimSpace(req.Role))
+	if role != "admin" {
+		role = "subscriber"
+	}
+
+	planName := strings.TrimSpace(req.Plan)
+	var intervalStr string
+	if role == "admin" {
+		planName = "vip"
+		intervalStr = "3650 days"
+	} else {
+		switch planName {
+		case "أعمال":
+			intervalStr = "365 days"
+		case "بلص":
+			intervalStr = "180 days"
+		case "سوبر اقتصادي":
+			intervalStr = "30 days"
+		default:
+			planName = "مشترك تجريبي"
+			intervalStr = "2 days"
+		}
+	}
+
+	hash, err := hashPassword(req.Password)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "could not hash password"})
+	}
+
+	var (
+		id                 int64
+		subscriptionEndsAt time.Time
+	)
+	err = h.Pool.QueryRow(c.Context(),
+		`INSERT INTO users (email, password_hash, full_name, store_name, phone, role, is_approved, status, plan_name, subscription_ends_at)
+		 VALUES ($1, $2, $3, $4, $5, $6, TRUE, 'active', $7, now() + ($8 || ' days')::interval)
+		 ON CONFLICT (email) DO NOTHING
+		 RETURNING id, subscription_ends_at`,
+		req.Email, hash, strings.TrimSpace(req.FullName), strings.TrimSpace(req.StoreName),
+		strings.TrimSpace(req.Phone), role, planName, strings.TrimSuffix(intervalStr, " days"),
+	).Scan(&id, &subscriptionEndsAt)
+	if err == pgx.ErrNoRows {
+		return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": "email already registered"})
+	}
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "database error: " + err.Error()})
+	}
+
+	h.audit(c, "CREATE_USER", "user", itoa(id), map[string]any{
+		"email": req.Email, "role": role, "plan": planName, "full_name": req.FullName,
+	})
+
+	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
+		"success": true,
+		"id":      id,
+		"user": fiber.Map{
+			"id":                   id,
+			"email":                req.Email,
+			"full_name":            req.FullName,
+			"store_name":           req.StoreName,
+			"phone":                req.Phone,
+			"role":                 role,
+			"is_approved":          true,
+			"status":               "active",
+			"plan_name":            planName,
+			"subscription_ends_at": subscriptionEndsAt,
+		},
+	})
 }
 
 // superAdminEmail reads SUPER_ADMIN_EMAIL (default Mahmoudraheem76@gmail.com).

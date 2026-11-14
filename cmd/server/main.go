@@ -159,10 +159,13 @@ func main() {
 	// Admin-only area.
 	admin := api.Group("/admin", middleware.JWT(jwtSecret), middleware.AdminOnly())
 	admin.Get("/users", authH.ListUsers)
+	admin.Post("/users", adminH.AdminCreateUser)
 	admin.Put("/users/:id/approve", authH.ApproveUser)
 	admin.Put("/users/:id/credentials", authH.AdminChangeUserCredentials)
 	admin.Put("/users/:id", adminH.AdminUpdateUser)
 	admin.Delete("/users/:id", adminH.AdminDeleteUser)
+	admin.Post("/users/:id/wallet", adminH.AdminAdjustWallet)
+	admin.Post("/wallet/credit", adminH.AdminAdjustWallet)
 	admin.Get("/users/:id/backup", backupsH.Backup)
 	admin.Post("/users/:id/restore", backupsH.Restore)
 	admin.Get("/tickets", ticketsH.ListAllTickets)
@@ -177,9 +180,19 @@ func main() {
 	admin.Post("/digital-cards", adminH.AdminSaveDigitalCard)
 	admin.Put("/digital-cards/:id", adminH.AdminSaveDigitalCard)
 	admin.Delete("/digital-cards/:id", adminH.AdminDeleteDigitalCard)
+	admin.Post("/cards", adminH.AdminSaveDigitalCard)
+	admin.Put("/cards/:id", adminH.AdminSaveDigitalCard)
+	admin.Delete("/cards/:id", adminH.AdminDeleteDigitalCard)
 
 	// R5A: digital cards catalog for the mobile بطاقات screen.
 	auth.Get("/digital-cards", adminH.ListDigitalCards)
+	auth.Get("/cards", adminH.ListDigitalCards)
+
+	// Additional sales route aliases for seamless compatibility
+	auth.Post("/sim/sales", simH.SellSim)
+	auth.Get("/sim/sales", simH.ListSales)
+	auth.Post("/credit/sales", simH.AddCreditSale)
+	auth.Get("/credit/sales", simH.ListCreditSales)
 
 	// R5B: domain-isolated web console hosting:
 	// - console.urukiq.com: serves Flutter Web Admin Console

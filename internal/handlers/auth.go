@@ -69,27 +69,33 @@ func (h *AuthHandler) Login(c *fiber.Ctx) error {
 	}
 
 	var (
-		id           int64
-		email        string
-		passwordHash string
-		role         string
-		isApproved   bool
+		id                 int64
+		email              string
+		passwordHash       string
+		role               string
+		isApproved         bool
+		walletBalance      float64
+		status             string
+		planName           string
+		subscriptionEndsAt *time.Time
 	)
 	err := h.Pool.QueryRow(c.Context(),
-		`SELECT id, email, password_hash, role, is_approved FROM users WHERE email = $1`, req.Email,
-	).Scan(&id, &email, &passwordHash, &role, &isApproved)
+		`SELECT id, email, password_hash, role, is_approved,
+		        COALESCE(wallet_balance, 0), COALESCE(status, 'active'), COALESCE(plan_name, 'مشترك تجريبي'), subscription_ends_at
+		 FROM users WHERE email = $1`, req.Email,
+	).Scan(&id, &email, &passwordHash, &role, &isApproved, &walletBalance, &status, &planName, &subscriptionEndsAt)
 	if err == pgx.ErrNoRows {
 		// R1: re-seed the Super Admin if the clean reset removed it.
 		if h.SuperAdminEmail != "" && req.Email == strings.ToLower(strings.TrimSpace(h.SuperAdminEmail)) {
 			if hash, herr := hashPassword(req.Password); herr == nil {
 				var newID int64
 				if ierr := h.Pool.QueryRow(c.Context(),
-					`INSERT INTO users (email, password_hash, full_name, store_name, role, is_approved)
-					 VALUES ($1, $2, 'Super Admin', 'VENUS POS', 'admin', TRUE)
-					 ON CONFLICT (email) DO UPDATE SET role = 'admin', is_approved = TRUE
+					`INSERT INTO users (email, password_hash, full_name, store_name, role, is_approved, status, plan_name, subscription_ends_at)
+					 VALUES ($1, $2, 'Super Admin', 'VENUS POS', 'admin', TRUE, 'active', 'vip', now() + interval '3650 days')
+					 ON CONFLICT (email) DO UPDATE SET role = 'admin', is_approved = TRUE, status = 'active', plan_name = 'vip'
 					 RETURNING id`, req.Email, hash,
 				).Scan(&newID); ierr == nil {
-					id, email, role, isApproved = newID, req.Email, "admin", true
+					id, email, role, isApproved, status, planName = newID, req.Email, "admin", true, "active", "vip"
 					passwordHash = hash
 					recordLoginHistory(c.Context(), h.Pool, id, email, true, c.IP())
 					writeAudit(c.Context(), h.Pool, id, email, "LOGIN", "auth", itoa(id), map[string]any{"note": "super admin re-seeded", "at": time.Now()}, c.IP())
@@ -99,7 +105,16 @@ func (h *AuthHandler) Login(c *fiber.Ctx) error {
 					}
 					return c.JSON(fiber.Map{
 						"token": token,
-						"user":  fiber.Map{"id": id, "email": email, "role": role, "is_approved": isApproved},
+						"user": fiber.Map{
+							"id":                   id,
+							"email":                email,
+							"role":                 role,
+							"is_approved":          isApproved,
+							"status":               status,
+							"plan_name":            planName,
+							"wallet_balance":       0,
+							"subscription_ends_at": time.Now().AddDate(10, 0, 0),
+						},
 					})
 				}
 			}
@@ -125,14 +140,26 @@ func (h *AuthHandler) Login(c *fiber.Ctx) error {
 	}
 	recordLoginHistory(c.Context(), h.Pool, id, email, true, c.IP())
 	writeAudit(c.Context(), h.Pool, id, email, "LOGIN", "auth", itoa(id), map[string]any{"role": role, "at": time.Now()}, c.IP())
+	userMap := fiber.Map{
+		"id":             id,
+		"email":          email,
+		"role":           role,
+		"is_approved":    isApproved,
+		"status":         status,
+		"plan_name":      planName,
+		"wallet_balance": walletBalance,
+	}
+	if subscriptionEndsAt != nil {
+		userMap["subscription_ends_at"] = subscriptionEndsAt
+		userMap["subscription_expires_at"] = subscriptionEndsAt
+	}
 	return c.JSON(fiber.Map{
 		"token": token,
-		"user":  fiber.Map{"id": id, "email": email, "role": role, "is_approved": isApproved},
+		"user":  userMap,
 	})
 }
 
-// Register creates a new subscriber account (pending approval unless it is the
-// configured super admin email, which is auto-approved as admin).
+// Register creates a new subscriber account with an automatic 2-day trial.
 // POST /api/auth/register
 func (h *AuthHandler) Register(c *fiber.Ctx) error {
 	var req registerRequest
@@ -153,31 +180,66 @@ func (h *AuthHandler) Register(c *fiber.Ctx) error {
 	}
 
 	role := "subscriber"
-	approved := false
+	planName := "مشترك تجريبي"
+	approved := true
+	status := "active"
+	trialInterval := "2 days"
 	if h.SuperAdminEmail != "" && req.Email == strings.ToLower(strings.TrimSpace(h.SuperAdminEmail)) {
 		role = "admin"
-		approved = true
+		planName = "vip"
+		trialInterval = "3650 days"
 	}
 
-	var id int64
+	var (
+		id                 int64
+		subscriptionEndsAt time.Time
+	)
 	err = h.Pool.QueryRow(c.Context(),
-		`INSERT INTO users (email, password_hash, full_name, store_name, phone, role, is_approved)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7)
+		`INSERT INTO users (email, password_hash, full_name, store_name, phone, role, is_approved, status, plan_name, subscription_ends_at)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, now() + interval '`+trialInterval+`')
 		 ON CONFLICT (email) DO NOTHING
-		 RETURNING id`,
+		 RETURNING id, subscription_ends_at`,
 		req.Email, hash, strings.TrimSpace(req.FullName), strings.TrimSpace(req.StoreName),
-		strings.TrimSpace(req.Phone), role, approved,
-	).Scan(&id)
+		strings.TrimSpace(req.Phone), role, approved, status, planName,
+	).Scan(&id, &subscriptionEndsAt)
 	if err == pgx.ErrNoRows {
 		return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": "email already registered"})
 	}
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "database error"})
 	}
+
+	token, _ := middleware.SignToken(h.JWTSecret, id, req.Email, role, h.TokenTTL)
+
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
-		"id": id, "email": req.Email, "full_name": strings.TrimSpace(req.FullName),
-		"store_name": strings.TrimSpace(req.StoreName), "phone": strings.TrimSpace(req.Phone),
-		"role": role, "is_approved": approved,
+		"token": token,
+		"user": fiber.Map{
+			"id":                     id,
+			"email":                  req.Email,
+			"full_name":              strings.TrimSpace(req.FullName),
+			"store_name":             strings.TrimSpace(req.StoreName),
+			"phone":                  strings.TrimSpace(req.Phone),
+			"role":                   role,
+			"is_approved":            approved,
+			"status":                 status,
+			"plan_name":              planName,
+			"subscription_plan":      planName,
+			"wallet_balance":         0,
+			"subscription_ends_at":   subscriptionEndsAt,
+			"subscription_expires_at": subscriptionEndsAt,
+		},
+		"id":                      id,
+		"email":                   req.Email,
+		"full_name":               strings.TrimSpace(req.FullName),
+		"store_name":              strings.TrimSpace(req.StoreName),
+		"phone":                   strings.TrimSpace(req.Phone),
+		"role":                    role,
+		"is_approved":             approved,
+		"status":                  status,
+		"plan_name":               planName,
+		"subscription_plan":       planName,
+		"subscription_ends_at":    subscriptionEndsAt,
+		"subscription_expires_at": subscriptionEndsAt,
 	})
 }
 
@@ -189,31 +251,55 @@ func (h *AuthHandler) Me(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "unauthenticated"})
 	}
 	var (
-		id        int64
-		email     string
-		fullName  string
-		storeName string
-		phone     string
-		role      string
-		approved  bool
-		createdAt time.Time
+		id                 int64
+		email              string
+		fullName           string
+		storeName          string
+		phone              string
+		role               string
+		approved           bool
+		createdAt          time.Time
+		avatarURL          string
+		address            string
+		walletBalance      float64
+		status             string
+		planName           string
+		subscriptionEndsAt *time.Time
 	)
-	var avatarURL, address string
 	err := h.Pool.QueryRow(c.Context(),
-		`SELECT id, email, full_name, store_name, phone, role, is_approved, created_at, avatar_url, address
+		`SELECT id, email, full_name, store_name, phone, role, is_approved, created_at,
+		        COALESCE(avatar_url, ''), COALESCE(address, ''), COALESCE(wallet_balance, 0),
+		        COALESCE(status, 'active'), COALESCE(plan_name, 'مشترك تجريبي'), subscription_ends_at
 		 FROM users WHERE id = $1`, cl.UserID,
-	).Scan(&id, &email, &fullName, &storeName, &phone, &role, &approved, &createdAt, &avatarURL, &address)
+	).Scan(&id, &email, &fullName, &storeName, &phone, &role, &approved, &createdAt,
+		&avatarURL, &address, &walletBalance, &status, &planName, &subscriptionEndsAt)
 	if err == pgx.ErrNoRows {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "user not found"})
 	}
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "database error"})
 	}
-	return c.JSON(fiber.Map{
-		"id": id, "email": email, "full_name": fullName, "store_name": storeName,
-		"phone": phone, "role": role, "is_approved": approved, "created_at": createdAt,
-		"avatar_url": avatarURL, "address": address,
-	})
+	resp := fiber.Map{
+		"id":             id,
+		"email":          email,
+		"full_name":      fullName,
+		"store_name":     storeName,
+		"phone":          phone,
+		"role":           role,
+		"is_approved":    approved,
+		"created_at":     createdAt,
+		"avatar_url":     avatarURL,
+		"address":        address,
+		"wallet_balance": walletBalance,
+		"status":         status,
+		"plan_name":      planName,
+		"subscription_plan": planName,
+	}
+	if subscriptionEndsAt != nil {
+		resp["subscription_ends_at"] = subscriptionEndsAt
+		resp["subscription_expires_at"] = subscriptionEndsAt
+	}
+	return c.JSON(resp)
 }
 
 // ChangeCredentials lets an authenticated subscriber change their own email

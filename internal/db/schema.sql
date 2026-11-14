@@ -344,10 +344,14 @@ CREATE TABLE IF NOT EXISTS zaincash_transactions (
     order_id       TEXT NOT NULL DEFAULT '',
     transaction_id TEXT NOT NULL DEFAULT '',
     msisdn         TEXT NOT NULL DEFAULT '',
+    purpose        TEXT NOT NULL DEFAULT 'WALLET_TOPUP',
+    plan_key       TEXT NOT NULL DEFAULT '',
     status         TEXT NOT NULL DEFAULT 'PENDING',
     created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
     completed_at   TIMESTAMPTZ
 );
+ALTER TABLE zaincash_transactions ADD COLUMN IF NOT EXISTS purpose TEXT NOT NULL DEFAULT 'WALLET_TOPUP';
+ALTER TABLE zaincash_transactions ADD COLUMN IF NOT EXISTS plan_key TEXT NOT NULL DEFAULT '';
 CREATE INDEX IF NOT EXISTS idx_zaincash_tx ON zaincash_transactions (transaction_id, order_id);
 
 -- -----------------------------------------------------------------------------
