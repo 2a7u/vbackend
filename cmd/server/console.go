@@ -1,9 +1,12 @@
-// R5B: hosting for the built Flutter web admin console (admin_dist).
-// The console is served at BOTH "/" and "/console" with:
-//   - <base href> rewrite for the /console mount point,
-//   - strict no-cache headers on the app shell (index.html, service worker,
-//     bootstrap and version files) so every deploy is picked up instantly,
-//   - SPA fallback so deep links render the app instead of a 404.
+// R5B: domain-isolated hosting for the built Flutter web admin console (admin_dist).
+//
+// Rules:
+//   - When host == "console.urukiq.com" (or console.*):
+//     Serve admin console at "/" with SPA fallback to index.html and strict no-cache.
+//   - When host == "vapi.urukiq.com" (or any other host):
+//     NEVER serve admin console.
+//     GET "/" returns {"service": "VENUS Core API", "status": "online"}.
+//     GET "/console" returns 404 Not Found.
 package main
 
 import (
@@ -23,6 +26,15 @@ var consoleShellFiles = map[string]bool{
 	"manifest.json":             true,
 }
 
+// isConsoleHost returns true only when the request hostname is console.urukiq.com or console.*.
+func isConsoleHost(c *fiber.Ctx) bool {
+	host := strings.ToLower(c.Hostname())
+	if idx := strings.Index(host, ":"); idx != -1 {
+		host = host[:idx]
+	}
+	return host == "console.urukiq.com" || strings.HasPrefix(host, "console.")
+}
+
 // noCacheHeaders sets strict no-cache response headers.
 func noCacheHeaders(c *fiber.Ctx) {
 	c.Set("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate")
@@ -30,20 +42,15 @@ func noCacheHeaders(c *fiber.Ctx) {
 	c.Set("Expires", "0")
 }
 
-// serveConsoleIndex sends index.html, rewriting <base href="/"> when the
-// console is mounted under /console.
-func serveConsoleIndex(c *fiber.Ctx, distDir, baseHref string) error {
+// serveConsoleIndex sends index.html with base href "/" and no-cache headers.
+func serveConsoleIndex(c *fiber.Ctx, distDir string) error {
 	data, err := os.ReadFile(filepath.Join(distDir, "index.html"))
 	if err != nil {
 		return fiber.ErrNotFound
 	}
-	html := string(data)
-	if baseHref != "/" {
-		html = strings.Replace(html, `<base href="/">`, `<base href="`+baseHref+`">`, 1)
-	}
 	noCacheHeaders(c)
 	c.Set(fiber.HeaderContentType, "text/html; charset=utf-8")
-	return c.SendString(html)
+	return c.SendString(string(data))
 }
 
 // sendConsoleFile serves one static asset from distDir. Returns false when
@@ -66,9 +73,9 @@ func sendConsoleFile(c *fiber.Ctx, distDir, rel string) (bool, error) {
 	return true, nil
 }
 
-// registerConsoleRoutes mounts the console at /console and at /. It must be
-// called AFTER all API routes are registered so /api, /ws and /health keep
-// matching priority (Fiber resolves routes in registration order).
+// registerConsoleRoutes sets up domain-isolated routing:
+// - console.urukiq.com: serves admin console
+// - vapi.urukiq.com: API only, returns JSON status on "/", 404 on "/console"
 func registerConsoleRoutes(app *fiber.App, distDir string) {
 	isReserved := func(p string) bool {
 		return p == "/api" || strings.HasPrefix(p, "/api/") ||
@@ -76,44 +83,53 @@ func registerConsoleRoutes(app *fiber.App, distDir string) {
 			p == "/health"
 	}
 
-	// ---- /console mount (prefix stripped, base href rewritten) ----
-	app.All("/console", func(c *fiber.Ctx) error {
-		return serveConsoleIndex(c, distDir, "/console/")
-	})
-	app.Get("/console/*", func(c *fiber.Ctx) error {
-		rel := strings.Trim(c.Params("*"), "/")
-		if rel == "" || strings.EqualFold(rel, "index.html") {
-			return serveConsoleIndex(c, distDir, "/console/")
+	// 1. Root route: domain check
+	app.Get("/", func(c *fiber.Ctx) error {
+		if isConsoleHost(c) {
+			return serveConsoleIndex(c, distDir)
 		}
-		served, err := sendConsoleFile(c, distDir, rel)
-		if err != nil {
-			return err
-		}
-		if !served {
-			return serveConsoleIndex(c, distDir, "/console/")
-		}
-		return nil
+		// vapi.urukiq.com or any non-console host
+		return c.JSON(fiber.Map{
+			"service": "VENUS Core API",
+			"status":  "online",
+		})
 	})
 
-	// ---- root mount (registered last: /api, /ws, /health keep priority) ----
-	app.Get("/", func(c *fiber.Ctx) error {
-		return serveConsoleIndex(c, distDir, "/")
+	// 2. /console route: 404 on vapi, redirect to / on console host
+	app.All("/console", func(c *fiber.Ctx) error {
+		if !isConsoleHost(c) {
+			return fiber.ErrNotFound
+		}
+		return c.Redirect("/", fiber.StatusMovedPermanently)
 	})
+	app.All("/console/*", func(c *fiber.Ctx) error {
+		if !isConsoleHost(c) {
+			return fiber.ErrNotFound
+		}
+		rel := strings.TrimPrefix(c.Path(), "/console/")
+		return c.Redirect("/"+rel, fiber.StatusMovedPermanently)
+	})
+
+	// 3. Fallback / SPA route for console host; 404 for API host
 	app.Get("/*", func(c *fiber.Ctx) error {
 		p := c.Path()
 		if isReserved(p) {
 			return fiber.ErrNotFound
 		}
+		if !isConsoleHost(c) {
+			return fiber.ErrNotFound
+		}
+
 		rel := strings.TrimPrefix(p, "/")
 		if rel == "" || strings.EqualFold(rel, "index.html") {
-			return serveConsoleIndex(c, distDir, "/")
+			return serveConsoleIndex(c, distDir)
 		}
 		served, err := sendConsoleFile(c, distDir, rel)
 		if err != nil {
 			return err
 		}
 		if !served {
-			return serveConsoleIndex(c, distDir, "/")
+			return serveConsoleIndex(c, distDir)
 		}
 		return nil
 	})

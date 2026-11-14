@@ -330,6 +330,25 @@ CREATE INDEX IF NOT EXISTS idx_card_categories_active ON card_categories (active
 ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT NOT NULL DEFAULT '';
 ALTER TABLE users ADD COLUMN IF NOT EXISTS address TEXT NOT NULL DEFAULT '';
 ALTER TABLE users ADD COLUMN IF NOT EXISTS wallet_balance NUMERIC(12,2) NOT NULL DEFAULT 0 CHECK (wallet_balance >= 0);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'active';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS plan_name TEXT NOT NULL DEFAULT 'free';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_ends_at TIMESTAMPTZ;
+
+-- -----------------------------------------------------------------------------
+-- zaincash_transactions: ledger of ZainCash UAT & production transactions
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS zaincash_transactions (
+    id             BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    user_id        BIGINT REFERENCES users(id) ON DELETE CASCADE,
+    amount         NUMERIC(12,2) NOT NULL DEFAULT 0,
+    order_id       TEXT NOT NULL DEFAULT '',
+    transaction_id TEXT NOT NULL DEFAULT '',
+    msisdn         TEXT NOT NULL DEFAULT '',
+    status         TEXT NOT NULL DEFAULT 'PENDING',
+    created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+    completed_at   TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_zaincash_tx ON zaincash_transactions (transaction_id, order_id);
 
 -- -----------------------------------------------------------------------------
 -- vouchers_vault: encrypted / secured digital voucher PIN & serial storage

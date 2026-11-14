@@ -8,7 +8,6 @@ import (
 	"log"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"syscall"
 	"time"
 
@@ -182,15 +181,12 @@ func main() {
 	// R5A: digital cards catalog for the mobile بطاقات screen.
 	auth.Get("/digital-cards", adminH.ListDigitalCards)
 
-	// R5B: host the built web admin console (Flutter web) at / and /console
-	// with strict no-cache headers on the app shell so deploys go live instantly.
+	// R5B: domain-isolated web console hosting:
+	// - console.urukiq.com: serves Flutter Web Admin Console
+	// - vapi.urukiq.com: API only (returns status JSON on /, 404 on /console)
 	adminDist := getenv("ADMIN_DIST_DIR", "./admin_dist")
-	if st, err := os.Stat(filepath.Join(adminDist, "index.html")); err == nil && !st.IsDir() {
-		registerConsoleRoutes(app, adminDist)
-		log.Printf("web admin console served from %s at / and /console", adminDist)
-	} else {
-		log.Printf("admin console dist not found at %s — console hosting disabled", adminDist)
-	}
+	registerConsoleRoutes(app, adminDist)
+	log.Printf("domain-isolated routing enabled (console.urukiq.com -> %s)", adminDist)
 
 	go func() {
 		log.Printf("VENUS POS backend listening on :%s", port)
