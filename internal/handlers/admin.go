@@ -5,12 +5,14 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -670,6 +672,103 @@ func superAdminEmail() string {
 		return strings.ToLower(strings.TrimSpace(v))
 	}
 	return "mahmoudraheem76@gmail.com"
+}
+
+// GenerateActivationCodes creates new pre-paid subscriber activation codes.
+// POST /api/admin/activation-codes/generate
+func (h *AdminHandler) GenerateActivationCodes(c *fiber.Ctx) error {
+	var req struct {
+		PlanName     string  `json:"plan_name"`
+		DurationDays int     `json:"duration_days"`
+		PriceIQD     float64 `json:"price_iqd"`
+		Count        int     `json:"count"`
+	}
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid JSON"})
+	}
+	if req.PlanName == "" {
+		req.PlanName = "سوبر اقتصادي"
+	}
+	if req.DurationDays <= 0 {
+		req.DurationDays = 30
+	}
+	if req.Count <= 0 {
+		req.Count = 1
+	}
+	if req.Count > 50 {
+		req.Count = 50
+	}
+
+	codes := make([]fiber.Map, 0, req.Count)
+	for i := 0; i < req.Count; i++ {
+		code := fmt.Sprintf("VENUS-%dD-%s", req.DurationDays, strings.ToUpper(uuid.New().String()[:8]))
+		var id int64
+		err := h.Pool.QueryRow(c.Context(),
+			`INSERT INTO activation_codes (code, plan_name, duration_days, price_iqd, is_used, created_at)
+			 VALUES ($1, $2, $3, $4, FALSE, now())
+			 RETURNING id`, code, req.PlanName, req.DurationDays, req.PriceIQD,
+		).Scan(&id)
+		if err == nil {
+			codes = append(codes, fiber.Map{
+				"id":            id,
+				"code":          code,
+				"plan_name":     req.PlanName,
+				"duration_days": req.DurationDays,
+				"price_iqd":     req.PriceIQD,
+				"is_used":       false,
+				"created_at":    time.Now(),
+			})
+		}
+	}
+
+	return c.JSON(fiber.Map{
+		"success": true,
+		"codes":   codes,
+	})
+}
+
+// ListActivationCodes lists all generated activation codes and their usage status.
+// GET /api/admin/activation-codes
+func (h *AdminHandler) ListActivationCodes(c *fiber.Ctx) error {
+	rows, err := h.Pool.Query(c.Context(),
+		`SELECT c.id, c.code, c.plan_name, c.duration_days, c.price_iqd, c.is_used,
+		        c.used_at, COALESCE(u.email, ''), c.created_at
+		 FROM activation_codes c
+		 LEFT JOIN users u ON u.id = c.used_by_user_id
+		 ORDER BY c.created_at DESC LIMIT 200`)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "database error"})
+	}
+	defer rows.Close()
+
+	list := make([]fiber.Map, 0)
+	for rows.Next() {
+		var (
+			id           int64
+			code         string
+			planName     string
+			durationDays int
+			price        float64
+			isUsed       bool
+			usedAt       *time.Time
+			usedByEmail  string
+			createdAt    time.Time
+		)
+		if err := rows.Scan(&id, &code, &planName, &durationDays, &price, &isUsed, &usedAt, &usedByEmail, &createdAt); err == nil {
+			list = append(list, fiber.Map{
+				"id":            id,
+				"code":          code,
+				"plan_name":     planName,
+				"duration_days": durationDays,
+				"price_iqd":     price,
+				"is_used":       isUsed,
+				"used_at":       usedAt,
+				"used_by_email": usedByEmail,
+				"created_at":    createdAt,
+			})
+		}
+	}
+	return c.JSON(list)
 }
 
 // itoa is a tiny int64 -> string helper to avoid importing strconv everywhere.

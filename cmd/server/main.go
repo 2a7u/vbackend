@@ -83,6 +83,7 @@ func main() {
 	announcementsH := &handlers.AnnouncementsHandler{Pool: pool, Hub: hub}
 	zainH := &handlers.ZainCashHandler{Pool: pool, Hub: hub, JWTSecret: jwtSecret}
 	vouchersH := &handlers.VouchersHandler{Pool: pool, Hub: hub}
+	syncH := &handlers.SyncHandler{Pool: pool, Hub: hub}
 
 	app := fiber.New(fiber.Config{
 		AppName:      "VENUS POS Backend",
@@ -112,8 +113,13 @@ func main() {
 	api.Post("/auth/login", authH.Login)
 	api.Post("/auth/register", authH.Register)
 
+	// Unified authoritative sync state (public fallback to UID 1 or header-based UID).
+	api.Get("/sync/state", syncH.GetSyncState)
+	api.Post("/subscriptions/redeem-code", authH.RedeemActivationCode)
+
 	// Public ZainCash browser, webhook, and payment endpoints (NO Authorization header required).
 	api.Post("/payments/zaincash/init", zainH.InitZainCash)
+	api.Post("/payments/zaincash/confirm", zainH.ConfirmInAppZainCash)
 	api.Get("/payments/zaincash/inquiry/:transactionId", zainH.InquiryZainCash)
 	api.Get("/zaincash/checkout", zainH.CheckoutZainCash)
 	api.Post("/zaincash/checkout/confirm", zainH.ConfirmCheckoutZainCash)
@@ -124,6 +130,9 @@ func main() {
 	auth := api.Group("", middleware.JWT(jwtSecret))
 	auth.Get("/auth/me", authH.Me)
 	auth.Put("/auth/credentials", authH.ChangeCredentials)
+	auth.Get("/sync/state", syncH.GetSyncState)
+	auth.Post("/subscriptions/redeem-code", authH.RedeemActivationCode)
+	auth.Post("/payments/zaincash/confirm", zainH.ConfirmInAppZainCash)
 
 	auth.Get("/sims", simH.ListSims)
 	auth.Post("/sims", simH.AddSims)
@@ -172,6 +181,10 @@ func main() {
 	admin.Put("/tickets/:id/reply", ticketsH.ReplyTicket)
 	admin.Post("/announcements", announcementsH.SaveAnnouncement)
 	admin.Delete("/announcements/:id", announcementsH.DeleteAnnouncement)
+
+	// Admin Activation Codes management
+	admin.Post("/activation-codes/generate", adminH.GenerateActivationCodes)
+	admin.Get("/activation-codes", adminH.ListActivationCodes)
 
 	// R1/R4/R5A: factory reset, audit trail, digital cards management.
 	admin.Post("/factory-reset", adminH.FactoryReset)

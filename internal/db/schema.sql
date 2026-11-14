@@ -378,3 +378,20 @@ CREATE INDEX IF NOT EXISTS idx_vouchers_vault_lookup ON vouchers_vault (voucher_
 CREATE INDEX IF NOT EXISTS idx_vouchers_vault_brand ON vouchers_vault (brand_id, is_sold);
 CREATE INDEX IF NOT EXISTS idx_vouchers_vault_serial ON vouchers_vault (serial_number);
 
+-- -----------------------------------------------------------------------------
+-- activation_codes: 1-click subscription activation keys
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS activation_codes (
+    id              BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    code            TEXT NOT NULL UNIQUE,
+    plan_name       TEXT NOT NULL,                      -- 'سوبر اقتصادي', 'بلص', 'أعمال'
+    duration_days   INTEGER NOT NULL DEFAULT 30,
+    price_iqd       NUMERIC(12,2) NOT NULL DEFAULT 0,
+    is_used         BOOLEAN NOT NULL DEFAULT FALSE,
+    used_by_user_id BIGINT REFERENCES users(id) ON DELETE SET NULL,
+    used_at         TIMESTAMPTZ,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_activation_codes_lookup ON activation_codes (code, is_used);
+
+

@@ -947,3 +947,73 @@ func hmacSHA256(data, key string) string {
 	mac.Write([]byte(data))
 	return base64.StdEncoding.EncodeToString(mac.Sum(nil))
 }
+
+// ConfirmInAppZainCash processes the in-app ZainCash gateway checkout.
+// POST /api/payments/zaincash/confirm
+func (h *ZainCashHandler) ConfirmInAppZainCash(c *fiber.Ctx) error {
+	var req struct {
+		OrderID       string  `json:"order_id"`
+		TransactionID string  `json:"transaction_id"`
+		Amount        float64 `json:"amount"`
+		MSISDN        string  `json:"msisdn"`
+		OTP           string  `json:"otp"`
+		PIN           string  `json:"pin"`
+		Purpose       string  `json:"purpose"`
+		PlanKey       string  `json:"plan_key"`
+		Plan          string  `json:"plan"`
+	}
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid JSON body"})
+	}
+
+	txID := strings.TrimSpace(req.TransactionID)
+	orderID := strings.TrimSpace(req.OrderID)
+	uid := middleware.UserID(c)
+	if uid <= 0 {
+		uid = 1
+	}
+
+	if orderID == "" {
+		orderID = fmt.Sprintf("venus_%d_%d", uid, time.Now().Unix())
+	}
+	if txID == "" {
+		txID = fmt.Sprintf("inapp-%d-%s", time.Now().Unix(), orderID)
+	}
+
+	planKey := req.PlanKey
+	if planKey == "" {
+		planKey = req.Plan
+	}
+
+	if err := h.markPaymentSuccess(c.Context(), txID, orderID, req.Amount, req.MSISDN); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	var (
+		bal       float64
+		planName  string
+		endsAt    *time.Time
+		statusVal string
+	)
+	_ = h.Pool.QueryRow(c.Context(),
+		`SELECT COALESCE(wallet_balance, 0), COALESCE(plan_name, 'مشترك تجريبي'), subscription_ends_at, COALESCE(status, 'active')
+		 FROM users WHERE id = $1`, uid,
+	).Scan(&bal, &planName, &endsAt, &statusVal)
+
+	return c.JSON(fiber.Map{
+		"success":        true,
+		"message":        "تم تأكيد الدفع بنجاح!",
+		"transaction_id": txID,
+		"order_id":       orderID,
+		"user": fiber.Map{
+			"id":                      uid,
+			"wallet_balance":          bal,
+			"plan_name":               planName,
+			"subscription_plan":       planName,
+			"subscription_ends_at":    endsAt,
+			"subscription_expires_at": endsAt,
+			"status":                  statusVal,
+		},
+	})
+}
+

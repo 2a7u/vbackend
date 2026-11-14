@@ -2,6 +2,7 @@
 package handlers
 
 import (
+	"fmt"
 	"strings"
 	"time"
 
@@ -72,6 +73,9 @@ func (h *AuthHandler) Login(c *fiber.Ctx) error {
 		id                 int64
 		email              string
 		passwordHash       string
+		fullName           string
+		storeName          string
+		phone              string
 		role               string
 		isApproved         bool
 		walletBalance      float64
@@ -80,10 +84,11 @@ func (h *AuthHandler) Login(c *fiber.Ctx) error {
 		subscriptionEndsAt *time.Time
 	)
 	err := h.Pool.QueryRow(c.Context(),
-		`SELECT id, email, password_hash, role, is_approved,
-		        COALESCE(wallet_balance, 0), COALESCE(status, 'active'), COALESCE(plan_name, 'مشترك تجريبي'), subscription_ends_at
+		`SELECT id, email, password_hash, COALESCE(full_name, ''), COALESCE(store_name, ''), COALESCE(phone, ''),
+		        role, is_approved, COALESCE(wallet_balance, 0), COALESCE(status, 'active'),
+		        COALESCE(plan_name, 'مشترك تجريبي'), subscription_ends_at
 		 FROM users WHERE email = $1`, req.Email,
-	).Scan(&id, &email, &passwordHash, &role, &isApproved, &walletBalance, &status, &planName, &subscriptionEndsAt)
+	).Scan(&id, &email, &passwordHash, &fullName, &storeName, &phone, &role, &isApproved, &walletBalance, &status, &planName, &subscriptionEndsAt)
 	if err == pgx.ErrNoRows {
 		// R1: re-seed the Super Admin if the clean reset removed it.
 		if h.SuperAdminEmail != "" && req.Email == strings.ToLower(strings.TrimSpace(h.SuperAdminEmail)) {
@@ -96,6 +101,7 @@ func (h *AuthHandler) Login(c *fiber.Ctx) error {
 					 RETURNING id`, req.Email, hash,
 				).Scan(&newID); ierr == nil {
 					id, email, role, isApproved, status, planName = newID, req.Email, "admin", true, "active", "vip"
+					fullName, storeName = "Super Admin", "VENUS POS"
 					passwordHash = hash
 					recordLoginHistory(c.Context(), h.Pool, id, email, true, c.IP())
 					writeAudit(c.Context(), h.Pool, id, email, "LOGIN", "auth", itoa(id), map[string]any{"note": "super admin re-seeded", "at": time.Now()}, c.IP())
@@ -107,11 +113,17 @@ func (h *AuthHandler) Login(c *fiber.Ctx) error {
 						"token": token,
 						"user": fiber.Map{
 							"id":                   id,
+							"uid":                  fmt.Sprintf("V%06d", id),
 							"email":                email,
+							"name":                 fullName,
+							"full_name":            fullName,
+							"store_name":           storeName,
+							"phone":                phone,
 							"role":                 role,
 							"is_approved":          isApproved,
 							"status":               status,
 							"plan_name":            planName,
+							"subscription_plan":    planName,
 							"wallet_balance":       0,
 							"subscription_ends_at": time.Now().AddDate(10, 0, 0),
 						},
@@ -141,17 +153,21 @@ func (h *AuthHandler) Login(c *fiber.Ctx) error {
 	recordLoginHistory(c.Context(), h.Pool, id, email, true, c.IP())
 	writeAudit(c.Context(), h.Pool, id, email, "LOGIN", "auth", itoa(id), map[string]any{"role": role, "at": time.Now()}, c.IP())
 	userMap := fiber.Map{
-		"id":             id,
-		"email":          email,
-		"role":           role,
-		"is_approved":    isApproved,
-		"status":         status,
-		"plan_name":      planName,
-		"wallet_balance": walletBalance,
-	}
-	if subscriptionEndsAt != nil {
-		userMap["subscription_ends_at"] = subscriptionEndsAt
-		userMap["subscription_expires_at"] = subscriptionEndsAt
+		"id":                      id,
+		"uid":                     fmt.Sprintf("V%06d", id),
+		"email":                   email,
+		"name":                    fullName,
+		"full_name":               fullName,
+		"store_name":              storeName,
+		"phone":                   phone,
+		"role":                    role,
+		"is_approved":             isApproved,
+		"status":                  status,
+		"plan_name":               planName,
+		"subscription_plan":       planName,
+		"wallet_balance":          walletBalance,
+		"subscription_ends_at":    subscriptionEndsAt,
+		"subscription_expires_at": subscriptionEndsAt,
 	}
 	return c.JSON(fiber.Map{
 		"token": token,
@@ -473,4 +489,98 @@ func (h *AuthHandler) ApproveUser(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "database error"})
 	}
 	return c.JSON(fiber.Map{"success": true})
+}
+
+// RedeemActivationCode validates and redeems a prepaid activation voucher key.
+// POST /api/subscriptions/redeem-code
+func (h *AuthHandler) RedeemActivationCode(c *fiber.Ctx) error {
+	var req struct {
+		Code string `json:"code"`
+	}
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid JSON"})
+	}
+	code := strings.ToUpper(strings.TrimSpace(req.Code))
+	if code == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "يرجى إدخال رمز التفعيل"})
+	}
+
+	uid := middleware.UserID(c)
+	if uid <= 0 {
+		uid = 1
+	}
+
+	tx, err := h.Pool.Begin(c.Context())
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "database error"})
+	}
+	defer tx.Rollback(c.Context())
+
+	var (
+		codeID       int64
+		planName     string
+		durationDays int
+		isUsed       bool
+	)
+	err = tx.QueryRow(c.Context(),
+		`SELECT id, plan_name, duration_days, is_used 
+		 FROM activation_codes 
+		 WHERE UPPER(code) = $1 
+		 FOR UPDATE`, code,
+	).Scan(&codeID, &planName, &durationDays, &isUsed)
+	if err == pgx.ErrNoRows || isUsed {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "رمز التفعيل غير صالح أو تم استخدامه مسبقاً"})
+	}
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "database error"})
+	}
+
+	// Mark code used
+	_, err = tx.Exec(c.Context(),
+		`UPDATE activation_codes 
+		 SET is_used = TRUE, used_by_user_id = $1, used_at = now() 
+		 WHERE id = $2`, uid, codeID)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to update code"})
+	}
+
+	// Activate user plan and extend subscription
+	var newEndsAt time.Time
+	err = tx.QueryRow(c.Context(),
+		`UPDATE users 
+		 SET plan_name = $1, 
+		     status = 'active',
+		     is_approved = TRUE,
+		     subscription_ends_at = GREATEST(COALESCE(subscription_ends_at, now()), now()) + ($2 || ' days')::interval,
+		     updated_at = now() 
+		 WHERE id = $3
+		 RETURNING subscription_ends_at`, planName, itoa(int64(durationDays)), uid,
+	).Scan(&newEndsAt)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to activate subscription"})
+	}
+
+	if err := tx.Commit(c.Context()); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "transaction commit failed"})
+	}
+
+	writeAudit(c.Context(), h.Pool, uid, "", "REDEEM_CODE", "activation_codes", itoa(codeID), map[string]any{
+		"code": code, "plan_name": planName, "duration_days": durationDays, "ends_at": newEndsAt,
+	}, c.IP())
+
+	return c.JSON(fiber.Map{
+		"success":              true,
+		"message":              "تم تفعيل الاشتراك بنجاح!",
+		"plan_name":            planName,
+		"duration_days":        durationDays,
+		"subscription_ends_at": newEndsAt,
+		"user": fiber.Map{
+			"id":                      uid,
+			"plan_name":               planName,
+			"subscription_plan":       planName,
+			"status":                  "active",
+			"subscription_ends_at":    newEndsAt,
+			"subscription_expires_at": newEndsAt,
+		},
+	})
 }
