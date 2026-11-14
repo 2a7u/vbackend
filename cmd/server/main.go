@@ -113,6 +113,12 @@ func main() {
 	api.Post("/auth/login", authH.Login)
 	api.Post("/auth/register", authH.Register)
 
+	// Public ZainCash browser & webhook endpoints (NO Authorization header required).
+	api.Get("/zaincash/checkout", zainH.CheckoutZainCash)
+	api.Post("/zaincash/checkout/confirm", zainH.ConfirmCheckoutZainCash)
+	api.Get("/zaincash/redirect", zainH.RedirectZainCash)
+	api.Post("/zaincash/webhook", zainH.WebhookZainCash)
+
 	// Authenticated subscriber area.
 	auth := api.Group("", middleware.JWT(jwtSecret))
 	auth.Get("/auth/me", authH.Me)
@@ -149,11 +155,9 @@ func main() {
 	auth.Get("/vouchers", vouchersH.GetVouchers)
 	auth.Post("/vouchers/dispense", vouchersH.DispenseVoucher)
 
-	// R8: ZainCash payments.
+	// R8: ZainCash authenticated payments.
 	auth.Post("/payments/zaincash/init", zainH.InitZainCash)
-	api.Post("/zaincash/webhook", zainH.WebhookZainCash)
-	api.Get("/zaincash/redirect", zainH.RedirectZainCash)
-	api.Get("/zaincash/checkout", zainH.CheckoutZainCash)
+	auth.Get("/payments/zaincash/inquiry/:transactionId", zainH.InquiryZainCash)
 
 	// Admin-only area.
 	admin := api.Group("/admin", middleware.JWT(jwtSecret), middleware.AdminOnly())

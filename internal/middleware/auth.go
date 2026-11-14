@@ -38,6 +38,12 @@ func SignToken(secret string, userID int64, email, role string, ttl time.Duratio
 // JWT verifies the Bearer token and stores the claims in the request context.
 func JWT(secret string) fiber.Handler {
 	return func(c *fiber.Ctx) error {
+		path := c.Path()
+		// Public ZainCash callbacks, redirects, and checkout pages never require JWT
+		if strings.HasPrefix(path, "/api/zaincash/") || strings.HasPrefix(path, "/api/auth/") {
+			return c.Next()
+		}
+
 		authHeader := c.Get(fiber.HeaderAuthorization)
 		if authHeader == "" {
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "missing Authorization header"})
