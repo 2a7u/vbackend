@@ -19,23 +19,77 @@ type DebtsHandler struct {
 }
 
 type contractRow struct {
-	ID                int64      `json:"id"`
-	DebtorName        string     `json:"debtor_name"`
-	Phone             string     `json:"phone"`
-	Description       string     `json:"description"`
-	SaleType          string     `json:"sale_type"`
-	CostPrice         float64    `json:"cost_price"`
-	TotalAmount       float64    `json:"total_amount"`
-	PaidAmount        float64    `json:"paid_amount"`
-	Remaining         float64    `json:"remaining_amount"`
-	MonthlyInstallment float64   `json:"monthly_installment_amount"`
-	InstallmentMonths int        `json:"installment_months_count"`
-	StartDate         *time.Time `json:"start_date,omitempty"`
-	FirstDueDate      *time.Time `json:"first_due_date,omitempty"`
-	Notes             string     `json:"notes"`
-	LastReminderAt    *time.Time `json:"last_whatsapp_reminder_at,omitempty"`
-	Status            string     `json:"status"`
-	CreatedAt         time.Time  `json:"created_at"`
+	ID                 int64      `json:"id"`
+	DebtorName         string     `json:"debtor_name"`
+	Phone              string     `json:"phone"`
+	Description        string     `json:"description"`
+	SaleType           string     `json:"sale_type"`
+	CostPrice          float64    `json:"cost_price"`
+	TotalAmount        float64    `json:"total_amount"`
+	PaidAmount         float64    `json:"paid_amount"`
+	Remaining          float64    `json:"remaining_amount"`
+	MonthlyInstallment float64    `json:"monthly_installment_amount"`
+	InstallmentMonths  int        `json:"installment_months_count"`
+	StartDate          *time.Time `json:"start_date,omitempty"`
+	FirstDueDate       *time.Time `json:"first_due_date,omitempty"`
+	Notes              string     `json:"notes"`
+	LastReminderAt     *time.Time `json:"last_whatsapp_reminder_at,omitempty"`
+	Status             string     `json:"status"`
+	CreatedAt          time.Time  `json:"created_at"`
+}
+
+// toMap serializes the contract with canonical snake_case keys AND every
+// alias key legacy Flutter clients read, so no consumer breaks regardless of
+// which field name it expects.
+func (r contractRow) toMap() fiber.Map {
+	m := fiber.Map{
+		"id":                         r.ID,
+		"debtor_name":                r.DebtorName,
+		"customer_name":              r.DebtorName,
+		"client_name":                r.DebtorName,
+		"name":                       r.DebtorName,
+		"phone":                      r.Phone,
+		"debtor_phone":               r.Phone,
+		"customer_phone":             r.Phone,
+		"phone_number":               r.Phone,
+		"description":                r.Description,
+		"item_name":                  r.Description,
+		"service_name":               r.Description,
+		"item":                       r.Description,
+		"item_description":           r.Description,
+		"sale_type":                  r.SaleType,
+		"contract_type":              r.SaleType,
+		"cost_price":                 r.CostPrice,
+		"total_amount":               r.TotalAmount,
+		"amount":                     r.TotalAmount,
+		"total_selling_price":        r.TotalAmount,
+		"paid_amount":                r.PaidAmount,
+		"paid":                       r.PaidAmount,
+		"down_payment":               r.PaidAmount,
+		"remaining_amount":           r.Remaining,
+		"remaining":                  r.Remaining,
+		"remaining_balance":          r.Remaining,
+		"monthly_installment_amount": r.MonthlyInstallment,
+		"installment_months_count":   r.InstallmentMonths,
+		"installments_count":         r.InstallmentMonths,
+		"installment_count":          r.InstallmentMonths,
+		"notes":                      r.Notes,
+		"contract_notes":             r.Notes,
+		"status":                     r.Status,
+		"created_at":                 r.CreatedAt,
+	}
+	if r.StartDate != nil {
+		m["start_date"] = r.StartDate.Format("2006-01-02")
+	}
+	if r.FirstDueDate != nil {
+		m["first_due_date"] = r.FirstDueDate.Format("2006-01-02")
+		m["due_date"] = r.FirstDueDate.Format("2006-01-02")
+		m["next_due_date"] = r.FirstDueDate.Format("2006-01-02")
+	}
+	if r.LastReminderAt != nil {
+		m["last_whatsapp_reminder_at"] = r.LastReminderAt
+	}
+	return m
 }
 
 // contractColumns is the shared SELECT list for contractRow scans.
@@ -55,13 +109,13 @@ func (h *DebtsHandler) ListDebts(c *fiber.Ctx) error {
 	}
 	defer rows.Close()
 
-	out := make([]contractRow, 0)
+	out := make([]fiber.Map, 0)
 	for rows.Next() {
 		var r contractRow
 		if err := scanContract(rows.Scan, &r); err != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "scan error"})
 		}
-		out = append(out, r)
+		out = append(out, r.toMap())
 	}
 	return c.JSON(out)
 }
@@ -81,19 +135,19 @@ func scanContract(scan func(dest ...interface{}) error, r *contractRow) error {
 func (h *DebtsHandler) CreateDebt(c *fiber.Ctx) error {
 	uid := middleware.UserID(c)
 	var req struct {
-		DebtorName         string   `json:"debtor_name"`
-		Phone              string   `json:"phone"`
-		Description        string   `json:"description"`
-		SaleType           string   `json:"sale_type"`
-		CostPrice          float64  `json:"cost_price"`
-		TotalAmount        float64  `json:"total_amount"`
-		DownPayment        float64  `json:"down_payment"`
-		MonthlyInstallment float64  `json:"monthly_installment_amount"`
-		InstallmentMonths  int      `json:"installment_months_count"`
-		StartDate          *string  `json:"start_date"`
-		FirstDueDate       *string  `json:"first_due_date"`
-		DueDate            *string  `json:"due_date"` // legacy alias for first_due_date
-		Notes              string   `json:"notes"`
+		DebtorName         string  `json:"debtor_name"`
+		Phone              string  `json:"phone"`
+		Description        string  `json:"description"`
+		SaleType           string  `json:"sale_type"`
+		CostPrice          float64 `json:"cost_price"`
+		TotalAmount        float64 `json:"total_amount"`
+		DownPayment        float64 `json:"down_payment"`
+		MonthlyInstallment float64 `json:"monthly_installment_amount"`
+		InstallmentMonths  int     `json:"installment_months_count"`
+		StartDate          *string `json:"start_date"`
+		FirstDueDate       *string `json:"first_due_date"`
+		DueDate            *string `json:"due_date"` // legacy alias for first_due_date
+		Notes              string  `json:"notes"`
 	}
 	if err := c.BodyParser(&req); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid JSON body"})
@@ -152,9 +206,16 @@ func (h *DebtsHandler) CreateDebt(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "database error"})
 	}
 	if h.Hub != nil {
-		h.Hub.Broadcast(uid, "debts", fiber.Map{"action": "created", "contract": r})
+		h.Hub.Broadcast(uid, "debts", fiber.Map{"action": "created", "contract": r.toMap()})
 	}
-	return c.Status(fiber.StatusCreated).JSON(r)
+	if cl := middleware.ClaimsFrom(c); cl != nil {
+		writeAudit(c.Context(), h.Pool, uid, cl.Email, "CREATE_DEBT", "debt_contracts", itoa(r.ID), map[string]any{
+			"item": r.Description, "customer_name": r.DebtorName, "phone": r.Phone,
+			"amount": r.TotalAmount, "paid": r.PaidAmount, "remaining": r.Remaining,
+			"created_at": r.CreatedAt,
+		}, c.IP())
+	}
+	return c.Status(fiber.StatusCreated).JSON(r.toMap())
 }
 
 // UpdateDebt edits editable fields of a contract. Only supplied fields change;
@@ -319,18 +380,42 @@ func (h *DebtsHandler) UpdateDebt(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "commit failed"})
 	}
 	if h.Hub != nil {
-		h.Hub.Broadcast(uid, "debts", fiber.Map{"action": "updated", "contract": r})
+		h.Hub.Broadcast(uid, "debts", fiber.Map{"action": "updated", "contract": r.toMap()})
 	}
-	return c.JSON(r)
+	return c.JSON(r.toMap())
 }
 
 // DeleteDebt permanently deletes a contract (payments cascade).
+// R4: bounded deletion (5/day, 24h window for non-admins) + audit archive.
 // DELETE /api/debts/:id
 func (h *DebtsHandler) DeleteDebt(c *fiber.Ctx) error {
 	uid := middleware.UserID(c)
+	cl := middleware.ClaimsFrom(c)
+	isAdmin := cl != nil && cl.Role == "admin"
 	id, err := paramID(c)
 	if err != nil || id <= 0 {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid id"})
+	}
+	var (
+		debtorName string
+		phone      string
+		desc       string
+		total      float64
+		paid       float64
+		createdAt  time.Time
+	)
+	err = h.Pool.QueryRow(c.Context(),
+		`SELECT debtor_name, phone, description, total_amount, paid_amount, created_at
+		 FROM debt_contracts WHERE id = $1 AND user_id = $2 AND is_deleted = FALSE`, id, uid,
+	).Scan(&debtorName, &phone, &desc, &total, &paid, &createdAt)
+	if err == pgx.ErrNoRows {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "contract not found"})
+	}
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "database error"})
+	}
+	if ok, status, msg := checkDeletionGuard(c.Context(), h.Pool, uid, isAdmin, createdAt); !ok {
+		return c.Status(status).JSON(fiber.Map{"error": msg})
 	}
 	res, err := h.Pool.Exec(c.Context(), `DELETE FROM debt_contracts WHERE id = $1 AND user_id = $2`, id, uid)
 	if err != nil {
@@ -339,6 +424,15 @@ func (h *DebtsHandler) DeleteDebt(c *fiber.Ctx) error {
 	if res.RowsAffected() == 0 {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "contract not found"})
 	}
+	email := ""
+	if cl != nil {
+		email = cl.Email
+	}
+	writeAudit(c.Context(), h.Pool, uid, email, "DELETE_DEBT", "debt_contracts", itoa(id), map[string]any{
+		"item": desc, "customer_name": debtorName, "phone": phone,
+		"amount": total, "paid": paid, "remaining": total - paid,
+		"deleted_at": time.Now(),
+	}, c.IP())
 	if h.Hub != nil {
 		h.Hub.Broadcast(uid, "debts", fiber.Map{"action": "deleted", "contract_id": id})
 	}
@@ -443,6 +537,13 @@ func (h *DebtsHandler) PayDebt(c *fiber.Ctx) error {
 	}
 	if h.Hub != nil {
 		h.Hub.Broadcast(uid, "debts", fiber.Map{"action": "payment", "contract_id": id, "remaining_amount": remaining, "status": newStatus})
+	}
+	if cl := middleware.ClaimsFrom(c); cl != nil {
+		writeAudit(c.Context(), h.Pool, uid, cl.Email, "PAY_DEBT", "debt_contracts", itoa(id), map[string]any{
+			"payment_id": paymentID, "amount": req.Amount,
+			"previous_balance": previousBalance, "remaining_amount": remaining,
+			"status": newStatus, "paid_at": createdAt,
+		}, c.IP())
 	}
 	return c.JSON(result)
 }

@@ -8,6 +8,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -65,6 +66,15 @@ func main() {
 
 	hub := handlers.NewWSHub()
 
+	adminH := &handlers.AdminHandler{Pool: pool, Hub: hub}
+	// R1: one-time clean reset (reset_v2_clean) — runs exactly ONCE per deploy,
+	// guarded by the system_meta marker so restarts never wipe data again.
+	if err := adminH.RunOneTimeResets(ctx); err != nil {
+		log.Printf("one-time reset check skipped: %v", err)
+	} else {
+		log.Println("one-time migrations verified (reset_v2_clean)")
+	}
+
 	authH := &handlers.AuthHandler{Pool: pool, JWTSecret: jwtSecret, TokenTTL: tokenTTL, SuperAdminEmail: superAdminEmail}
 	simH := &handlers.SimHandler{Pool: pool, Hub: hub}
 	debtsH := &handlers.DebtsHandler{Pool: pool, Hub: hub}
@@ -72,6 +82,8 @@ func main() {
 	backupsH := &handlers.BackupsHandler{Pool: pool, Hub: hub}
 	expensesH := &handlers.ExpensesHandler{Pool: pool, Hub: hub}
 	announcementsH := &handlers.AnnouncementsHandler{Pool: pool, Hub: hub}
+	zainH := &handlers.ZainCashHandler{Pool: pool, Hub: hub}
+	vouchersH := &handlers.VouchersHandler{Pool: pool, Hub: hub}
 
 	app := fiber.New(fiber.Config{
 		AppName:      "VENUS POS Backend",
@@ -132,17 +144,51 @@ func main() {
 
 	auth.Get("/announcements", announcementsH.ListAnnouncements)
 
+	// Encrypted Voucher Vault
+	auth.Post("/vouchers/upload", vouchersH.UploadVouchers)
+	auth.Get("/vouchers", vouchersH.GetVouchers)
+	auth.Post("/vouchers/dispense", vouchersH.DispenseVoucher)
+
+	// R8: ZainCash payments.
+	auth.Post("/payments/zaincash/init", zainH.InitZainCash)
+	api.Post("/zaincash/webhook", zainH.WebhookZainCash)
+	api.Get("/zaincash/redirect", zainH.RedirectZainCash)
+	api.Get("/zaincash/checkout", zainH.CheckoutZainCash)
+
 	// Admin-only area.
 	admin := api.Group("/admin", middleware.JWT(jwtSecret), middleware.AdminOnly())
 	admin.Get("/users", authH.ListUsers)
 	admin.Put("/users/:id/approve", authH.ApproveUser)
 	admin.Put("/users/:id/credentials", authH.AdminChangeUserCredentials)
+	admin.Put("/users/:id", adminH.AdminUpdateUser)
+	admin.Delete("/users/:id", adminH.AdminDeleteUser)
 	admin.Get("/users/:id/backup", backupsH.Backup)
 	admin.Post("/users/:id/restore", backupsH.Restore)
 	admin.Get("/tickets", ticketsH.ListAllTickets)
 	admin.Put("/tickets/:id/reply", ticketsH.ReplyTicket)
 	admin.Post("/announcements", announcementsH.SaveAnnouncement)
 	admin.Delete("/announcements/:id", announcementsH.DeleteAnnouncement)
+
+	// R1/R4/R5A: factory reset, audit trail, digital cards management.
+	admin.Post("/factory-reset", adminH.FactoryReset)
+	admin.Get("/audit-logs", adminH.ListAuditLogs)
+	admin.Get("/login-history", adminH.ListLoginHistory)
+	admin.Post("/digital-cards", adminH.AdminSaveDigitalCard)
+	admin.Put("/digital-cards/:id", adminH.AdminSaveDigitalCard)
+	admin.Delete("/digital-cards/:id", adminH.AdminDeleteDigitalCard)
+
+	// R5A: digital cards catalog for the mobile بطاقات screen.
+	auth.Get("/digital-cards", adminH.ListDigitalCards)
+
+	// R5B: host the built web admin console (Flutter web) at / and /console
+	// with strict no-cache headers on the app shell so deploys go live instantly.
+	adminDist := getenv("ADMIN_DIST_DIR", "./admin_dist")
+	if st, err := os.Stat(filepath.Join(adminDist, "index.html")); err == nil && !st.IsDir() {
+		registerConsoleRoutes(app, adminDist)
+		log.Printf("web admin console served from %s at / and /console", adminDist)
+	} else {
+		log.Printf("admin console dist not found at %s — console hosting disabled", adminDist)
+	}
 
 	go func() {
 		log.Printf("VENUS POS backend listening on :%s", port)

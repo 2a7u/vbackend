@@ -79,15 +79,43 @@ func (h *AuthHandler) Login(c *fiber.Ctx) error {
 		`SELECT id, email, password_hash, role, is_approved FROM users WHERE email = $1`, req.Email,
 	).Scan(&id, &email, &passwordHash, &role, &isApproved)
 	if err == pgx.ErrNoRows {
+		// R1: re-seed the Super Admin if the clean reset removed it.
+		if h.SuperAdminEmail != "" && req.Email == strings.ToLower(strings.TrimSpace(h.SuperAdminEmail)) {
+			if hash, herr := hashPassword(req.Password); herr == nil {
+				var newID int64
+				if ierr := h.Pool.QueryRow(c.Context(),
+					`INSERT INTO users (email, password_hash, full_name, store_name, role, is_approved)
+					 VALUES ($1, $2, 'Super Admin', 'VENUS POS', 'admin', TRUE)
+					 ON CONFLICT (email) DO UPDATE SET role = 'admin', is_approved = TRUE
+					 RETURNING id`, req.Email, hash,
+				).Scan(&newID); ierr == nil {
+					id, email, role, isApproved = newID, req.Email, "admin", true
+					passwordHash = hash
+					recordLoginHistory(c.Context(), h.Pool, id, email, true, c.IP())
+					writeAudit(c.Context(), h.Pool, id, email, "LOGIN", "auth", itoa(id), map[string]any{"note": "super admin re-seeded", "at": time.Now()}, c.IP())
+					token, terr := middleware.SignToken(h.JWTSecret, id, email, role, h.TokenTTL)
+					if terr != nil {
+						return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "could not sign token"})
+					}
+					return c.JSON(fiber.Map{
+						"token": token,
+						"user":  fiber.Map{"id": id, "email": email, "role": role, "is_approved": isApproved},
+					})
+				}
+			}
+		}
+		recordLoginHistory(c.Context(), h.Pool, 0, req.Email, false, c.IP())
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "invalid credentials"})
 	}
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "database error"})
 	}
 	if bcrypt.CompareHashAndPassword([]byte(passwordHash), []byte(req.Password)) != nil {
+		recordLoginHistory(c.Context(), h.Pool, id, email, false, c.IP())
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "invalid credentials"})
 	}
 	if role == "subscriber" && !isApproved {
+		recordLoginHistory(c.Context(), h.Pool, id, email, false, c.IP())
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "account pending admin approval"})
 	}
 
@@ -95,6 +123,8 @@ func (h *AuthHandler) Login(c *fiber.Ctx) error {
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "could not sign token"})
 	}
+	recordLoginHistory(c.Context(), h.Pool, id, email, true, c.IP())
+	writeAudit(c.Context(), h.Pool, id, email, "LOGIN", "auth", itoa(id), map[string]any{"role": role, "at": time.Now()}, c.IP())
 	return c.JSON(fiber.Map{
 		"token": token,
 		"user":  fiber.Map{"id": id, "email": email, "role": role, "is_approved": isApproved},
@@ -168,10 +198,11 @@ func (h *AuthHandler) Me(c *fiber.Ctx) error {
 		approved  bool
 		createdAt time.Time
 	)
+	var avatarURL, address string
 	err := h.Pool.QueryRow(c.Context(),
-		`SELECT id, email, full_name, store_name, phone, role, is_approved, created_at
+		`SELECT id, email, full_name, store_name, phone, role, is_approved, created_at, avatar_url, address
 		 FROM users WHERE id = $1`, cl.UserID,
-	).Scan(&id, &email, &fullName, &storeName, &phone, &role, &approved, &createdAt)
+	).Scan(&id, &email, &fullName, &storeName, &phone, &role, &approved, &createdAt, &avatarURL, &address)
 	if err == pgx.ErrNoRows {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "user not found"})
 	}
@@ -181,6 +212,7 @@ func (h *AuthHandler) Me(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{
 		"id": id, "email": email, "full_name": fullName, "store_name": storeName,
 		"phone": phone, "role": role, "is_approved": approved, "created_at": createdAt,
+		"avatar_url": avatarURL, "address": address,
 	})
 }
 
@@ -242,6 +274,9 @@ func (h *AuthHandler) ChangeCredentials(c *fiber.Ctx) error {
 	if err := tx.Commit(c.Context()); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "commit failed"})
 	}
+	writeAudit(c.Context(), h.Pool, cl.UserID, cl.Email, "UPDATE_PROFILE", "users", itoa(cl.UserID), map[string]any{
+		"fields": map[string]bool{"email": req.Email != "", "password": req.Password != ""}, "at": time.Now(),
+	}, c.IP())
 	return c.JSON(fiber.Map{"success": true})
 }
 
@@ -306,7 +341,8 @@ func (h *AuthHandler) AdminChangeUserCredentials(c *fiber.Ctx) error {
 // GET /api/admin/users
 func (h *AuthHandler) ListUsers(c *fiber.Ctx) error {
 	rows, err := h.Pool.Query(c.Context(),
-		`SELECT id, email, full_name, store_name, phone, role, is_approved, created_at FROM users ORDER BY created_at DESC`)
+		`SELECT id, email, full_name, store_name, phone, role, is_approved, created_at, avatar_url, address, wallet_balance
+		 FROM users ORDER BY created_at DESC`)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "database error"})
 	}
@@ -323,13 +359,17 @@ func (h *AuthHandler) ListUsers(c *fiber.Ctx) error {
 			role      string
 			approved  bool
 			createdAt time.Time
+			avatarURL string
+			address   string
+			walletBal float64
 		)
-		if err := rows.Scan(&id, &email, &fullName, &storeName, &phone, &role, &approved, &createdAt); err != nil {
+		if err := rows.Scan(&id, &email, &fullName, &storeName, &phone, &role, &approved, &createdAt, &avatarURL, &address, &walletBal); err != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "scan error"})
 		}
 		users = append(users, fiber.Map{
 			"id": id, "email": email, "full_name": fullName, "store_name": storeName,
 			"phone": phone, "role": role, "is_approved": approved, "created_at": createdAt,
+			"avatar_url": avatarURL, "address": address, "wallet_balance": walletBal,
 		})
 	}
 	return c.JSON(users)

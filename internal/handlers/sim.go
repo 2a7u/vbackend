@@ -18,26 +18,26 @@ type SimHandler struct {
 }
 
 type simRow struct {
-	ID           int64      `json:"id"`
-	Barcode      string     `json:"barcode"`
-	Operator     string     `json:"operator"`
-	BatchName    string     `json:"batch_name"`
-	PhoneNumber  string     `json:"phone_number"`
-	PurchasePrice float64   `json:"purchase_price"`
-	SellingPrice float64    `json:"selling_price"`
-	Reward       float64    `json:"reward"`
-	Status       string     `json:"status"`
-	CreatedAt    time.Time  `json:"created_at"`
-	SoldAt       *time.Time `json:"sold_at,omitempty"`
+	ID            int64      `json:"id"`
+	Barcode       string     `json:"barcode"`
+	Operator      string     `json:"operator"`
+	BatchName     string     `json:"batch_name"`
+	PhoneNumber   string     `json:"phone_number"`
+	PurchasePrice float64    `json:"purchase_price"`
+	SellingPrice  float64    `json:"selling_price"`
+	Reward        float64    `json:"reward"`
+	Status        string     `json:"status"`
+	CreatedAt     time.Time  `json:"created_at"`
+	SoldAt        *time.Time `json:"sold_at,omitempty"`
 }
 
 type addSimsRequest struct {
-	Operator       string   `json:"operator"`
-	BatchName      string   `json:"batch_name"`
-	PurchasePrice  float64  `json:"purchase_price"`
-	SellingPrice   float64  `json:"selling_price"`
-	Reward         float64  `json:"reward"`
-	Barcodes       []string `json:"barcodes"` // batch add
+	Operator      string   `json:"operator"`
+	BatchName     string   `json:"batch_name"`
+	PurchasePrice float64  `json:"purchase_price"`
+	SellingPrice  float64  `json:"selling_price"`
+	Reward        float64  `json:"reward"`
+	Barcodes      []string `json:"barcodes"` // batch add
 }
 
 type sellSimRequest struct {
@@ -344,21 +344,50 @@ func (h *SimHandler) ListSales(c *fiber.Ctx) error {
 
 // DeleteSim permanently deletes an inventory row owned by the caller.
 // The path parameter accepts a numeric id OR the barcode string.
+// R4: bounded deletion (5/day, 24h window for non-admins) + audit archive.
 // DELETE /api/sims/:idOrBarcode
 func (h *SimHandler) DeleteSim(c *fiber.Ctx) error {
 	uid := middleware.UserID(c)
+	cl := middleware.ClaimsFrom(c)
+	isAdmin := cl != nil && cl.Role == "admin"
 	raw := strings.TrimSpace(c.Params("id"))
 	if raw == "" {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid id"})
 	}
+	var (
+		simID     int64
+		barcode   string
+		operator  string
+		createdAt time.Time
+	)
+	err := h.Pool.QueryRow(c.Context(),
+		`SELECT id, barcode, operator, created_at FROM sim_inventory
+		 WHERE user_id = $1 AND (id::text = $2 OR barcode = $2)`, uid, raw,
+	).Scan(&simID, &barcode, &operator, &createdAt)
+	if err == pgx.ErrNoRows {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "SIM not found"})
+	}
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "database error"})
+	}
+	if ok, status, msg := checkDeletionGuard(c.Context(), h.Pool, uid, isAdmin, createdAt); !ok {
+		return c.Status(status).JSON(fiber.Map{"error": msg})
+	}
 	res, err := h.Pool.Exec(c.Context(),
-		`DELETE FROM sim_inventory WHERE user_id = $1 AND (id::text = $2 OR barcode = $2)`, uid, raw)
+		`DELETE FROM sim_inventory WHERE id = $1 AND user_id = $2`, simID, uid)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "database error"})
 	}
 	if res.RowsAffected() == 0 {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "SIM not found"})
 	}
+	email := ""
+	if cl != nil {
+		email = cl.Email
+	}
+	writeAudit(c.Context(), h.Pool, uid, email, "DELETE_SIM", "sim_inventory", itoa(simID), map[string]any{
+		"item": "SIM", "barcode": barcode, "operator": operator, "deleted_at": time.Now(),
+	}, c.IP())
 	if h.Hub != nil {
 		h.Hub.Broadcast(uid, "inventory", fiber.Map{"action": "deleted", "target": raw})
 	}
@@ -368,21 +397,55 @@ func (h *SimHandler) DeleteSim(c *fiber.Ctx) error {
 // DeleteSale soft-deletes a sale record owned by the caller (is_deleted flag,
 // preserving the immutable ledger). The path parameter accepts a numeric id OR
 // the barcode string.
+// R4: bounded deletion (5/day, 24h window for non-admins) + audit archive.
 // DELETE /api/sales/:idOrBarcode
 func (h *SimHandler) DeleteSale(c *fiber.Ctx) error {
 	uid := middleware.UserID(c)
+	cl := middleware.ClaimsFrom(c)
+	isAdmin := cl != nil && cl.Role == "admin"
 	raw := strings.TrimSpace(c.Params("id"))
 	if raw == "" {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid id"})
 	}
+	var (
+		saleID        int64
+		barcode       string
+		operator      string
+		purchasePrice float64
+		sellingPrice  float64
+		profit        float64
+		createdAt     time.Time
+	)
+	err := h.Pool.QueryRow(c.Context(),
+		`SELECT id, barcode, operator, purchase_price, selling_price, profit, created_at FROM sim_sales
+		 WHERE user_id = $1 AND is_deleted = FALSE AND (id::text = $2 OR barcode = $2)`, uid, raw,
+	).Scan(&saleID, &barcode, &operator, &purchasePrice, &sellingPrice, &profit, &createdAt)
+	if err == pgx.ErrNoRows {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "sale not found"})
+	}
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "database error"})
+	}
+	if ok, status, msg := checkDeletionGuard(c.Context(), h.Pool, uid, isAdmin, createdAt); !ok {
+		return c.Status(status).JSON(fiber.Map{"error": msg})
+	}
 	res, err := h.Pool.Exec(c.Context(),
-		`UPDATE sim_sales SET is_deleted = TRUE WHERE user_id = $1 AND is_deleted = FALSE AND (id::text = $2 OR barcode = $2)`, uid, raw)
+		`UPDATE sim_sales SET is_deleted = TRUE WHERE id = $1 AND user_id = $2 AND is_deleted = FALSE`, saleID, uid)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "database error"})
 	}
 	if res.RowsAffected() == 0 {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "sale not found"})
 	}
+	email := ""
+	if cl != nil {
+		email = cl.Email
+	}
+	writeAudit(c.Context(), h.Pool, uid, email, "DELETE_SALE", "sim_sales", itoa(saleID), map[string]any{
+		"item": "SIM sale", "iccid": barcode, "operator": operator,
+		"amount": sellingPrice, "profit": profit, "purchase_price": purchasePrice,
+		"deleted_at": time.Now(),
+	}, c.IP())
 	if h.Hub != nil {
 		h.Hub.Broadcast(uid, "sales", fiber.Map{"action": "deleted", "target": raw})
 	}
@@ -489,21 +552,55 @@ func (h *SimHandler) ListCreditSales(c *fiber.Ctx) error {
 }
 
 // DeleteCreditSale soft-deletes a credit sale owned by the caller.
+// R4: bounded deletion (5/day, 24h window for non-admins) + audit archive.
 // DELETE /api/credit-sales/:id
 func (h *SimHandler) DeleteCreditSale(c *fiber.Ctx) error {
 	uid := middleware.UserID(c)
+	cl := middleware.ClaimsFrom(c)
+	isAdmin := cl != nil && cl.Role == "admin"
 	raw := strings.TrimSpace(c.Params("id"))
 	if raw == "" {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid id"})
 	}
+	var (
+		saleID       int64
+		operator     string
+		category     string
+		costPrice    float64
+		sellingPrice float64
+		profit       float64
+		createdAt    time.Time
+	)
+	err := h.Pool.QueryRow(c.Context(),
+		`SELECT id, operator, category, cost_price, selling_price, profit, created_at FROM credit_sales
+		 WHERE user_id = $1 AND is_deleted = FALSE AND id::text = $2`, uid, raw,
+	).Scan(&saleID, &operator, &category, &costPrice, &sellingPrice, &profit, &createdAt)
+	if err == pgx.ErrNoRows {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "credit sale not found"})
+	}
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "database error"})
+	}
+	if ok, status, msg := checkDeletionGuard(c.Context(), h.Pool, uid, isAdmin, createdAt); !ok {
+		return c.Status(status).JSON(fiber.Map{"error": msg})
+	}
 	res, err := h.Pool.Exec(c.Context(),
-		`UPDATE credit_sales SET is_deleted = TRUE WHERE user_id = $1 AND is_deleted = FALSE AND id::text = $2`, uid, raw)
+		`UPDATE credit_sales SET is_deleted = TRUE WHERE id = $1 AND user_id = $2 AND is_deleted = FALSE`, saleID, uid)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "database error"})
 	}
 	if res.RowsAffected() == 0 {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "credit sale not found"})
 	}
+	email := ""
+	if cl != nil {
+		email = cl.Email
+	}
+	writeAudit(c.Context(), h.Pool, uid, email, "DELETE_CREDIT_SALE", "credit_sales", itoa(saleID), map[string]any{
+		"item": "Credit sale", "operator": operator, "category": category,
+		"amount": sellingPrice, "profit": profit, "cost_price": costPrice,
+		"deleted_at": time.Now(),
+	}, c.IP())
 	if h.Hub != nil {
 		h.Hub.Broadcast(uid, "sales", fiber.Map{"action": "credit_deleted", "target": raw})
 	}

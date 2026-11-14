@@ -220,3 +220,138 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_credit_sales_client_request ON credit_sales
 
 CREATE INDEX IF NOT EXISTS idx_debt_contracts_due ON debt_contracts (user_id, first_due_date);
 CREATE INDEX IF NOT EXISTS idx_sim_sales_barcode ON sim_sales (user_id, barcode);
+
+-- -----------------------------------------------------------------------------
+-- system_meta: one-time migration markers (e.g. reset_v2_clean runs ONCE)
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS system_meta (
+    key        TEXT PRIMARY KEY,
+    applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- -----------------------------------------------------------------------------
+-- audit_logs: full real-time audit trail of every action & deletion
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS audit_logs (
+    id          BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    user_id     BIGINT REFERENCES users(id) ON DELETE SET NULL,
+    user_email  TEXT NOT NULL DEFAULT '',
+    user_name   TEXT NOT NULL DEFAULT '',
+    store_name  TEXT NOT NULL DEFAULT '',
+    action      TEXT NOT NULL,               -- CREATE_SALE, DELETE_SALE, DELETE_DEBT, PAY_DEBT, LOGIN, UPDATE_PROFILE, ...
+    entity      TEXT NOT NULL DEFAULT '',    -- sim_sale, credit_sale, debt_contract, user, ...
+    entity_id   TEXT NOT NULL DEFAULT '',
+    details     JSONB NOT NULL DEFAULT '{}'::jsonb,  -- item, iccid, amount, profit, customer_name, deleted_at, ...
+    ip_address  TEXT NOT NULL DEFAULT '',
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_user ON audit_logs (user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_action ON audit_logs (action, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_created ON audit_logs (created_at DESC);
+
+-- -----------------------------------------------------------------------------
+-- login_history: every login attempt with IP + Baghdad timestamp
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS login_history (
+    id         BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    user_id    BIGINT REFERENCES users(id) ON DELETE CASCADE,
+    email      TEXT NOT NULL DEFAULT '',
+    success    BOOLEAN NOT NULL DEFAULT FALSE,
+    ip_address TEXT NOT NULL DEFAULT '',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_login_history_user ON login_history (user_id, created_at DESC);
+
+-- -----------------------------------------------------------------------------
+-- wallet_ledger: subscriber wallet top-ups & payments (ZainCash etc.)
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS wallet_ledger (
+    id             BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    user_id        BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    amount         NUMERIC(12,2) NOT NULL CHECK (amount > 0),
+    kind           TEXT NOT NULL DEFAULT 'topup' CHECK (kind IN ('topup', 'payment', 'refund')),
+    provider       TEXT NOT NULL DEFAULT 'manual',          -- manual, zaincash, ...
+    provider_ref   TEXT,                                    -- transactionId / order id
+    status         TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'success', 'failed')),
+    note           TEXT NOT NULL DEFAULT '',
+    created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+    completed_at   TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_wallet_ledger_user ON wallet_ledger (user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_wallet_ledger_provider ON wallet_ledger (provider, provider_ref);
+
+-- -----------------------------------------------------------------------------
+-- subscriptions: VIP plan subscriptions paid via ZainCash
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS subscriptions (
+    id           BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    user_id      BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    plan         TEXT NOT NULL DEFAULT 'vip',
+    amount       NUMERIC(12,2) NOT NULL DEFAULT 0,
+    provider     TEXT NOT NULL DEFAULT 'zaincash',
+    provider_ref TEXT,
+    status       TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'active', 'expired', 'cancelled')),
+    started_at   TIMESTAMPTZ,
+    expires_at   TIMESTAMPTZ,
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_subscriptions_user ON subscriptions (user_id, created_at DESC);
+
+-- -----------------------------------------------------------------------------
+-- card_categories + digital_cards: admin-managed digital card catalog
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS card_categories (
+    id         BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    title      TEXT NOT NULL,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    active     BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS digital_cards (
+    id           BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    category_id  BIGINT REFERENCES card_categories(id) ON DELETE SET NULL,
+    title        TEXT NOT NULL,
+    category     TEXT NOT NULL DEFAULT '',
+    image_url    TEXT NOT NULL DEFAULT '',
+    buy_price    NUMERIC(12,2) NOT NULL DEFAULT 0 CHECK (buy_price >= 0),
+    sell_price   NUMERIC(12,2) NOT NULL DEFAULT 0 CHECK (sell_price >= 0),
+    active       BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_digital_cards_active ON digital_cards (active, category);
+CREATE INDEX IF NOT EXISTS idx_digital_cards_category ON digital_cards (category_id, active);
+CREATE INDEX IF NOT EXISTS idx_card_categories_active ON card_categories (active, sort_order);
+
+-- -----------------------------------------------------------------------------
+-- users v3 columns: avatar + address for admin-managed subscriber profiles
+-- -----------------------------------------------------------------------------
+ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT NOT NULL DEFAULT '';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS address TEXT NOT NULL DEFAULT '';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS wallet_balance NUMERIC(12,2) NOT NULL DEFAULT 0 CHECK (wallet_balance >= 0);
+
+-- -----------------------------------------------------------------------------
+-- vouchers_vault: encrypted / secured digital voucher PIN & serial storage
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS vouchers_vault (
+    id                 BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    user_id            BIGINT REFERENCES users(id) ON DELETE SET NULL,
+    brand_id           TEXT NOT NULL DEFAULT '',
+    voucher_id         TEXT NOT NULL DEFAULT '',
+    pin                TEXT NOT NULL,
+    serial_number      TEXT NOT NULL DEFAULT '',
+    cost_price         NUMERIC(12,2) NOT NULL DEFAULT 0 CHECK (cost_price >= 0),
+    selling_price      NUMERIC(12,2) NOT NULL DEFAULT 0 CHECK (selling_price >= 0),
+    is_sold            BOOLEAN NOT NULL DEFAULT FALSE,
+    sold_to_user_id    BIGINT REFERENCES users(id) ON DELETE SET NULL,
+    sold_to_store_name TEXT NOT NULL DEFAULT '',
+    sold_at            TIMESTAMPTZ,
+    sold_price         NUMERIC(12,2),
+    reprint_count      INTEGER NOT NULL DEFAULT 0,
+    created_at         TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_vouchers_vault_lookup ON vouchers_vault (voucher_id, is_sold);
+CREATE INDEX IF NOT EXISTS idx_vouchers_vault_brand ON vouchers_vault (brand_id, is_sold);
+CREATE INDEX IF NOT EXISTS idx_vouchers_vault_serial ON vouchers_vault (serial_number);
+

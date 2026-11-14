@@ -1,0 +1,40 @@
+# ==============================================================================
+# Apache / LiteSpeed Configuration for console.urukiq.com (Flutter Web SPA)
+# Optimized for Shared Hosting behind Cloudflare CDN
+# ==============================================================================
+
+# Enable URL Rewriting for Single Page Application (SPA)
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteBase /
+
+  # Do not rewrite if requested file or directory physically exists
+  RewriteCond %{REQUEST_FILENAME} -f [OR]
+  RewriteCond %{REQUEST_FILENAME} -d
+  RewriteRule ^ - [L]
+
+  # Route all other URLs to index.html
+  RewriteRule ^ index.html [L]
+</IfModule>
+
+# Security Headers
+<IfModule mod_headers.c>
+  Header always set X-Frame-Options "DENY"
+  Header always set X-Content-Type-Options "nosniff"
+  Header always set Referrer-Policy "strict-origin-when-cross-origin"
+</IfModule>
+
+# Cloudflare & Browser Caching Directives
+<IfModule mod_headers.c>
+  # 1. Critical bootstrap files must NEVER be cached (instant updates)
+  <FilesMatch "^(index\.html|flutter_service_worker\.js|flutter_bootstrap\.js|version\.json)$">
+    Header set Cache-Control "no-cache, no-store, must-revalidate"
+    Header set Pragma "no-cache"
+    Header set Expires 0
+  </FilesMatch>
+
+  # 2. Immutable static assets, icons, fonts, wasm (cached for 1 year)
+  <FilesMatch "\.(wasm|ttf|woff|woff2|png|jpg|jpeg|gif|svg|ico|json)$">
+    Header set Cache-Control "public, max-age=31536000, immutable"
+  </FilesMatch>
+</IfModule>

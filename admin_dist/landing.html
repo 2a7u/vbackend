@@ -1,0 +1,2061 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>منظومة أوروك POS | أسرع نظام سحابي لنقاط بيع كروت الرصيد والشرائح والطباعة الحرارية في العراق</title>
+  <meta name="description" content="منظومة أوروك (URUK POS) هي المنصة السحابية المتكاملة لإدارة مبيعات شرائح زين العراق، كروت الرصيد، خزنة الأكواد الفورية، الطباعة الحرارية ESC/POS، ودفتر الديون والأقساط.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800;900&family=Inter:wght@400;500;600;700&family=Roboto+Mono:wght@500;700&display=swap" rel="stylesheet">
+  <style>
+    /* -------------------------------------------------------------------------
+       URUK POS DESIGN SYSTEM (Refined Relate Theme Applied to UPOS)
+       Concept: Cool dawn over Iraqi Telecom Canvas | Light Minimalist SaaS
+       ------------------------------------------------------------------------- */
+    :root {
+      /* Palette Tokens */
+      --color-snow-canvas: #fcfcfc;
+      --color-lavender-wash: #f0f4fe;
+      --color-midnight-ink: #020520;
+      --color-graphite-body: #14141e;
+      --color-slate-caption: #374151;
+      --color-ash-helper: #6b7280;
+      --color-stone-divider: #e2e8f0;
+      --color-fog-surface: #f1f5f9;
+      --color-royal-signal: #0058bc; /* UPOS Primary Royal Blue */
+      --color-royal-signal-bright: #0077e6; /* UPOS Sky Blue Accent */
+      --color-cobalt-glow: #3b82f6;
+      --color-mint-win: #16ca2e;
+      --color-coral-lost: #f26052;
+      --color-amber-pending: #ffa64d;
+      --color-azure-focus: #0099ff;
+
+      /* Typography */
+      --font-arabic: 'Cairo', system-ui, -apple-system, sans-serif;
+      --font-inter: 'Inter', system-ui, -apple-system, sans-serif;
+      --font-mono: 'Roboto Mono', monospace;
+
+      /* Radii */
+      --radius-cards: 8px;
+      --radius-inputs: 12px;
+      --radius-pipeline-cards: 16px;
+      --radius-containers: 40px;
+      --radius-pills: 100px;
+      --radius-buttons: 9999px;
+
+      /* Shadows */
+      --shadow-sm: rgba(0, 0, 0, 0.08) 0px 0px 4px -2px;
+      --shadow-feature: rgba(0, 0, 0, 0.082) 0px 0.36px 1.8px -1.4px,
+                        rgba(0, 0, 0, 0.07) 0px 1.37px 6.87px -2.8px,
+                        rgba(0, 0, 0, 0.016) 0px 6px 30px -4.25px;
+      --shadow-xl: rgba(0, 88, 188, 0.1) 0px 0px 100px -28px;
+    }
+
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html {
+      scroll-behavior: smooth;
+      background-color: var(--color-snow-canvas);
+      color: var(--color-graphite-body);
+      font-family: var(--font-arabic);
+      font-size: 16px;
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    body {
+      background-color: var(--color-snow-canvas);
+      color: var(--color-graphite-body);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    a {
+      color: inherit;
+      text-decoration: none;
+      transition: all 0.2s ease;
+    }
+
+    button, input, select {
+      font-family: inherit;
+      border: none;
+      outline: none;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
+    /* -------------------------------------------------------------------------
+       TOP NAVIGATION
+       ------------------------------------------------------------------------- */
+    .nav-bar {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: rgba(252, 252, 252, 0.94);
+      backdrop-filter: blur(14px);
+      border-bottom: 1px solid var(--color-stone-divider);
+    }
+
+    .nav-inner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 74px;
+    }
+
+    .nav-brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-weight: 800;
+      font-size: 21px;
+      color: var(--color-midnight-ink);
+      letter-spacing: -0.02em;
+    }
+
+    .brand-mark {
+      width: 36px;
+      height: 36px;
+      background: linear-gradient(135deg, var(--color-royal-signal), var(--color-royal-signal-bright));
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #ffffff;
+      font-family: var(--font-inter);
+      font-weight: 800;
+      font-size: 20px;
+      box-shadow: 0 4px 10px rgba(0, 88, 188, 0.25);
+    }
+
+    .nav-brand-text {
+      display: flex;
+      flex-direction: column;
+      line-height: 1.15;
+    }
+
+    .nav-brand-title {
+      font-size: 19px;
+      font-weight: 800;
+      color: var(--color-midnight-ink);
+    }
+
+    .nav-brand-subtitle {
+      font-size: 10.5px;
+      font-weight: 600;
+      color: var(--color-royal-signal);
+      letter-spacing: 0.05em;
+    }
+
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 22px;
+      list-style: none;
+    }
+
+    @media (max-width: 900px) {
+      .nav-links {
+        display: none;
+      }
+    }
+
+    .nav-link {
+      font-size: 14.5px;
+      font-weight: 600;
+      color: var(--color-slate-caption);
+      padding: 6px 4px;
+      transition: color 0.15s ease;
+    }
+
+    .nav-link:hover {
+      color: var(--color-royal-signal);
+    }
+
+    .nav-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    /* Buttons (Strict Relate Ghost Outline & Frosted Pill spec) */
+    .btn-ghost-outline {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      background: var(--color-snow-canvas);
+      color: var(--color-royal-signal);
+      border: 1.5px solid var(--color-royal-signal);
+      border-radius: var(--radius-buttons);
+      padding: 10px 24px;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      box-shadow: 0 1px 2px rgba(0, 88, 188, 0.05);
+    }
+
+    .btn-ghost-outline:hover {
+      background: #ffffff;
+      box-shadow: 0 0 0 3px rgba(0, 88, 188, 0.12), var(--shadow-sm);
+      transform: translateY(-1px);
+    }
+
+    .btn-ghost-hero {
+      padding: 14px 32px;
+      font-size: 15.5px;
+    }
+
+    .btn-frosted-whatsapp {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      background: rgba(255, 255, 255, 0.9);
+      color: #15803d;
+      border: 1.5px solid #22c55e;
+      border-radius: var(--radius-buttons);
+      padding: 13px 28px;
+      font-size: 14.5px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      backdrop-filter: blur(8px);
+    }
+
+    .btn-frosted-whatsapp:hover {
+      background: #f0fdf4;
+      box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.15);
+      transform: translateY(-1px);
+    }
+
+    /* -------------------------------------------------------------------------
+       HERO SECTION
+       ------------------------------------------------------------------------- */
+    .hero-section {
+      position: relative;
+      padding-top: 44px;
+      padding-bottom: 72px;
+      overflow: hidden;
+    }
+
+    .hero-glow-underlay {
+      position: absolute;
+      top: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 100%;
+      max-width: 1280px;
+      height: 520px;
+      background: linear-gradient(180deg, rgba(0, 88, 188, 0.07) 0%, rgba(182, 203, 253, 0.35) 100%);
+      border-radius: 0 0 48px 48px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .hero-content {
+      position: relative;
+      z-index: 1;
+      text-align: center;
+      max-width: 860px;
+      margin: 0 auto;
+    }
+
+    .trust-badge-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: #ffffff;
+      border: 1px solid var(--color-stone-divider);
+      padding: 6px 16px 6px 10px;
+      border-radius: var(--radius-pills);
+      box-shadow: var(--shadow-sm);
+      margin-bottom: 24px;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--color-graphite-body);
+    }
+
+    .trust-icon-box {
+      width: 20px;
+      height: 20px;
+      background-color: var(--color-royal-signal);
+      color: #ffffff;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+    }
+
+    .hero-headline {
+      font-size: 46px;
+      font-weight: 800;
+      line-height: 1.22;
+      letter-spacing: -0.025em;
+      color: var(--color-midnight-ink);
+      margin-bottom: 18px;
+    }
+
+    @media (min-width: 992px) {
+      .hero-headline {
+        font-size: 58px;
+      }
+    }
+
+    .hero-headline .highlight {
+      color: var(--color-royal-signal);
+      position: relative;
+      display: inline-block;
+    }
+
+    .hero-subtext {
+      font-size: 17.5px;
+      line-height: 1.7;
+      color: var(--color-slate-caption);
+      max-width: 660px;
+      margin: 0 auto 32px auto;
+      font-weight: 500;
+    }
+
+    .hero-cta-group {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      margin-bottom: 44px;
+      flex-wrap: wrap;
+    }
+
+    /* -------------------------------------------------------------------------
+       HERO PRODUCT UI: SIGNATURE 4-COLUMN KANBAN & POS PIPELINE
+       ------------------------------------------------------------------------- */
+    .product-ui-wrapper {
+      position: relative;
+      z-index: 2;
+      margin-top: 10px;
+    }
+
+    .kanban-window {
+      background: #ffffff;
+      border: 1px solid var(--color-stone-divider);
+      border-radius: 20px;
+      box-shadow: var(--shadow-feature), var(--shadow-xl);
+      overflow: hidden;
+    }
+
+    .kanban-window-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 20px;
+      border-bottom: 1px solid var(--color-stone-divider);
+      background: var(--color-fog-surface);
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .kanban-window-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .window-controls {
+      display: flex;
+      gap: 6px;
+    }
+
+    .window-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--color-stone-divider);
+    }
+
+    .kanban-breadcrumb {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12.5px;
+      font-weight: 600;
+      color: var(--color-ash-helper);
+    }
+
+    .kanban-breadcrumb span.active {
+      color: var(--color-midnight-ink);
+      font-weight: 700;
+    }
+
+    .kanban-window-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .pill-filter {
+      padding: 4px 12px;
+      font-size: 12px;
+      font-weight: 600;
+      border-radius: var(--radius-pills);
+      background: #ffffff;
+      color: var(--color-slate-caption);
+      border: 1px solid var(--color-stone-divider);
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .pill-filter.active {
+      background: var(--color-lavender-wash);
+      border-color: rgba(0, 88, 188, 0.4);
+      color: var(--color-royal-signal);
+    }
+
+    /* 4-Column Board */
+    .kanban-board {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      padding: 16px;
+      background: var(--color-lavender-wash);
+      min-height: 440px;
+      overflow-x: auto;
+    }
+
+    @media (max-width: 992px) {
+      .kanban-board {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+
+    @media (max-width: 600px) {
+      .kanban-board {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .pipeline-column {
+      background: rgba(255, 255, 255, 0.7);
+      border: 1px solid rgba(226, 232, 240, 0.85);
+      border-radius: var(--radius-pipeline-cards);
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      backdrop-filter: blur(10px);
+    }
+
+    .column-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding-bottom: 8px;
+      border-bottom: 1px solid rgba(226, 232, 240, 0.6);
+    }
+
+    .column-title-group {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+    }
+
+    /* 5px colored dots per spec */
+    .status-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .status-dot.blue { background-color: var(--color-cobalt-glow); }
+    .status-dot.orange { background-color: var(--color-amber-pending); }
+    .status-dot.green { background-color: var(--color-mint-win); }
+    .status-dot.red { background-color: var(--color-coral-lost); }
+
+    .column-name {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--color-midnight-ink);
+    }
+
+    .column-count {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--color-ash-helper);
+      background: rgba(0, 0, 0, 0.05);
+      padding: 1px 7px;
+      border-radius: var(--radius-pills);
+    }
+
+    .column-value {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--color-royal-signal);
+      letter-spacing: -0.02em;
+    }
+
+    .column-cards {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    /* 8px Deal / Item Cards */
+    .deal-card {
+      background: #ffffff;
+      border-radius: var(--radius-cards);
+      padding: 12px 14px;
+      box-shadow: var(--shadow-sm);
+      border: 1px solid rgba(226, 232, 240, 0.85);
+      cursor: pointer;
+      transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+    }
+
+    .deal-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06), 0 0 0 1px var(--color-royal-signal);
+      border-color: var(--color-royal-signal);
+    }
+
+    .deal-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 6px;
+    }
+
+    .item-brand-tag {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .item-avatar {
+      width: 22px;
+      height: 22px;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+      font-weight: 800;
+      color: #ffffff;
+    }
+
+    .item-title {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--color-graphite-body);
+    }
+
+    .item-price {
+      font-family: var(--font-mono);
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--color-graphite-body);
+    }
+
+    .item-activity {
+      font-size: 11.5px;
+      line-height: 1.45;
+      color: var(--color-ash-helper);
+      margin-bottom: 10px;
+    }
+
+    .item-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding-top: 6px;
+      border-top: 1px solid var(--color-fog-surface);
+      font-size: 11px;
+    }
+
+    .badge-pill-micro {
+      font-size: 10.5px;
+      font-weight: 700;
+      padding: 1px 7px;
+      border-radius: var(--radius-pills);
+    }
+
+    /* -------------------------------------------------------------------------
+       TELECOM & DIGITAL BRANDS STRIP (8 Monochrome Brands)
+       ------------------------------------------------------------------------- */
+    .brand-strip-section {
+      padding: 60px 0 20px 0;
+      text-align: center;
+    }
+
+    .brand-strip-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--color-slate-caption);
+      margin-bottom: 30px;
+    }
+
+    .brand-strip-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 32px 40px;
+      max-width: 920px;
+      margin: 0 auto;
+      align-items: center;
+      justify-items: center;
+    }
+
+    @media (max-width: 768px) {
+      .brand-strip-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 20px 24px;
+      }
+    }
+
+    .telecom-logo-box {
+      font-size: 17px;
+      font-weight: 800;
+      color: var(--color-graphite-body);
+      opacity: 0.65;
+      transition: opacity 0.2s ease, transform 0.2s ease;
+      letter-spacing: -0.01em;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .telecom-logo-box:hover {
+      opacity: 1;
+      color: var(--color-royal-signal);
+      transform: translateY(-1px);
+    }
+
+    /* -------------------------------------------------------------------------
+       FEATURE SECTION CONTAINER: 40px radius, 52px 72px padding, multi-layer shadow
+       ------------------------------------------------------------------------- */
+    .feature-section {
+      padding: 80px 0 0 0;
+    }
+
+    .feature-card-container {
+      background: var(--color-snow-canvas);
+      border: 1px solid var(--color-stone-divider);
+      border-radius: var(--radius-containers);
+      padding: 52px 72px;
+      box-shadow: var(--shadow-feature);
+      margin-bottom: 60px;
+      position: relative;
+    }
+
+    @media (max-width: 768px) {
+      .feature-card-container {
+        padding: 30px 20px;
+        border-radius: 24px;
+      }
+    }
+
+    .feature-tag-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--color-royal-signal);
+      background: var(--color-lavender-wash);
+      padding: 4px 12px;
+      border-radius: var(--radius-pills);
+      margin-bottom: 12px;
+    }
+
+    .feature-heading {
+      font-size: 38px;
+      font-weight: 800;
+      line-height: 1.25;
+      letter-spacing: -0.02em;
+      color: var(--color-midnight-ink);
+      margin-bottom: 12px;
+    }
+
+    .feature-subtext {
+      font-size: 17px;
+      line-height: 1.7;
+      color: var(--color-slate-caption);
+      max-width: 620px;
+      margin-bottom: 32px;
+      font-weight: 500;
+    }
+
+    /* -------------------------------------------------------------------------
+       FEATURE 1: "خزنة الأكواد والمحفظة السحابية" (3-Pane Center)
+       ------------------------------------------------------------------------- */
+    .vault-mockup-grid {
+      background: #ffffff;
+      border: 1px solid var(--color-stone-divider);
+      border-radius: 16px;
+      box-shadow: var(--shadow-sm);
+      display: grid;
+      grid-template-columns: 280px 1fr 280px;
+      overflow: hidden;
+      min-height: 420px;
+    }
+
+    @media (max-width: 992px) {
+      .vault-mockup-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .pane-column {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .pane-border-left {
+      border-left: 1px solid var(--color-stone-divider);
+    }
+
+    .pane-header-box {
+      padding: 14px 16px;
+      background: var(--color-fog-surface);
+      border-bottom: 1px solid var(--color-stone-divider);
+      font-size: 12.5px;
+      font-weight: 700;
+      color: var(--color-midnight-ink);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .vault-item-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--color-stone-divider);
+      cursor: pointer;
+      transition: background 0.15s ease;
+    }
+
+    .vault-item-row:hover, .vault-item-row.active {
+      background: var(--color-lavender-wash);
+    }
+
+    .vault-item-row.active {
+      border-right: 3px solid var(--color-royal-signal);
+    }
+
+    /* Scratch PIN Delivery Card */
+    .scratch-delivery-box {
+      background: #ffffff;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      flex: 1;
+    }
+
+    .scratch-card-visual {
+      width: 100%;
+      max-width: 380px;
+      background: linear-gradient(135deg, #0058bc, #0077e6);
+      border-radius: 14px;
+      padding: 20px;
+      color: #ffffff;
+      box-shadow: 0 10px 25px rgba(0, 88, 188, 0.25);
+      margin-bottom: 18px;
+      text-align: right;
+    }
+
+    .scratch-secret-pill {
+      background: #ffffff;
+      color: var(--color-midnight-ink);
+      border-radius: 10px;
+      padding: 12px;
+      text-align: center;
+      margin: 12px 0 8px 0;
+      font-family: var(--font-mono);
+      font-size: 19px;
+      font-weight: 700;
+      letter-spacing: 2px;
+      box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+
+    /* Wallet Ledger Summary */
+    .wallet-stat-card {
+      padding: 16px;
+      background: #ffffff;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .wallet-balance-big {
+      font-family: var(--font-mono);
+      font-size: 26px;
+      font-weight: 700;
+      color: var(--color-royal-signal);
+      line-height: 1;
+      margin-top: 4px;
+    }
+
+    .ledger-mini-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 8px 0;
+      border-bottom: 1px dashed var(--color-stone-divider);
+      font-size: 12px;
+    }
+
+    /* -------------------------------------------------------------------------
+       FEATURE 2: "استوديو الطباعة والباركود الحراري"
+       ------------------------------------------------------------------------- */
+    .thermal-preview-container {
+      display: grid;
+      grid-template-columns: 340px 1fr;
+      gap: 24px;
+      align-items: center;
+    }
+
+    @media (max-width: 900px) {
+      .thermal-preview-container {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .realistic-sticker {
+      background: #ffffff;
+      border: 1px solid #c7c7cc;
+      border-radius: 10px;
+      padding: 18px;
+      box-shadow: 0 10px 20px rgba(0, 0, 0, 0.06);
+      text-align: center;
+    }
+
+    .sticker-top-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--color-slate-caption);
+      margin-bottom: 8px;
+      border-bottom: 1px dashed #d1d5db;
+      padding-bottom: 6px;
+    }
+
+    .sticker-price-huge {
+      font-family: var(--font-mono);
+      font-size: 32px;
+      font-weight: 800;
+      color: var(--color-midnight-ink);
+      line-height: 1.1;
+      margin: 6px 0;
+    }
+
+    .barcode-svg-mock {
+      width: 100%;
+      height: 48px;
+      margin: 8px 0 4px 0;
+    }
+
+    .thermal-controls-card {
+      background: #ffffff;
+      border: 1px solid var(--color-stone-divider);
+      border-radius: 16px;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .printer-status-active {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: #f0fdf4;
+      border: 1px solid #bbf7d0;
+      padding: 12px 16px;
+      border-radius: 12px;
+    }
+
+    /* -------------------------------------------------------------------------
+       FEATURE 3: "شرائح الاتصال وحماية الأرباح"
+       ------------------------------------------------------------------------- */
+    .sim-engine-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+    }
+
+    @media (max-width: 768px) {
+      .sim-engine-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .sim-stat-box {
+      background: #ffffff;
+      border: 1px solid var(--color-stone-divider);
+      border-radius: 16px;
+      padding: 22px;
+    }
+
+    .profit-pill-success {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(22, 202, 46, 0.12);
+      color: var(--color-mint-win);
+      border: 1px solid rgba(22, 202, 46, 0.3);
+      padding: 4px 12px;
+      border-radius: var(--radius-pills);
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    /* -------------------------------------------------------------------------
+       PRICING PLANS (From official SubscriptionPlanModel)
+       ------------------------------------------------------------------------- */
+    .pricing-section {
+      padding: 40px 0 80px 0;
+    }
+
+    .pricing-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 20px;
+      margin-top: 36px;
+    }
+
+    @media (max-width: 992px) {
+      .pricing-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .plan-card {
+      background: #ffffff;
+      border: 1px solid var(--color-stone-divider);
+      border-radius: 20px;
+      padding: 32px 24px;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .plan-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 12px 30px rgba(0, 0, 0, 0.08);
+      border-color: var(--color-royal-signal);
+    }
+
+    .plan-card.popular {
+      border: 2px solid var(--color-royal-signal);
+      background: #ffffff;
+    }
+
+    .popular-pill-badge {
+      position: absolute;
+      top: -12px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--color-royal-signal);
+      color: #ffffff;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 3px 14px;
+      border-radius: var(--radius-pills);
+    }
+
+    .plan-title {
+      font-size: 20px;
+      font-weight: 800;
+      color: var(--color-midnight-ink);
+      margin-bottom: 8px;
+    }
+
+    .plan-price {
+      font-family: var(--font-mono);
+      font-size: 30px;
+      font-weight: 800;
+      color: var(--color-royal-signal);
+      margin: 12px 0;
+    }
+
+    .plan-features-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin: 20px 0 28px 0;
+      flex: 1;
+    }
+
+    .plan-feature-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13.5px;
+      color: var(--color-slate-caption);
+    }
+
+    .feature-check-icon {
+      color: var(--color-mint-win);
+      font-weight: 800;
+    }
+
+    /* -------------------------------------------------------------------------
+       INTERACTIVE ROI / PROFIT CALCULATOR
+       ------------------------------------------------------------------------- */
+    .calc-card-container {
+      background: var(--color-fog-surface);
+      border: 1px solid var(--color-stone-divider);
+      border-radius: var(--radius-containers);
+      padding: 48px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 40px;
+      align-items: center;
+      margin-bottom: 80px;
+    }
+
+    @media (max-width: 900px) {
+      .calc-card-container {
+        grid-template-columns: 1fr;
+        padding: 32px 20px;
+      }
+    }
+
+    .calc-results-box {
+      background: #ffffff;
+      border: 1px solid var(--color-stone-divider);
+      border-radius: 20px;
+      padding: 28px;
+      box-shadow: var(--shadow-sm);
+    }
+
+    /* -------------------------------------------------------------------------
+       FINAL CTA
+       ------------------------------------------------------------------------- */
+    .final-cta-card {
+      background: linear-gradient(180deg, var(--color-lavender-wash) 0%, rgba(182, 203, 253, 0.45) 100%);
+      border: 1px solid rgba(0, 88, 188, 0.2);
+      border-radius: var(--radius-containers);
+      padding: 60px 32px;
+      text-align: center;
+      margin-bottom: 80px;
+    }
+
+    /* -------------------------------------------------------------------------
+       FOOTER (Midnight Ink)
+       ------------------------------------------------------------------------- */
+    .site-footer {
+      background-color: var(--color-midnight-ink);
+      color: #ffffff;
+      padding: 64px 0 36px 0;
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .footer-grid {
+      display: grid;
+      grid-template-columns: 2fr 1fr 1fr 1fr;
+      gap: 40px;
+      margin-bottom: 48px;
+    }
+
+    @media (max-width: 768px) {
+      .footer-grid {
+        grid-template-columns: 1fr;
+        gap: 30px;
+      }
+    }
+
+    .footer-desc {
+      color: #94a3b8;
+      font-size: 14px;
+      line-height: 1.7;
+      max-width: 340px;
+      margin-top: 12px;
+    }
+
+    .footer-title {
+      font-size: 13px;
+      font-weight: 700;
+      color: #e2e8f0;
+      text-transform: uppercase;
+      margin-bottom: 16px;
+    }
+
+    .footer-links-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      font-size: 13.5px;
+      color: #94a3b8;
+    }
+
+    .footer-links-list a:hover {
+      color: #ffffff;
+    }
+
+    .footer-bottom-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+      padding-top: 24px;
+      font-size: 13px;
+      color: #64748b;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    /* -------------------------------------------------------------------------
+       MODAL (Demo / Trial Signup)
+       ------------------------------------------------------------------------- */
+    .modal-backdrop {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(2, 5, 32, 0.5);
+      backdrop-filter: blur(8px);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+    }
+
+    .modal-backdrop.open {
+      display: flex;
+    }
+
+    .modal-card {
+      background: #ffffff;
+      border-radius: 20px;
+      border: 1px solid var(--color-stone-divider);
+      box-shadow: var(--shadow-xl), 0 20px 40px rgba(0, 0, 0, 0.15);
+      width: 100%;
+      max-width: 480px;
+      padding: 32px;
+      position: relative;
+      text-align: right;
+    }
+
+    .modal-close-btn {
+      position: absolute;
+      top: 16px;
+      left: 16px;
+      background: var(--color-fog-surface);
+      border: 1px solid var(--color-stone-divider);
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      color: var(--color-slate-caption);
+    }
+
+    .form-group {
+      margin-bottom: 14px;
+    }
+
+    .form-label {
+      display: block;
+      font-size: 12.5px;
+      font-weight: 700;
+      color: var(--color-midnight-ink);
+      margin-bottom: 6px;
+    }
+
+    .form-input {
+      width: 100%;
+      background: #ffffff;
+      border: 1px solid var(--color-stone-divider);
+      border-radius: var(--radius-inputs);
+      padding: 11px 14px;
+      font-size: 14px;
+      color: var(--color-graphite-body);
+    }
+
+    .form-input:focus {
+      border-color: var(--color-azure-focus);
+      box-shadow: 0 0 0 3px rgba(0, 153, 255, 0.15);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top Navigation -->
+  <nav class="nav-bar">
+    <div class="container nav-inner">
+      <a href="#" class="nav-brand">
+        <div class="brand-mark">U</div>
+        <div class="nav-brand-text">
+          <span class="nav-brand-title">أوروك POS</span>
+          <span class="nav-brand-subtitle">URUK TELECOM POS</span>
+        </div>
+      </a>
+
+      <ul class="nav-links">
+        <li><a href="#vouchers" class="nav-link">البطاقات والخزنة</a></li>
+        <li><a href="#sim-pos" class="nav-link">شرائح الاتصال</a></li>
+        <li><a href="#thermal-studio" class="nav-link">الطباعة الحرارية</a></li>
+        <li><a href="#debts" class="nav-link">الديون والأقساط</a></li>
+        <li><a href="#pricing" class="nav-link">باقات الاشتراك</a></li>
+        <li><a href="#calculator" class="nav-link">حاسبة الأرباح</a></li>
+      </ul>
+
+      <div class="nav-actions">
+        <a href="https://wa.me/9647874500747?text=السلام%20عليكم%20إدارة%20أوروك%20POS،%20أود%20الاستفسار%20عن%20تفعيل%20المنظومة" target="_blank" class="btn-frosted-whatsapp" style="padding:8px 16px; font-size:13px;">
+          واتساب الدعم 💬
+        </a>
+        <button class="btn-ghost-outline" onclick="openTrialModal('البدء بالتجربة المجانية 7 أيام')">
+          تجربة مجانية
+        </button>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Hero Section -->
+  <section class="hero-section">
+    <div class="hero-glow-underlay"></div>
+    <div class="container">
+      <div class="hero-content">
+        <!-- Trust Signal Badge -->
+        <div class="trust-badge-pill">
+          <span class="trust-icon-box">⚡</span>
+          <span>المنظومة السحابية المعتمدة لنقاط بيع الاتصالات والبطاقات في العراق</span>
+        </div>
+
+        <!-- Hero Headline -->
+        <h1 class="hero-headline">
+          أسرع منظومة <span class="highlight">نقاط بيع</span> لكروت الرصيد والشرائح والطباعة الحرارية
+        </h1>
+
+        <!-- Hero Subtext -->
+        <p class="hero-subtext">
+          إدارة مبيعات شرائح زين العراق، خزنة الأكواد الفورية (Cloud PIN Vault)، طباعة ملصقات الباركود الحرارية، ومحفظة رصيد إلكترونية مباشرة لكل محطة ونقطة بيع.
+        </p>
+
+        <!-- CTA Buttons -->
+        <div class="hero-cta-group">
+          <button class="btn-ghost-outline btn-ghost-hero" onclick="openTrialModal('تفعيل التجربة المجانية 7 أيام')">
+            ابدأ التجربة المجانية (7 أيام)
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M10 12L6 8L10 4" stroke="#0058bc" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+          <a href="https://wa.me/9647874500747?text=مرحباً%20أوروك%20POS،%20أريد%20الاشتراك%20في%20المنظومة" target="_blank" class="btn-frosted-whatsapp">
+            طلب اشتراك رسمي عبر واتساب
+          </a>
+        </div>
+      </div>
+
+      <!-- Hero Product UI: Signature 4-Column Live POS Dashboard -->
+      <div class="product-ui-wrapper" id="vouchers">
+        <div class="kanban-window">
+          <!-- Window Header -->
+          <div class="kanban-window-header">
+            <div class="kanban-window-left">
+              <div class="window-controls">
+                <div class="window-dot"></div>
+                <div class="window-dot"></div>
+                <div class="window-dot"></div>
+              </div>
+              <div class="kanban-breadcrumb">
+                <span>منظومة أوروك POS</span>
+                <span>/</span>
+                <span>فرع المنصور والوركاء</span>
+                <span>/</span>
+                <span class="active">لوحة العمليات الحية</span>
+              </div>
+            </div>
+            <div class="kanban-window-actions">
+              <button class="pill-filter active">الكل (120 كارت)</button>
+              <button class="pill-filter">زين العراق</button>
+              <button class="pill-filter">شبكات FTTH الضوئية</button>
+            </div>
+          </div>
+
+          <!-- 4 Kanban Columns -->
+          <div class="kanban-board">
+            
+            <!-- Column 1: بطاقات ورصيد (Blue dot) -->
+            <div class="pipeline-column">
+              <div class="column-header">
+                <div class="column-title-group">
+                  <div class="status-dot blue"></div>
+                  <span class="column-name">كروت الرصيد والإنترنت</span>
+                  <span class="column-count">420</span>
+                </div>
+                <span class="column-value">3,450,000 د.ع</span>
+              </div>
+              <div class="column-cards">
+                <div class="deal-card" onclick="openVoucherPreview('بطاقة شحن زين 5,000', '5,250 د.ع', 'تسليم كود فوري S/N')">
+                  <div class="deal-top">
+                    <div class="item-brand-tag">
+                      <div class="item-avatar" style="background:#0058bc;">Z</div>
+                      <span class="item-title">زين العراق 5,000</span>
+                    </div>
+                    <span class="item-price">5,250 د.ع</span>
+                  </div>
+                  <div class="item-activity">كود شحن فوري معتمد • متوفر بالخزنة 48 كارت</div>
+                  <div class="item-footer">
+                    <span class="badge-pill-micro" style="background:#e0f2fe; color:#0058bc;">الأكثر طلباً</span>
+                    <span style="color:#6b7280;">منذ دقيقتين</span>
+                  </div>
+                </div>
+
+                <div class="deal-card" onclick="openVoucherPreview('باقة بكيفي 6,000', '6,250 د.ع', '90 دقيقة + 1.5GB')">
+                  <div class="deal-top">
+                    <div class="item-brand-tag">
+                      <div class="item-avatar" style="background:#0284c7;">B</div>
+                      <span class="item-title">باقة بكيفي 6,000</span>
+                    </div>
+                    <span class="item-price">6,250 د.ع</span>
+                  </div>
+                  <div class="item-activity">90 دقيقة اتصال + 1.5GB إنترنت معتمد</div>
+                  <div class="item-footer">
+                    <span class="badge-pill-micro" style="background:#fef3c7; color:#b45309;">باقة مميزة</span>
+                    <span style="color:#6b7280;">منذ 15 دقيقة</span>
+                  </div>
+                </div>
+
+                <div class="deal-card" onclick="openVoucherPreview('الرحمة فايبر FTTH', '35,000 د.ع', 'اشتراك ضوئي شهري')">
+                  <div class="deal-top">
+                    <div class="item-brand-tag">
+                      <div class="item-avatar" style="background:#10b981;">R</div>
+                      <span class="item-title">الرحمة FTTH فايبر</span>
+                    </div>
+                    <span class="item-price">35,000 د.ع</span>
+                  </div>
+                  <div class="item-activity">اشتراك ضوئي شهري فائق السرعة</div>
+                  <div class="item-footer">
+                    <span class="badge-pill-micro" style="background:#dcfce7; color:#15803d;">إنترنت ضوئي</span>
+                    <span style="color:#6b7280;">اليوم</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Column 2: شرائح الاتصال (Orange dot) -->
+            <div class="pipeline-column" id="sim-pos">
+              <div class="column-header">
+                <div class="column-title-group">
+                  <div class="status-dot orange"></div>
+                  <span class="column-name">شرائح SIM المعتمدة</span>
+                  <span class="column-count">65</span>
+                </div>
+                <span class="column-value">485,000 د.ع</span>
+              </div>
+              <div class="column-cards">
+                <div class="deal-card" onclick="openTrialModal('بيع وتفعيل شرائح الاتصال')">
+                  <div class="deal-top">
+                    <div class="item-brand-tag">
+                      <div class="item-avatar" style="background:#f97316;">SIM</div>
+                      <span class="item-title">شريحة زين 4G معبأة</span>
+                    </div>
+                    <span class="item-price">6,500 د.ع</span>
+                  </div>
+                  <div class="item-activity">مسح باركود ICCID بالكاميرا • ربح فوري 3,750 د.ع</div>
+                  <div class="item-footer">
+                    <span class="badge-pill-micro" style="background:#ffedd5; color:#c2410c;">خط أمان فعال</span>
+                    <span style="color:#6b7280;">منذ ساعة</span>
+                  </div>
+                </div>
+
+                <div class="deal-card" onclick="openTrialModal('تفعيل شريحة بيانات 5G')">
+                  <div class="deal-top">
+                    <div class="item-brand-tag">
+                      <div class="item-avatar" style="background:#ea580c;">5G</div>
+                      <span class="item-title">شريحة زين بيانات 5G</span>
+                    </div>
+                    <span class="item-price">12,000 د.ع</span>
+                  </div>
+                  <div class="item-activity">مكافأة تفعيل فورية + عمولة شهرية للوكيل</div>
+                  <div class="item-footer">
+                    <span class="badge-pill-micro" style="background:#e0f2fe; color:#0058bc;">عمولة إضافية</span>
+                    <span style="color:#6b7280;">منذ 3 ساعات</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Column 3: الطباعة الحرارية المكتملة (Green dot) -->
+            <div class="pipeline-column" id="thermal-studio">
+              <div class="column-header">
+                <div class="column-title-group">
+                  <div class="status-dot green"></div>
+                  <span class="column-name">الطباعة والملصقات</span>
+                  <span class="column-count">128</span>
+                </div>
+                <span class="column-value">1,890,000 د.ع</span>
+              </div>
+              <div class="column-cards">
+                <div class="deal-card" onclick="openThermalModal()">
+                  <div class="deal-top">
+                    <div class="item-brand-tag">
+                      <div class="item-avatar" style="background:#16a34a;">🖨️</div>
+                      <span class="item-title">ملصق حراري 40x60 مم</span>
+                    </div>
+                    <span class="item-price">50 ملصق</span>
+                  </div>
+                  <div class="item-activity">طابعة Wi-Fi المنفذ 9100 • باركود ضوئي Code-128</div>
+                  <div class="item-footer">
+                    <span class="badge-pill-micro" style="background:#dcfce7; color:#15803d;">جاهز للرف</span>
+                    <span style="color:#6b7280;">ناجح OK</span>
+                  </div>
+                </div>
+
+                <div class="deal-card" onclick="openThermalModal()">
+                  <div class="deal-top">
+                    <div class="item-brand-tag">
+                      <div class="item-avatar" style="background:#15803d;">A4</div>
+                      <span class="item-title">تصدير شبكي ورق A4</span>
+                    </div>
+                    <span class="item-price">دفعة كاملة</span>
+                  </div>
+                  <div class="item-activity">تصدير PDF عالي الدقة جاهز للطباعة المكتبية</div>
+                  <div class="item-footer">
+                    <span class="badge-pill-micro" style="background:#e0f2fe; color:#0058bc;">PDF معتمد</span>
+                    <span style="color:#6b7280;">اليوم</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Column 4: الديون والأقساط المستحقة (Red dot) -->
+            <div class="pipeline-column" id="debts">
+              <div class="column-header">
+                <div class="column-title-group">
+                  <div class="status-dot red"></div>
+                  <span class="column-name">دفتر الديون والأقساط</span>
+                  <span class="column-count">12</span>
+                </div>
+                <span class="column-value">640,000 د.ع</span>
+              </div>
+              <div class="column-cards">
+                <div class="deal-card" onclick="openTrialModal('إدارة الديون والأقساط')">
+                  <div class="deal-top">
+                    <div class="item-brand-tag">
+                      <div class="item-avatar" style="background:#dc2626;">D</div>
+                      <span class="item-title">عقد قسط هاتف ذكي</span>
+                    </div>
+                    <span class="item-price">125,000 د.ع</span>
+                  </div>
+                  <div class="item-activity">المتبقي: 125 ألف • استحقاق القسط القادم 10 بالشهر</div>
+                  <div class="item-footer">
+                    <span class="badge-pill-micro" style="background:#fee2e2; color:#b91c1c;">إشعار واتساب</span>
+                    <span style="color:#6b7280;">مستحق</span>
+                  </div>
+                </div>
+
+                <div class="deal-card" onclick="openTrialModal('كروت رصيد بالدين')">
+                  <div class="deal-top">
+                    <div class="item-brand-tag">
+                      <div class="item-avatar" style="background:#b91c1c;">C</div>
+                      <span class="item-title">مبيعات كروت بالآجل</span>
+                    </div>
+                    <span class="item-price">45,000 د.ع</span>
+                  </div>
+                  <div class="item-activity">حساب مؤتمت بالكامل مع إمكانية التسديد الجزئي</div>
+                  <div class="item-footer">
+                    <span class="badge-pill-micro" style="background:#fee2e2; color:#b91c1c;">قيد التسديد</span>
+                    <span style="color:#6b7280;">نشط</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Telecom & Brand Partners Strip (8 Monochrome Iraqi Brands) -->
+  <section class="brand-strip-section">
+    <div class="container">
+      <p class="brand-strip-title">متوافق ومعتمد مع كبرى شبكات الاتصالات والإنترنت والبطاقات الرقمية في العراق</p>
+      
+      <div class="brand-strip-grid">
+        <div class="telecom-logo-box">زين العراق (Zain Iraq)</div>
+        <div class="telecom-logo-box">الرحمة FTTH الضوئي</div>
+        <div class="telecom-logo-box">الجزيرة فايبر (Al-Jazeera)</div>
+        <div class="telecom-logo-box">إيرثلنك (Earthlink)</div>
+        <div class="telecom-logo-box">PlayStation Network</div>
+        <div class="telecom-logo-box">Apple iTunes & App Store</div>
+        <div class="telecom-logo-box">PUBG Mobile شدات</div>
+        <div class="telecom-logo-box">Xbox Live Gift Cards</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Feature 1: "خزنة الأكواد والمحفظة السحابية" -->
+  <section class="feature-section">
+    <div class="container">
+      <div class="feature-card-container">
+        <div class="feature-tag-pill">CLOUD VOUCHER VAULT & WALLET</div>
+        <h2 class="feature-heading">خزنة الأكواد الرقمية ومحفظة الرصيد الفورية.</h2>
+        <p class="feature-subtext">
+          تغذية وجبات كروت الشحن بالجملة عبر لصق Excel المباشر، تسليم الأكواد والسيريال بنظام الخدش التفاعلي للزبون، ومحفظة رصيد حية للمشترك مع سجل حركات تفصيلي.
+        </p>
+
+        <!-- 3-Pane Center UI -->
+        <div class="vault-mockup-grid">
+          <!-- Pane 1: قائمة الكروت -->
+          <div class="pane-column" style="background:var(--color-fog-surface);">
+            <div class="pane-header-box">
+              <span>كتالوج البطاقات المعتمد</span>
+              <span class="badge-pill-micro" style="background:#e0f2fe; color:#0058bc;">2-Level Catalog</span>
+            </div>
+            <div class="vault-item-row active" onclick="updateVaultDemo('زين العراق 5,000', '5,250 د.ع', '6401-9823-1102-4491', '2026-9041052')">
+              <div class="item-avatar" style="background:#0058bc;">Z</div>
+              <div>
+                <div style="font-weight:700; font-size:13px;">زين العراق 5,000</div>
+                <div style="font-size:11px; color:#6b7280;">المتوفر: 48 كود شحن</div>
+              </div>
+            </div>
+            <div class="vault-item-row" onclick="updateVaultDemo('باقة بكيفي 6,000', '6,250 د.ع', '8812-4019-3381-9021', '2026-8812041')">
+              <div class="item-avatar" style="background:#0284c7;">B</div>
+              <div>
+                <div style="font-weight:700; font-size:13px;">باقة بكيفي 6,000</div>
+                <div style="font-size:11px; color:#6b7280;">المتوفر: 25 كود شحن</div>
+              </div>
+            </div>
+            <div class="vault-item-row" onclick="updateVaultDemo('الرحمة فايبر FTTH', '35,000 د.ع', 'FTTH-RAHMA-90412', 'SN-FTTH-0914')">
+              <div class="item-avatar" style="background:#10b981;">R</div>
+              <div>
+                <div style="font-weight:700; font-size:13px;">الرحمة FTTH الضوئي</div>
+                <div style="font-size:11px; color:#6b7280;">المتوفر: 12 كود تجديد</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Pane 2: كرت التسليم والخدش الفوري -->
+          <div class="pane-column pane-border-left">
+            <div class="pane-header-box">
+              <span>نافذة تسليم الكود للزبون (PIN Delivery)</span>
+              <span style="color:#16a34a; font-weight:700;">تسليم سحابي فوري</span>
+            </div>
+            <div class="scratch-delivery-box">
+              <div class="scratch-card-visual">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                  <span style="font-size:13px; font-weight:700;" id="vault-card-name">بطاقة شحن زين 5,000</span>
+                  <span style="font-size:12px; opacity:0.85;">منظومة أوروك POS</span>
+                </div>
+                <div class="scratch-secret-pill" id="vault-card-pin">6401-9823-1102-4491</div>
+                <div style="display:flex; justify-content:space-between; font-size:11px; opacity:0.9;">
+                  <span id="vault-card-sn">S/N: 2026-9041052</span>
+                  <span id="vault-card-price">السعر: 5,250 د.ع</span>
+                </div>
+              </div>
+
+              <div style="display:flex; gap:10px;">
+                <button class="btn-ghost-outline" style="padding:8px 18px; font-size:12.5px;" onclick="copyPinCode()">
+                  نسخ كود الشحن 📋
+                </button>
+                <button class="btn-ghost-outline" style="padding:8px 18px; font-size:12.5px;" onclick="openThermalModal()">
+                  طباعة الإيصال الحراري 🖨️
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Pane 3: المحفظة الحية للمشترك -->
+          <div class="pane-column pane-border-left">
+            <div class="pane-header-box">
+              <span>رصيد المحفظة وحركات الحساب</span>
+              <span class="badge-pill-micro" style="background:#dcfce7; color:#15803d;">نشط</span>
+            </div>
+            <div class="wallet-stat-card">
+              <div>
+                <span style="font-size:11.5px; color:#6b7280; font-weight:600;">رصيد المحفظة الحالي:</span>
+                <div class="wallet-balance-big">1,425,000 د.ع</div>
+              </div>
+              <div style="font-size:11.5px; font-weight:700; color:#374151; margin-top:6px;">سجل الحركات السحابية:</div>
+              <div class="ledger-mini-row">
+                <span>تعبئة رصيد محفظة (إدارة)</span>
+                <span style="color:#16a34a; font-weight:700;">+500,000 د.ع</span>
+              </div>
+              <div class="ledger-mini-row">
+                <span>شراء وجبة بطاقات زين 5,000</span>
+                <span style="color:#dc2626; font-weight:700;">-120,000 د.ع</span>
+              </div>
+              <div class="ledger-mini-row">
+                <span>تفعيل شريحة معبأة ICCID</span>
+                <span style="color:#16a34a; font-weight:700;">+3,750 د.ع</span>
+              </div>
+              <button class="btn-ghost-outline" style="width:100%; padding:8px; font-size:12px; margin-top:8px;" onclick="openTrialModal('طلب تعبئة رصيد المحفظة')">
+                + طلب تعبئة المحفظة عبر واتساب
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Feature 2: "استوديو الطباعة والباركود الحراري" -->
+  <section class="feature-section">
+    <div class="container">
+      <div class="feature-card-container">
+        <div class="feature-tag-pill">REAL HARDWARE & ESC/POS PROTOCOL</div>
+        <h2 class="feature-heading">استوديو الطباعة الحرارية الحقيقية والباركود الضوئي.</h2>
+        <p class="feature-subtext">
+          اقتران حقيقي بالطابعات عبر البلوتوث أو شبكة الـ Wi-Fi (Port 9100)، توليد باركود ضوئي Code-128 مطابق للمواصفات الدولية بدون تشويش لقارئات الليزر، ودعم رولات 80 مم و 58 مم وتصدير PDF ورق A4 لاصق.
+        </p>
+
+        <div class="thermal-preview-container">
+          <!-- 1:1 Live Label Preview -->
+          <div class="realistic-sticker">
+            <div class="sticker-top-row">
+              <span>#01</span>
+              <span>نقطة بيع أوروك • فرع المنصور</span>
+            </div>
+            <div style="font-size:13px; font-weight:800; color:var(--color-midnight-ink); margin-top:4px;">بطاقة شحن زين 5,000</div>
+            <div style="font-size:10px; color:#6b7280;">رصيد أساسي معتمد رسمي</div>
+            <div class="sticker-price-huge">5,250 <span style="font-size:14px; font-weight:700; color:#6b7280;">د.ع</span></div>
+            
+            <!-- Code-128 Barcode Mock -->
+            <svg class="barcode-svg-mock" viewBox="0 0 200 40">
+              <rect x="10" y="0" width="3" height="35" fill="#000"/>
+              <rect x="16" y="0" width="2" height="35" fill="#000"/>
+              <rect x="22" y="0" width="5" height="35" fill="#000"/>
+              <rect x="30" y="0" width="2" height="35" fill="#000"/>
+              <rect x="36" y="0" width="4" height="35" fill="#000"/>
+              <rect x="44" y="0" width="2" height="35" fill="#000"/>
+              <rect x="50" y="0" width="6" height="35" fill="#000"/>
+              <rect x="60" y="0" width="3" height="35" fill="#000"/>
+              <rect x="68" y="0" width="2" height="35" fill="#000"/>
+              <rect x="75" y="0" width="5" height="35" fill="#000"/>
+              <rect x="85" y="0" width="4" height="35" fill="#000"/>
+              <rect x="94" y="0" width="2" height="35" fill="#000"/>
+              <rect x="100" y="0" width="6" height="35" fill="#000"/>
+              <rect x="110" y="0" width="3" height="35" fill="#000"/>
+              <rect x="118" y="0" width="4" height="35" fill="#000"/>
+              <rect x="126" y="0" width="2" height="35" fill="#000"/>
+              <rect x="132" y="0" width="5" height="35" fill="#000"/>
+              <rect x="142" y="0" width="3" height="35" fill="#000"/>
+              <rect x="150" y="0" width="2" height="35" fill="#000"/>
+              <rect x="156" y="0" width="6" height="35" fill="#000"/>
+              <rect x="168" y="0" width="3" height="35" fill="#000"/>
+              <rect x="176" y="0" width="4" height="35" fill="#000"/>
+              <rect x="185" y="0" width="2" height="35" fill="#000"/>
+            </svg>
+            <div style="font-family:var(--font-mono); font-size:11px; font-weight:700; letter-spacing:1.5px; margin-bottom:8px;">IQ - 2026 - 640105</div>
+            <div style="display:flex; justify-content:space-between; font-size:9.5px; color:#6b7280; border-top:1px solid #e5e7eb; padding-top:4px;">
+              <span>تسعير رسمي معتمد ✓</span>
+              <span>2026/11/05</span>
+            </div>
+          </div>
+
+          <!-- Controls and Hardware Options -->
+          <div class="thermal-controls-card">
+            <div class="printer-status-active">
+              <div>
+                <div style="font-size:13px; font-weight:800; color:#15803d;">طابعة الشبكة مقترنة ونشطة ✅</div>
+                <div style="font-size:11px; color:#166534;">متصل: 192.168.1.100:9100 (ESC/POS حراري مباشر)</div>
+              </div>
+              <span class="badge-pill-micro" style="background:#16a34a; color:#ffffff;">رول 80mm</span>
+            </div>
+
+            <div style="display:flex; gap:10px;">
+              <button class="btn-ghost-outline" style="flex:1; padding:10px;" onclick="simulateTestPrint()">
+                فحص طباعة ومعايرة 🖨️
+              </button>
+              <button class="btn-ghost-outline" style="flex:1; padding:10px;" onclick="openTrialModal('إعدادات الطابعات الحرارية')">
+                تغيير إعدادات الطابعة ⚙️
+              </button>
+            </div>
+
+            <div style="background:var(--color-fog-surface); border-radius:10px; padding:12px; font-size:12.5px; color:#374151;">
+              💡 <strong>معايرة أوروك:</strong> الباركود المطبوع متوافق 100% مع قارئات الباركود الليزرية وكاميرات الموبايل لسرعة البيع في ثانية واحدة.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Feature 3: "شرائح الاتصال وحماية الأرباح" -->
+  <section class="feature-section">
+    <div class="container">
+      <div class="feature-card-container">
+        <div class="feature-tag-pill">SMART SIM ENGINE & ICCID</div>
+        <h2 class="feature-heading">بيع الشرائح الذكي وجدار حماية الأرباح.</h2>
+        <p class="feature-subtext">
+          سحب باركود ICCID بكاميرا الهاتف، حساب تلقائي لمكافأة التفعيل وعمولة الشريحة، وتنبيه خط الأمان الذكي (Break-even Guard) لمنع البيع بأقل من التكلفة.
+        </p>
+
+        <div class="sim-engine-grid">
+          <div class="sim-stat-box">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+              <span style="font-weight:700; font-size:14px; color:var(--color-midnight-ink);">حساب تكاليف وأرباح الشريحة التلقائي</span>
+              <span class="profit-pill-success">+3,750 د.ع ربح صافي</span>
+            </div>
+            <div style="display:flex; flex-direction:column; gap:8px; font-size:13px; color:#374151;">
+              <div style="display:flex; justify-content:space-between;">
+                <span>سعر الشريحة الرسمي للوكيل:</span>
+                <span style="font-weight:700;">2,500 د.ع</span>
+              </div>
+              <div style="display:flex; justify-content:space-between;">
+                <span>الرصيد المعبأ بالخط:</span>
+                <span style="font-weight:700;">5,000 د.ع</span>
+              </div>
+              <div style="display:flex; justify-content:space-between; color:#16a34a;">
+                <span>مكافأة التفعيل من الشركة:</span>
+                <span style="font-weight:700;">+3,000 د.ع</span>
+              </div>
+              <div style="display:flex; justify-content:space-between; color:#0058bc;">
+                <span>سعر البيع المقترح للزبون:</span>
+                <span style="font-weight:800; font-family:var(--font-mono); font-size:15px;">6,250 د.ع</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="sim-stat-box" style="background:var(--color-lavender-wash); border-color:rgba(0,88,188,0.25);">
+            <div style="font-weight:800; font-size:15px; color:var(--color-royal-signal); margin-bottom:8px;">
+              🛡️ جدار حماية رأس المال (Break-even Guard)
+            </div>
+            <p style="font-size:13px; color:#374151; line-height:1.6; margin-bottom:12px;">
+              تمنع المنظومة موظفيك من البيع بخسارة عبر فحص رياضي فوري يحسب العمولات والمكافآت ويحدد أقل سعر بيع آمن تلقائياً.
+            </p>
+            <div style="background:#ffffff; border-radius:8px; padding:10px; font-size:12px; font-weight:700; color:#15803d;">
+              ✓ نقطة التعادل الآمنة: 3,750 د.ع • يمنع البيع بأقل منها لحماية رأس مالك.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Interactive ROI & Profit Calculator -->
+  <section class="container" id="calculator">
+    <div class="calc-card-container">
+      <div>
+        <div class="feature-tag-pill">PROFIT CALCULATOR</div>
+        <h3 style="font-size:30px; font-weight:800; color:var(--color-midnight-ink); margin-bottom:10px;">احسب أرباح نقطة بيعك مع أوروك POS</h3>
+        <p style="font-size:15px; color:#475569; margin-bottom:24px;">
+          اكتشف مقدار الأرباح والوقت المهدر في الجرد اليدوي الذي ستوفره أوروك لنشاطك التجاري شهرياً.
+        </p>
+
+        <div style="margin-bottom:20px;">
+          <div style="display:flex; justify-content:space-between; font-size:13.5px; font-weight:700; margin-bottom:6px;">
+            <span>عدد العمليات اليومية (كروت + شرائح):</span>
+            <span style="color:var(--color-royal-signal); font-family:var(--font-mono);" id="ops-display">80 عملية</span>
+          </div>
+          <input type="range" id="ops-slider" min="20" max="300" value="80" style="width:100%; height:6px; accent-color:var(--color-royal-signal);" oninput="updateProfitCalc()">
+        </div>
+
+        <div>
+          <div style="display:flex; justify-content:space-between; font-size:13.5px; font-weight:700; margin-bottom:6px;">
+            <span>متوسط هامش الربح لكل عملية:</span>
+            <span style="color:var(--color-royal-signal); font-family:var(--font-mono);" id="margin-display">500 د.ع</span>
+          </div>
+          <input type="range" id="margin-slider" min="250" max="2500" step="50" value="500" style="width:100%; height:6px; accent-color:var(--color-royal-signal);" oninput="updateProfitCalc()">
+        </div>
+      </div>
+
+      <div class="calc-results-box">
+        <div style="margin-bottom:16px;">
+          <div style="font-size:12px; color:#6b7280; font-weight:700;">صافي الأرباح الإضافية المتوقعة:</div>
+          <div style="font-family:var(--font-mono); font-size:36px; font-weight:800; color:var(--color-royal-signal);" id="profit-calc-result">+1,200,000 د.ع / شهرياً</div>
+        </div>
+
+        <div style="margin-bottom:16px;">
+          <div style="font-size:12px; color:#6b7280; font-weight:700;">الوقت الموفر شهرياً في الجرد والحسابات:</div>
+          <div style="font-family:var(--font-mono); font-size:24px; font-weight:800; color:#16a34a;" id="hours-calc-result">48 ساعة توفير</div>
+        </div>
+
+        <button class="btn-ghost-outline" style="width:100%; padding:12px; font-size:14px;" onclick="openTrialModal('حساب الأرباح وبدء التجربة')">
+          ابدأ تجربة أوروك الآن مجاناً 🚀
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Official Pricing Plans (Directly from SubscriptionPlanModel) -->
+  <section class="pricing-section" id="pricing">
+    <div class="container">
+      <div style="text-align:center; max-width:680px; margin:0 auto;">
+        <div class="feature-tag-pill">باقات الاشتراك الرسمية المعتمدة</div>
+        <h2 style="font-size:38px; font-weight:800; color:var(--color-midnight-ink); margin-bottom:10px;">اختر الخطة المناسبة لحجم متجرك</h2>
+        <p style="font-size:16px; color:#475569;">
+          اشترك بسهولة مع ضمان استرجاع كامل ودعم فني مستمر بدون أي رسوم خفية.
+        </p>
+      </div>
+
+      <div class="pricing-grid">
+        <!-- Plan 1: الباقة التجريبية -->
+        <div class="plan-card">
+          <div class="plan-title">الباقة التجريبية (Trial)</div>
+          <div style="font-size:13px; color:#6b7280;">لاختبار كافة الخصائص المتقدمة</div>
+          <div class="plan-price">مجاناً <span style="font-size:14px; color:#6b7280; font-weight:600;">(7 أيام)</span></div>
+          <ul class="plan-features-list">
+            <li class="plan-feature-item"><span class="feature-check-icon">✓</span> تجربة شاملة لكافة المميزات</li>
+            <li class="plan-feature-item"><span class="feature-check-icon">✓</span> إصدار فواتير POS وتتبع مبيعات</li>
+            <li class="plan-feature-item"><span class="feature-check-icon">✓</span> حفظ سحابي مشفر</li>
+          </ul>
+          <button class="btn-ghost-outline" style="width:100%;" onclick="openTrialModal('الباقة التجريبية (7 أيام)')">
+            تفعيل التجربة المجانية
+          </button>
+        </div>
+
+        <!-- Plan 2: الباقة الشهرية (الأكثر طلباً) -->
+        <div class="plan-card popular">
+          <div class="popular-pill-badge">الأكثر طلباً واعتماداً ⭐</div>
+          <div class="plan-title">الباقة الشهرية (Monthly Pro)</div>
+          <div style="font-size:13px; color:#6b7280;">مثالية لنقاط البيع ومحلات الهواتف النشطة</div>
+          <div class="plan-price">15,000 <span style="font-size:14px; color:#6b7280; font-weight:600;">د.ع / شهرياً</span></div>
+          <ul class="plan-features-list">
+            <li class="plan-feature-item"><span class="feature-check-icon">✓</span> مبيعات غير محدودة للشرائح والرصيد</li>
+            <li class="plan-feature-item"><span class="feature-check-icon">✓</span> حفظ سحابي فوري وتتبع الأرباح</li>
+            <li class="plan-feature-item"><span class="feature-check-icon">✓</span> دفتر الديون والأقساط الشهرية المؤتمت</li>
+            <li class="plan-feature-item"><span class="feature-check-icon">✓</span> إضافة حتى 3 موظفين بصلاحيات بيع</li>
+          </ul>
+          <a href="https://wa.me/9647874500747?text=السلام%20عليكم%20إدارة%20أوروك%20POS،%20أود%20الاشتراك%20في%20(الباقة%20الشهرية%2015,000%20د.ع)" target="_blank" class="btn-frosted-whatsapp" style="width:100%;">
+            تفعيل الباقة الشهرية (واتساب)
+          </a>
+        </div>
+
+        <!-- Plan 3: الباقة السنوية الشاملة -->
+        <div class="plan-card">
+          <div style="display:inline-block; align-self:flex-start; background:#fef3c7; color:#b45309; font-size:11px; font-weight:800; padding:2px 8px; border-radius:100px; margin-bottom:8px;">
+            توفير 55,000 د.ع
+          </div>
+          <div class="plan-title">السنوية الشاملة (Enterprise VIP)</div>
+          <div style="font-size:13px; color:#6b7280;">للوكلاء الكبار والموزعين والشركات</div>
+          <div class="plan-price">125,000 <span style="font-size:14px; color:#6b7280; font-weight:600;">د.ع / سنوياً</span></div>
+          <ul class="plan-features-list">
+            <li class="plan-feature-item"><span class="feature-check-icon">✓</span> عدد غير محدود من الموظفين والصلاحيات</li>
+            <li class="plan-feature-item"><span class="feature-check-icon">✓</span> أرشيف سحابي دائم واسترجاع فوري</li>
+            <li class="plan-feature-item"><span class="feature-check-icon">✓</span> ربط طابعات بلوتوث وحرارية Wi-Fi غير محدود</li>
+            <li class="plan-feature-item"><span class="feature-check-icon">✓</span> دعم فني مباشر VIP على مدار 24/7</li>
+          </ul>
+          <a href="https://wa.me/9647874500747?text=السلام%20عليكم%20إدارة%20أوروك%20POS،%20أود%20الاشتراك%20في%20(الباقة%20السنوية%20VIP%20125,000%20د.ع)" target="_blank" class="btn-ghost-outline" style="width:100%;">
+            اشتراك سنوي VIP
+          </a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Final CTA Card -->
+  <section class="container">
+    <div class="final-cta-card">
+      <h2 style="font-size:38px; font-weight:800; color:var(--color-midnight-ink); margin-bottom:12px;">حوّل نقطة بيعك إلى محطة سحابية متطورة الآن</h2>
+      <p style="font-size:16.5px; color:#475569; max-width:580px; margin:0 auto 28px auto;">
+        انضم لمئات نقاط البيع في بغداد والمحافظات التي تعتمد على أوروك POS لإدارة مبيعات الرصيد والشرائح وطباعة الباركود.
+      </p>
+
+      <div style="display:flex; justify-content:center; gap:14px; flex-wrap:wrap;">
+        <button class="btn-ghost-outline btn-ghost-hero" onclick="openTrialModal('البدء المباشر مع أوروك')">
+          ابدأ تجربتك المجانية الفورية
+        </button>
+        <a href="https://wa.me/9647874500747?text=مرحباً%20أوروك%20POS،%20أريد%20تفعيل%20حسابي" target="_blank" class="btn-frosted-whatsapp">
+          تواصل مع الإدارة عبر واتساب
+        </a>
+      </div>
+
+      <div style="margin-top:20px; font-size:12.5px; color:#6b7280; display:flex; justify-content:center; gap:16px;">
+        <span>✓ بدون فيزا كارت</span>
+        <span>•</span>
+        <span>✓ دعم فني عراقي مباشر</span>
+        <span>•</span>
+        <span>✓ حفظ سحابي دائم</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer (Midnight Ink) -->
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <div>
+          <div class="nav-brand" style="color:#ffffff;">
+            <div class="brand-mark">U</div>
+            <div class="nav-brand-text">
+              <span class="nav-brand-title" style="color:#ffffff;">أوروك POS</span>
+              <span class="nav-brand-subtitle" style="color:#60a5fa;">URUK TELECOM POS</span>
+            </div>
+          </div>
+          <p class="footer-desc">
+            المنظومة السحابية العراقية الأولى المتخصصة في أتمتة مبيعات الرصيد، شرائح الاتصال، طباعة الباركود، والديون لنقاط البيع والوكلاء.
+          </p>
+          <div style="margin-top:16px; font-size:13px; color:#94a3b8;">
+            📞 هاتف الدعم / واتساب: <strong style="color:#ffffff;">+964 787 450 0747</strong>
+          </div>
+        </div>
+
+        <div>
+          <div class="footer-title">أقسام المنظومة</div>
+          <ul class="footer-links-list">
+            <li><a href="#vouchers">خزنة كروت الرصيد</a></li>
+            <li><a href="#sim-pos">مبيعات شرائح زين (SIM)</a></li>
+            <li><a href="#thermal-studio">استوديو الطباعة الحرارية</a></li>
+            <li><a href="#debts">دفتر الديون والأقساط</a></li>
+            <li><a href="#calculator">حاسبة الأرباح</a></li>
+          </ul>
+        </div>
+
+        <div>
+          <div class="footer-title">الشركات المعتمدة</div>
+          <ul class="footer-links-list">
+            <li><a href="#">زين العراق (Zain IQ)</a></li>
+            <li><a href="#">شبكة الرحمة FTTH</a></li>
+            <li><a href="#">شبكة الجزيرة الضوئية</a></li>
+            <li><a href="#">بطاقات الألعاب والآيتونز</a></li>
+          </ul>
+        </div>
+
+        <div>
+          <div class="footer-title">الأمان والاشتراك</div>
+          <ul class="footer-links-list">
+            <li><a href="#pricing">الباقات والأسعار</a></li>
+            <li><a href="https://wa.me/9647874500747" target="_blank">خدمة العملاء VIP</a></li>
+            <li><a href="#">حفظ سحابي مشفر Supabase</a></li>
+            <li><a href="#">شروط الخدمة والخصوصية</a></li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="footer-bottom-bar">
+        <div>جميع الحقوق محفوظة © 2026 لمنظومة أوروك POS (URUK). صنع لرواد الأعمال في العراق.</div>
+        <div style="display:flex; align-items:center; gap:8px; color:#4ade80; font-size:12px; font-weight:700;">
+          <span style="width:7px; height:7px; background:#4ade80; border-radius:50%; box-shadow:0 0 8px #4ade80;"></span>
+          <span>خوادم السحابة تعمل بكفاءة 100% OK</span>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Modal: Trial Signup & Info -->
+  <div class="modal-backdrop" id="trial-modal" onclick="closeTrialModal(event)">
+    <div class="modal-card" onclick="event.stopPropagation()">
+      <button class="modal-close-btn" onclick="closeTrialModal()">✕</button>
+      <div style="margin-bottom:18px;">
+        <span class="feature-tag-pill" style="margin-bottom:6px;">تسجيل نقطة بيع</span>
+        <h3 style="font-size:20px; font-weight:800; color:var(--color-midnight-ink);" id="modal-heading">تفعيل التجربة المجانية (7 أيام)</h3>
+        <p style="font-size:12.5px; color:#64748b;">املأ البيانات وسيقوم فريق الدعم بربط حسابك فوراً.</p>
+      </div>
+
+      <form onsubmit="handleTrialSubmit(event)">
+        <div class="form-group">
+          <label class="form-label">اسم نقطة البيع / المحل</label>
+          <input type="text" id="store-name-input" required class="form-input" placeholder="مثال: مركز المنصور للاتصالات">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">المحافظة / المدينة</label>
+          <select id="city-input" class="form-input">
+            <option>بغداد</option>
+            <option>البصرة</option>
+            <option>أربيل</option>
+            <option>النجف الأشرف</option>
+            <option>كربلاء المقدسة</option>
+            <option>الموصل</option>
+            <option>السليمانية</option>
+            <option>بابل</option>
+            <option>محافظة أخرى</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">رقم الهاتف / الواتساب</label>
+          <input type="tel" id="phone-input" required class="form-input" placeholder="078XXXXXXXX">
+        </div>
+
+        <button type="submit" class="btn-ghost-outline" style="width:100%; padding:12px; font-size:14px; margin-top:8px;">
+          إرسال وتفعيل الحساب مباشرة عبر واتساب
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    // 1. Modal Handler
+    function openTrialModal(planTitle) {
+      document.getElementById('modal-heading').innerText = planTitle || 'تفعيل تجربة أوروك POS';
+      document.getElementById('trial-modal').classList.add('open');
+    }
+
+    function closeTrialModal(e) {
+      document.getElementById('trial-modal').classList.remove('open');
+    }
+
+    function handleTrialSubmit(e) {
+      e.preventDefault();
+      const store = document.getElementById('store-name-input').value;
+      const city = document.getElementById('city-input').value;
+      const phone = document.getElementById('phone-input').value;
+      const text = encodeURIComponent(`السلام عليكم إدارة أوروك POS، أود تفعيل المنظومة لنقطة بيع:\n- المحل: ${store}\n- المحافظة: ${city}\n- الهاتف: ${phone}`);
+      window.open(`https://wa.me/9647874500747?text=${text}`, '_blank');
+      closeTrialModal();
+    }
+
+    // 2. Vault Demo Update
+    function updateVaultDemo(name, price, pin, sn) {
+      document.querySelectorAll('.vault-item-row').forEach(el => el.classList.remove('active'));
+      event.currentTarget.classList.add('active');
+
+      document.getElementById('vault-card-name').innerText = name;
+      document.getElementById('vault-card-price').innerText = `السعر: ${price}`;
+      document.getElementById('vault-card-pin').innerText = pin;
+      document.getElementById('vault-card-sn').innerText = `S/N: ${sn}`;
+    }
+
+    function copyPinCode() {
+      const pin = document.getElementById('vault-card-pin').innerText;
+      navigator.clipboard.writeText(pin);
+      alert(`تم نسخ كود الشحن بنجاح:\n${pin}`);
+    }
+
+    function openVoucherPreview(name, price, details) {
+      alert(`معاينة كارت أوروك POS:\n${name} (${price})\n${details}`);
+    }
+
+    function openThermalModal() {
+      alert('تم فتح استوديو الطباعة الحرارية: جاري إرسال إشارة الفحص لطابعة الباركود (ESC/POS)...');
+    }
+
+    function simulateTestPrint() {
+      alert('🖨️ تم إرسال وصل فحص ومعايرة إلى الطابعة الحرارية المقترنة بنجاح!');
+    }
+
+    // 3. Profit Calculator
+    function updateProfitCalc() {
+      const ops = parseInt(document.getElementById('ops-slider').value);
+      const margin = parseInt(document.getElementById('margin-slider').value);
+
+      document.getElementById('ops-display').innerText = `${ops} عملية / يومياً`;
+      document.getElementById('margin-display').innerText = `${margin.toLocaleString()} د.ع`;
+
+      const monthlyProfit = ops * margin * 30;
+      const hoursSaved = Math.round(ops * 0.6);
+
+      document.getElementById('profit-calc-result').innerText = `+${monthlyProfit.toLocaleString()} د.ع / شهرياً`;
+      document.getElementById('hours-calc-result').innerText = `${hoursSaved} ساعة توفير`;
+    }
+
+    updateProfitCalc();
+  </script>
+</body>
+</html>
