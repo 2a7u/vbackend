@@ -82,7 +82,7 @@ func main() {
 	backupsH := &handlers.BackupsHandler{Pool: pool, Hub: hub}
 	expensesH := &handlers.ExpensesHandler{Pool: pool, Hub: hub}
 	announcementsH := &handlers.AnnouncementsHandler{Pool: pool, Hub: hub}
-	zainH := &handlers.ZainCashHandler{Pool: pool, Hub: hub}
+	zainH := &handlers.ZainCashHandler{Pool: pool, Hub: hub, JWTSecret: jwtSecret}
 	vouchersH := &handlers.VouchersHandler{Pool: pool, Hub: hub}
 
 	app := fiber.New(fiber.Config{
@@ -113,7 +113,9 @@ func main() {
 	api.Post("/auth/login", authH.Login)
 	api.Post("/auth/register", authH.Register)
 
-	// Public ZainCash browser & webhook endpoints (NO Authorization header required).
+	// Public ZainCash browser, webhook, and payment endpoints (NO Authorization header required).
+	api.Post("/payments/zaincash/init", zainH.InitZainCash)
+	api.Get("/payments/zaincash/inquiry/:transactionId", zainH.InquiryZainCash)
 	api.Get("/zaincash/checkout", zainH.CheckoutZainCash)
 	api.Post("/zaincash/checkout/confirm", zainH.ConfirmCheckoutZainCash)
 	api.Get("/zaincash/redirect", zainH.RedirectZainCash)
@@ -154,10 +156,6 @@ func main() {
 	auth.Post("/vouchers/upload", vouchersH.UploadVouchers)
 	auth.Get("/vouchers", vouchersH.GetVouchers)
 	auth.Post("/vouchers/dispense", vouchersH.DispenseVoucher)
-
-	// R8: ZainCash authenticated payments.
-	auth.Post("/payments/zaincash/init", zainH.InitZainCash)
-	auth.Get("/payments/zaincash/inquiry/:transactionId", zainH.InquiryZainCash)
 
 	// Admin-only area.
 	admin := api.Group("/admin", middleware.JWT(jwtSecret), middleware.AdminOnly())

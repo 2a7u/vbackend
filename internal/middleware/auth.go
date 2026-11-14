@@ -39,8 +39,10 @@ func SignToken(secret string, userID int64, email, role string, ttl time.Duratio
 func JWT(secret string) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		path := c.Path()
-		// Public ZainCash callbacks, redirects, and checkout pages never require JWT
-		if strings.HasPrefix(path, "/api/zaincash/") || strings.HasPrefix(path, "/api/auth/") {
+		// Public ZainCash callbacks, redirects, payment init, and checkout pages never require JWT
+		if strings.HasPrefix(path, "/api/zaincash/") ||
+			strings.HasPrefix(path, "/api/auth/") ||
+			strings.HasPrefix(path, "/api/payments/zaincash/") {
 			return c.Next()
 		}
 
