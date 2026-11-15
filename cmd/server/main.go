@@ -17,17 +17,23 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/logger"
 	"github.com/gofiber/fiber/v2/middleware/recover"
 
+	"venus_backend/internal/appconfig"
+	"venus_backend/internal/bi"
 	"venus_backend/internal/db"
 	"venus_backend/internal/db/migrations"
+	"venus_backend/internal/deviceradar"
 	"venus_backend/internal/fraud"
 	"venus_backend/internal/handlers"
 	"venus_backend/internal/hierarchy"
 	"venus_backend/internal/ledger"
 	"venus_backend/internal/middleware"
 	"venus_backend/internal/pricing"
+	"venus_backend/internal/promotions"
 	"venus_backend/internal/radar"
 	"venus_backend/internal/reconcile"
 	"venus_backend/internal/scheduler"
+	"venus_backend/internal/security"
+	"venus_backend/internal/subscribers"
 	"venus_backend/internal/vault"
 )
 
@@ -122,6 +128,15 @@ func main() {
 	}
 	syncH := &handlers.SyncHandler{Pool: pool, Hub: hub}
 
+	subSvc := subscribers.NewService(pool, hub, jwtSecret, ledgerSvc)
+	promoSvc := promotions.NewService(pool, ledgerSvc)
+	appConfigSvc := appconfig.NewService(pool, hub)
+	deviceRadarSvc := deviceradar.NewService(pool, hub)
+	securitySvc := security.NewService(pool, ledgerSvc)
+	biSvc := bi.NewService(pool)
+
+	enterpriseH := handlers.NewEnterpriseHandler(pool, hub, subSvc, promoSvc, appConfigSvc, deviceRadarSvc, securitySvc, biSvc)
+
 	app := fiber.New(fiber.Config{
 		AppName:      "VENUS POS Backend",
 		ReadTimeout:  15 * time.Second,
@@ -134,8 +149,8 @@ func main() {
 	app.Use(cors.New(cors.Config{
 		AllowOrigins:     "*",
 		AllowMethods:     "GET,POST,PUT,PATCH,DELETE,OPTIONS",
-		AllowHeaders:     "Origin, Content-Type, Accept, Authorization, X-User-Id, X-User-Email, X-Requested-With, Accept-Language",
-		ExposeHeaders:    "Content-Length, Content-Type",
+		AllowHeaders:     "Origin, Content-Type, Accept, Authorization, X-User-Id, X-User-Email, X-Requested-With, Accept-Language, Idempotency-Key, X-Idempotency-Key",
+		ExposeHeaders:    "Content-Length, Content-Type, X-Idempotent-Replay",
 		AllowCredentials: false,
 	}))
 	app.Use(recover.New())
@@ -149,11 +164,17 @@ func main() {
 	app.Get("/health", func(c *fiber.Ctx) error {
 		return c.JSON(fiber.Map{"status": "ok", "time": time.Now()})
 	})
+	app.Get("/healthz", enterpriseH.Healthz)
+	app.Get("/readyz", enterpriseH.Readyz)
 
 	// Realtime WebSocket endpoint (JWT via ?token= or Authorization header).
 	app.Get("/ws", hub.Handler(jwtSecret))
 
 	api := app.Group("/api")
+
+	// Public app config & banners
+	api.Get("/app-config", enterpriseH.GetPublicAppConfig)
+	api.Get("/banners", enterpriseH.GetPublicAppConfig)
 
 	// Public auth endpoints.
 	api.Post("/auth/login", authH.Login)
@@ -303,6 +324,45 @@ func main() {
 	auth.Get("/sim/sales", simH.ListSales)
 	auth.Post("/credit/sales", simH.AddCreditSale)
 	auth.Get("/credit/sales", simH.ListCreditSales)
+	auth.Get("/coupons/validate", enterpriseH.ValidateCoupon)
+	auth.Post("/commands/ack", enterpriseH.AckRemoteCommand)
+
+	// Phase 3: CRM & Lifecycle
+	admin.Get("/subscribers/:id/360", enterpriseH.GetSubscriber360)
+	admin.Post("/subscribers/bulk/preview", enterpriseH.BulkSubscribersPreview)
+	admin.Post("/subscribers/bulk/execute", enterpriseH.BulkSubscribersExecute)
+	admin.Post("/users/:id/lock-device", enterpriseH.LockDevice)
+	admin.Post("/users/:id/reset-device", enterpriseH.ResetDevice)
+	admin.Post("/users/:id/kick-sessions", enterpriseH.KickSessions)
+	admin.Post("/users/:id/impersonate", enterpriseH.ImpersonateSubscriber)
+
+	// Phase 4: Promotions & Coupons
+	admin.Get("/coupons", enterpriseH.ListCoupons)
+	admin.Post("/coupons", enterpriseH.CreateCoupon)
+
+	// Phase 5: Remote App Config & Banners
+	admin.Get("/app-config", enterpriseH.GetAllAppConfigs)
+	admin.Put("/app-config/:key", enterpriseH.UpdateAppConfig)
+	admin.Get("/banners", enterpriseH.ListBanners)
+	admin.Post("/banners", enterpriseH.SaveBanner)
+	admin.Delete("/banners/:id", enterpriseH.DeleteBanner)
+
+	// Phase 6: Live Radar & Remote Commands
+	admin.Get("/radar/online-devices", enterpriseH.GetOnlineDevices)
+	admin.Post("/commands/queue", enterpriseH.QueueRemoteCommand)
+
+	// Phase 7: Rollback, WAF, API Keys
+	admin.Post("/security/rollback", enterpriseH.RollbackOperation)
+	admin.Get("/security/ip-rules", enterpriseH.ListIPRules)
+	admin.Post("/security/ip-rules", enterpriseH.SaveIPRule)
+	admin.Delete("/security/ip-rules/:id", enterpriseH.DeleteIPRule)
+	admin.Get("/security/api-keys", enterpriseH.ListAPIKeys)
+	admin.Post("/security/api-keys", enterpriseH.GenerateAPIKey)
+
+	// Phase 8: BI Analytics, Backups, Streaming Export
+	admin.Get("/bi/dashboard", enterpriseH.GetBIDashboard)
+	admin.Get("/bi/backup", enterpriseH.DownloadSecureBackup)
+	admin.Get("/export/subscribers", enterpriseH.ExportSubscribersCSV)
 
 	// R5B: domain-isolated web console hosting:
 	// - console.urukiq.com: serves Flutter Web Admin Console

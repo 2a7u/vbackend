@@ -140,7 +140,29 @@ func VerifyAccountChain(ctx context.Context, pool *pgxpool.Pool, accountID int64
 		records = append(records, r)
 	}
 
-	return VerifyAccountRecords(accountID, records), nil
+	violations := VerifyAccountRecords(accountID, records)
+
+	// Verify that users.wallet_balance matches the ledger's latest balance_after
+	if len(records) > 0 {
+		var actualWalletBal float64
+		err := pool.QueryRow(ctx, `SELECT COALESCE(wallet_balance, 0) FROM users WHERE id = $1`, accountID).Scan(&actualWalletBal)
+		if err == nil {
+			lastEntry := records[len(records)-1]
+			if int64(actualWalletBal) != lastEntry.BalanceAfter {
+				violations = append(violations, IntegrityViolation{
+					AccountID:     accountID,
+					EntryID:       lastEntry.ID,
+					TxID:          lastEntry.TxID.String(),
+					ViolationType: "WALLET_BALANCE_MISMATCH",
+					ExpectedValue: fmt.Sprintf("%d", lastEntry.BalanceAfter),
+					ActualValue:   fmt.Sprintf("%d", int64(actualWalletBal)),
+					DetectedAt:    time.Now().UTC(),
+				})
+			}
+		}
+	}
+
+	return violations, nil
 }
 
 // VerifyGlobalIntegrity runs a complete cryptographic and double-entry audit across all accounts.

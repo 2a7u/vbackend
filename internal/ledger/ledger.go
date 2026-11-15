@@ -484,7 +484,7 @@ func (s *Service) RecordRefund(ctx context.Context, tx pgx.Tx, userID int64, sys
 // GetEntriesByRef fetches ledger entries matching a given ref_type and ref_id.
 func (s *Service) GetEntriesByRef(ctx context.Context, tx pgx.Tx, refType, refID string) ([]LedgerEntry, error) {
 	rows, err := tx.Query(ctx,
-		`SELECT id, tx_id::text, account_id, debit, credit, balance_after, ref_type, ref_id, prev_hash, entry_hash, created_at
+		`SELECT id, tx_id::text, account_id, debit, credit, balance_after, ref_type, ref_id, prev_hash, hash, created_at
 		 FROM ledger_entries
 		 WHERE ref_type = $1 AND ref_id = $2
 		 ORDER BY id ASC`,

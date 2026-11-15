@@ -14,9 +14,11 @@ import (
 
 // Claims is the JWT payload carried by every authenticated request.
 type Claims struct {
-	UserID int64  `json:"uid"`
-	Email  string `json:"email"`
-	Role   string `json:"role"` // "subscriber" | "admin"
+	UserID         int64  `json:"uid"`
+	Email          string `json:"email"`
+	Role           string `json:"role"` // "subscriber" | "admin" | "superadmin" | "finance" | "support"
+	Scope          string `json:"scope,omitempty"` // "read_only" for impersonation
+	ImpersonatorID int64  `json:"impersonator_id,omitempty"`
 	jwt.RegisteredClaims
 }
 
@@ -31,6 +33,24 @@ func SignToken(secret string, userID int64, email, role string, ttl time.Duratio
 			IssuedAt:  jwt.NewNumericDate(now),
 			ExpiresAt: jwt.NewNumericDate(now.Add(ttl)),
 			Issuer:    "venus_backend",
+		},
+	}
+	return jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString([]byte(secret))
+}
+
+// SignImpersonationToken issues a read-only token for admin subscriber impersonation.
+func SignImpersonationToken(secret string, targetUserID int64, email, role string, impersonatorID int64, ttl time.Duration) (string, error) {
+	now := time.Now()
+	claims := Claims{
+		UserID:         targetUserID,
+		Email:          email,
+		Role:           role,
+		Scope:          "read_only",
+		ImpersonatorID: impersonatorID,
+		RegisteredClaims: jwt.RegisteredClaims{
+			IssuedAt:  jwt.NewNumericDate(now),
+			ExpiresAt: jwt.NewNumericDate(now.Add(ttl)),
+			Issuer:    "venus_backend_impersonation",
 		},
 	}
 	return jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString([]byte(secret))
@@ -61,6 +81,15 @@ func JWT(secret string) fiber.Handler {
 					return []byte(secret), nil
 				})
 				if err == nil && token.Valid {
+					if claims.Scope == "read_only" {
+						method := c.Method()
+						if method == "POST" || method == "PUT" || method == "PATCH" || method == "DELETE" {
+							return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+								"error": "جلسة محاكاة الحساب مخصصة للقراءة فقط - يمنع إجراء أي عمليات كتابة أو تعديل",
+								"code":  "READ_ONLY_IMPERSONATION",
+							})
+						}
+					}
 					c.Locals("claims", claims)
 					return c.Next()
 				}
