@@ -394,4 +394,24 @@ CREATE TABLE IF NOT EXISTS activation_codes (
 );
 CREATE INDEX IF NOT EXISTS idx_activation_codes_lookup ON activation_codes (code, is_used);
 
+-- -----------------------------------------------------------------------------
+-- Idempotent runtime migrations for ZainCash, Wallets, and Subscriptions
+-- -----------------------------------------------------------------------------
+ALTER TABLE users ADD COLUMN IF NOT EXISTS wallet_balance NUMERIC(12,2) NOT NULL DEFAULT 0;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'active';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS plan_name TEXT NOT NULL DEFAULT 'مشترك تجريبي';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_ends_at TIMESTAMPTZ;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS zaincash_wallet_phone TEXT DEFAULT '';
+
+ALTER TABLE wallet_ledger DROP CONSTRAINT IF EXISTS wallet_ledger_kind_check;
+ALTER TABLE wallet_ledger ADD CONSTRAINT wallet_ledger_kind_check CHECK (kind IN ('topup', 'payment', 'refund', 'subscription'));
+CREATE INDEX IF NOT EXISTS idx_wallet_ledger_provider_ref ON wallet_ledger (provider_ref);
+
+ALTER TABLE zaincash_transactions ADD COLUMN IF NOT EXISTS purpose TEXT NOT NULL DEFAULT 'WALLET_TOPUP';
+ALTER TABLE zaincash_transactions ADD COLUMN IF NOT EXISTS plan_key TEXT NOT NULL DEFAULT '';
+ALTER TABLE zaincash_transactions ADD COLUMN IF NOT EXISTS msisdn TEXT NOT NULL DEFAULT '';
+ALTER TABLE zaincash_transactions ADD COLUMN IF NOT EXISTS completed_at TIMESTAMPTZ;
+CREATE INDEX IF NOT EXISTS idx_zaincash_tx ON zaincash_transactions (transaction_id, order_id);
+
+
 

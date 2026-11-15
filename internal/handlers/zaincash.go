@@ -482,7 +482,7 @@ func (h *ZainCashHandler) ConfirmCheckoutZainCash(c *fiber.Ctx) error {
 	log.Printf("[ZainCash UAT] Confirming checkout tx=%s, order=%s, amount=%.0f, msisdn=%s", txID, orderID, amount, msisdn)
 
 	// Mark transaction success in DB, credit wallet balance & activate subscription
-	if err := h.markPaymentSuccess(c.Context(), txID, orderID, amount, msisdn); err != nil {
+	if err := h.markPaymentSuccess(c.Context(), txID, orderID, amount, msisdn, 0); err != nil {
 		log.Printf("[ZainCash UAT] markPaymentSuccess warning: %v", err)
 	}
 
@@ -530,7 +530,7 @@ func (h *ZainCashHandler) RedirectZainCash(c *fiber.Ctx) error {
 	c.Set("Content-Type", "text/html; charset=utf-8")
 
 	if status == "SUCCESS" || status == "PAID" || status == "COMPLETED" {
-		_ = h.markPaymentSuccess(c.Context(), txID, orderID, amount, "")
+		_ = h.markPaymentSuccess(c.Context(), txID, orderID, amount, "", 0)
 
 		html := fmt.Sprintf(`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
@@ -675,7 +675,7 @@ func (h *ZainCashHandler) WebhookZainCash(c *fiber.Ctx) error {
 		return c.JSON(fiber.Map{"received": true, "status": status})
 	}
 
-	if err := h.markPaymentSuccess(c.Context(), txID, orderID, 0, ""); err != nil {
+	if err := h.markPaymentSuccess(c.Context(), txID, orderID, 0, "", 0); err != nil {
 		log.Printf("[ZainCash Webhook] markPaymentSuccess error: %v", err)
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 	}
@@ -757,15 +757,10 @@ func verifyZainJWT(tokenStr, secret string) bool {
 
 // markPaymentSuccess credits the wallet or activates the subscription and
 // broadcasts payment_success. Idempotent on provider_ref / transaction_id.
-func (h *ZainCashHandler) markPaymentSuccess(ctx context.Context, txID, orderID string, customAmount float64, msisdn string) error {
+func (h *ZainCashHandler) markPaymentSuccess(ctx context.Context, txID, orderID string, customAmount float64, msisdn string, preferredUID int64) error {
 	if txID == "" && orderID == "" {
 		return fmt.Errorf("empty transaction identifier")
 	}
-	tx, err := h.Pool.Begin(ctx)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback(ctx)
 
 	var (
 		txRowID  int64
@@ -776,93 +771,94 @@ func (h *ZainCashHandler) markPaymentSuccess(ctx context.Context, txID, orderID 
 		txStatus string
 	)
 
-	// Check zaincash_transactions table first
-	err = tx.QueryRow(ctx,
+	// 1. Check zaincash_transactions table first
+	err := h.Pool.QueryRow(ctx,
 		`SELECT id, user_id, amount, COALESCE(purpose, 'WALLET_TOPUP'), COALESCE(plan_key, ''), status
 		 FROM zaincash_transactions
-		 WHERE transaction_id = $1 OR order_id = $2 OR transaction_id = $2 OR order_id = $1
-		 FOR UPDATE LIMIT 1`, txID, orderID,
+		 WHERE (transaction_id = $1 AND transaction_id != '') 
+		    OR (order_id = $2 AND order_id != '') 
+		    OR (transaction_id = $2 AND transaction_id != '') 
+		    OR (order_id = $1 AND order_id != '')
+		 LIMIT 1`, txID, orderID,
 	).Scan(&txRowID, &uid, &amount, &purpose, &planKey, &txStatus)
 
 	if err == nil {
 		if strings.EqualFold(txStatus, "SUCCESS") {
-			return tx.Commit(ctx) // idempotent: already processed
+			return nil // idempotent: already successfully processed
 		}
 	} else {
-		// Fallback: Check wallet_ledger
+		// 2. Fallback: Check wallet_ledger
 		var ledgerID int64
 		var lStatus string
-		lerr := tx.QueryRow(ctx,
+		lerr := h.Pool.QueryRow(ctx,
 			`SELECT id, user_id, amount, status FROM wallet_ledger
-			 WHERE provider_ref = $1 OR provider_ref = $2 OR provider_ref = ('uat-' || $1) OR provider_ref = ('uat-' || $2)
-			 FOR UPDATE LIMIT 1`, txID, orderID,
+			 WHERE (provider_ref = $1 AND provider_ref != '') 
+			    OR (provider_ref = $2 AND provider_ref != '') 
+			    OR provider_ref = ('uat-' || $1) 
+			    OR provider_ref = ('uat-' || $2)
+			 LIMIT 1`, txID, orderID,
 		).Scan(&ledgerID, &uid, &amount, &lStatus)
 
 		if lerr == nil {
 			if strings.EqualFold(lStatus, "success") {
-				return tx.Commit(ctx)
-			}
-			purpose = "WALLET_TOPUP"
-		} else {
-			// Extract user id from orderID: venus_<uid>_<timestamp>
-			uid = 1
-			if strings.HasPrefix(orderID, "venus") {
-				parts := strings.Split(orderID, "_")
-				if len(parts) >= 2 {
-					if parsedUID, parseErr := strconv.ParseInt(parts[1], 10, 64); parseErr == nil && parsedUID > 0 {
-						var exists bool
-						_ = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM users WHERE id = $1)`, parsedUID).Scan(&exists)
-						if exists {
-							uid = parsedUID
-						}
-					}
-				} else {
-					numPart := strings.TrimPrefix(orderID, "venus")
-					digits := ""
-					for _, r := range numPart {
-						if r >= '0' && r <= '9' {
-							digits += string(r)
-						} else {
-							break
-						}
-					}
-					if len(digits) > 0 {
-						if parsedUID, parseErr := strconv.ParseInt(digits, 10, 64); parseErr == nil && parsedUID > 0 {
-							var exists bool
-							_ = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM users WHERE id = $1)`, parsedUID).Scan(&exists)
-							if exists {
-								uid = parsedUID
-							}
-						}
-					}
-				}
-			}
-			amount = customAmount
-			if amount <= 0 {
-				amount = 25000
+				return nil // idempotent: already processed
 			}
 			purpose = "WALLET_TOPUP"
 		}
 	}
 
-	if customAmount > 0 && amount <= 0 {
-		amount = customAmount
+	// 3. Resolve UID
+	if preferredUID > 0 {
+		var exists bool
+		_ = h.Pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM users WHERE id = $1)`, preferredUID).Scan(&exists)
+		if exists {
+			uid = preferredUID
+		}
+	}
+
+	if uid <= 0 {
+		// Extract from orderID or txID (e.g. venus_3_1731658492 or VENUS-3-1794641860812314711)
+		idCandidate := orderID
+		if idCandidate == "" {
+			idCandidate = txID
+		}
+		parts := strings.FieldsFunc(idCandidate, func(r rune) bool {
+			return r == '_' || r == '-' || r == '.'
+		})
+		for _, p := range parts {
+			if parsed, perr := strconv.ParseInt(p, 10, 64); perr == nil && parsed > 0 && parsed < 10000000 {
+				var exists bool
+				_ = h.Pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM users WHERE id = $1)`, parsed).Scan(&exists)
+				if exists {
+					uid = parsed
+					break
+				}
+			}
+		}
 	}
 	if uid <= 0 {
 		uid = 1
 	}
 
-	// If amount is a subscription tier price or planKey is present, treat as SUBSCRIPTION
+	// 4. Resolve Amount
+	if customAmount > 0 {
+		amount = customAmount
+	}
+	if amount <= 0 {
+		amount = 15000
+	}
+
+	// 5. Determine Purpose & Plan
 	if purpose == "SUBSCRIPTION" || amount == 15000 || amount == 55000 || amount == 125000 || planKey != "" {
 		purpose = "SUBSCRIPTION"
 	}
 
 	var planName string
 	var subDays int
-	if amount >= 120000 || planKey == "annual_125k" || planKey == "أعمال" {
+	if amount >= 120000 || planKey == "annual_125k" || planKey == "annual" || planKey == "أعمال" {
 		planName = "أعمال"
 		subDays = 365
-	} else if amount >= 50000 || planKey == "biannual_55k" || planKey == "بلص" {
+	} else if amount >= 50000 || planKey == "biannual_55k" || planKey == "semi_annual" || planKey == "بلص" {
 		planName = "بلص"
 		subDays = 180
 	} else {
@@ -870,55 +866,112 @@ func (h *ZainCashHandler) markPaymentSuccess(ctx context.Context, txID, orderID 
 		subDays = 30
 	}
 
+	// 6. Begin Postgres Transaction
+	tx, err := h.Pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
 	if purpose == "WALLET_TOPUP" {
-		// Credit user's wallet balance
-		_, _ = tx.Exec(ctx,
+		_, err = tx.Exec(ctx,
 			`UPDATE users 
 			 SET wallet_balance = COALESCE(wallet_balance, 0) + $1, 
 			     status = 'active',
 			     updated_at = now() 
 			 WHERE id = $2`, amount, uid)
+		if err != nil {
+			return fmt.Errorf("update user wallet_balance: %w", err)
+		}
 
-		// Record in wallet_ledger
-		_, _ = tx.Exec(ctx,
-			`INSERT INTO wallet_ledger (user_id, amount, kind, provider, provider_ref, status, note, completed_at)
-			 VALUES ($1, $2, 'topup', 'zaincash', $3, 'success', 'ZainCash Wallet Topup', now())
-			 ON CONFLICT (provider_ref) DO UPDATE SET status = 'success', completed_at = now()`,
-			uid, amount, txID)
+		var existingLedgerID int64
+		_ = tx.QueryRow(ctx, `SELECT id FROM wallet_ledger WHERE provider_ref = $1 OR provider_ref = $2 LIMIT 1`, txID, orderID).Scan(&existingLedgerID)
+		if existingLedgerID > 0 {
+			_, err = tx.Exec(ctx,
+				`UPDATE wallet_ledger SET status = 'success', completed_at = now(), amount = $1, kind = 'topup', note = 'ZainCash Wallet Topup' WHERE id = $2`,
+				amount, existingLedgerID)
+			if err != nil {
+				return fmt.Errorf("update wallet_ledger: %w", err)
+			}
+		} else {
+			_, err = tx.Exec(ctx,
+				`INSERT INTO wallet_ledger (user_id, amount, kind, provider, provider_ref, status, note, completed_at)
+				 VALUES ($1, $2, 'topup', 'zaincash', $3, 'success', 'ZainCash Wallet Topup', now())`,
+				uid, amount, txID)
+			if err != nil {
+				return fmt.Errorf("insert wallet_ledger: %w", err)
+			}
+		}
 	} else {
-		// SUBSCRIPTION: Activate tier
-		_, _ = tx.Exec(ctx,
+		// SUBSCRIPTION: Extend subscription period atomically
+		_, err = tx.Exec(ctx,
 			`UPDATE users 
 			 SET plan_name = $1, 
-			     subscription_ends_at = now() + ($2 || ' days')::interval,
+			     subscription_ends_at = GREATEST(COALESCE(subscription_ends_at, now()), now()) + ($2 || ' days')::interval,
 			     status = 'active',
 			     updated_at = now() 
 			 WHERE id = $3`, planName, itoa(int64(subDays)), uid)
+		if err != nil {
+			return fmt.Errorf("update user subscription: %w", err)
+		}
 
-		// Record in wallet_ledger
-		_, _ = tx.Exec(ctx,
-			`INSERT INTO wallet_ledger (user_id, amount, kind, provider, provider_ref, status, note, completed_at)
-			 VALUES ($1, $2, 'subscription', 'zaincash', $3, 'success', 'ZainCash Subscription Activation - ' || $4, now())
-			 ON CONFLICT (provider_ref) DO UPDATE SET status = 'success', completed_at = now()`,
-			uid, amount, txID, planName)
+		var existingLedgerID int64
+		_ = tx.QueryRow(ctx, `SELECT id FROM wallet_ledger WHERE provider_ref = $1 OR provider_ref = $2 LIMIT 1`, txID, orderID).Scan(&existingLedgerID)
+		noteStr := "ZainCash Subscription Activation - " + planName
+		if existingLedgerID > 0 {
+			_, err = tx.Exec(ctx,
+				`UPDATE wallet_ledger SET status = 'success', completed_at = now(), amount = $1, kind = 'subscription', note = $2 WHERE id = $3`,
+				amount, noteStr, existingLedgerID)
+			if err != nil {
+				return fmt.Errorf("update wallet_ledger: %w", err)
+			}
+		} else {
+			_, err = tx.Exec(ctx,
+				`INSERT INTO wallet_ledger (user_id, amount, kind, provider, provider_ref, status, note, completed_at)
+				 VALUES ($1, $2, 'subscription', 'zaincash', $3, 'success', $4, now())`,
+				uid, amount, txID, noteStr)
+			if err != nil {
+				return fmt.Errorf("insert wallet_ledger: %w", err)
+			}
+		}
 	}
 
-	// Update / Insert zaincash_transactions
+	if msisdn != "" {
+		_, _ = tx.Exec(ctx, `UPDATE users SET zaincash_wallet_phone = $1 WHERE id = $2`, msisdn, uid)
+	}
+
+	// 7. Update or insert zaincash_transactions
+	var zainID int64
 	if txRowID > 0 {
-		_, _ = tx.Exec(ctx,
-			`UPDATE zaincash_transactions 
-			 SET status = 'SUCCESS', msisdn = $1, completed_at = now() 
-			 WHERE id = $2`, msisdn, txRowID)
+		zainID = txRowID
 	} else {
-		_, _ = tx.Exec(ctx,
+		_ = tx.QueryRow(ctx,
+			`SELECT id FROM zaincash_transactions 
+			 WHERE (transaction_id = $1 AND transaction_id != '') 
+			    OR (order_id = $2 AND order_id != '') 
+			 LIMIT 1`, txID, orderID).Scan(&zainID)
+	}
+
+	if zainID > 0 {
+		_, err = tx.Exec(ctx,
+			`UPDATE zaincash_transactions 
+			 SET status = 'SUCCESS', msisdn = $1, completed_at = now(), amount = $2, purpose = $3, plan_key = $4 
+			 WHERE id = $5`, msisdn, amount, purpose, planKey, zainID)
+		if err != nil {
+			return fmt.Errorf("update zaincash_transactions: %w", err)
+		}
+	} else {
+		_, err = tx.Exec(ctx,
 			`INSERT INTO zaincash_transactions (user_id, amount, order_id, transaction_id, msisdn, purpose, plan_key, status, completed_at)
-			 VALUES ($1, $2, $3, $4, $5, $6, $7, 'SUCCESS', now())
-			 ON CONFLICT DO NOTHING`,
+			 VALUES ($1, $2, $3, $4, $5, $6, $7, 'SUCCESS', now())`,
 			uid, amount, orderID, txID, msisdn, purpose, planKey)
+		if err != nil {
+			return fmt.Errorf("insert zaincash_transactions: %w", err)
+		}
 	}
 
 	if err := tx.Commit(ctx); err != nil {
-		return err
+		return fmt.Errorf("commit tx: %w", err)
 	}
 
 	writeAudit(ctx, h.Pool, uid, "", "PAYMENT_SUCCESS", "zaincash_transactions", txID, map[string]any{
@@ -952,6 +1005,7 @@ func hmacSHA256(data, key string) string {
 // POST /api/payments/zaincash/confirm
 func (h *ZainCashHandler) ConfirmInAppZainCash(c *fiber.Ctx) error {
 	var req struct {
+		UserID        int64   `json:"user_id"`
 		OrderID       string  `json:"order_id"`
 		TransactionID string  `json:"transaction_id"`
 		Amount        float64 `json:"amount"`
@@ -969,6 +1023,9 @@ func (h *ZainCashHandler) ConfirmInAppZainCash(c *fiber.Ctx) error {
 	txID := strings.TrimSpace(req.TransactionID)
 	orderID := strings.TrimSpace(req.OrderID)
 	uid := middleware.UserID(c)
+	if uid <= 0 && req.UserID > 0 {
+		uid = req.UserID
+	}
 	if uid <= 0 {
 		uid = 1
 	}
@@ -985,8 +1042,8 @@ func (h *ZainCashHandler) ConfirmInAppZainCash(c *fiber.Ctx) error {
 		planKey = req.Plan
 	}
 
-	if err := h.markPaymentSuccess(c.Context(), txID, orderID, req.Amount, req.MSISDN); err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+	if err := h.markPaymentSuccess(c.Context(), txID, orderID, req.Amount, req.MSISDN, uid); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "خطأ في إتمام الدفع: " + err.Error()})
 	}
 
 	var (

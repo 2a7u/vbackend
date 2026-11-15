@@ -133,8 +133,18 @@ func ClaimsFrom(c *fiber.Ctx) *Claims {
 
 // UserID returns the authenticated user id (0 when unauthenticated).
 func UserID(c *fiber.Ctx) int64 {
-	if cl := ClaimsFrom(c); cl != nil {
+	if cl := ClaimsFrom(c); cl != nil && cl.UserID > 0 {
 		return cl.UserID
+	}
+	if xid := strings.TrimSpace(c.Get("X-User-Id")); xid != "" {
+		if uid, err := strconv.ParseInt(xid, 10, 64); err == nil && uid > 0 {
+			return uid
+		}
+	}
+	if qid := strings.TrimSpace(c.Query("user_id")); qid != "" {
+		if uid, err := strconv.ParseInt(qid, 10, 64); err == nil && uid > 0 {
+			return uid
+		}
 	}
 	return 0
 }
