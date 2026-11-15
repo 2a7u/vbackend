@@ -245,6 +245,67 @@ func MigrateLegacyPlaintextPINsBatched(ctx context.Context, pool *pgxpool.Pool, 
 	return report, nil
 }
 
+// VerifySampleDecryption selects up to sampleSize rows that have pin_encrypted and pin_hmac,
+// decrypts each one using AES-256-GCM, verifies that HMAC(decrypted) == pin_hmac,
+// and (if plaintext pin is still present before wipe) verifies that decrypted == pin.
+func VerifySampleDecryption(ctx context.Context, pool *pgxpool.Pool, mgr *VaultManager, sampleSize int) (int, error) {
+	if sampleSize <= 0 {
+		sampleSize = 100
+	}
+
+	rows, err := pool.Query(ctx, `
+		SELECT id, COALESCE(pin, ''), pin_encrypted, nonce, key_version, pin_hmac
+		FROM vouchers_vault
+		WHERE pin_encrypted <> '' AND pin_hmac <> ''
+		ORDER BY id ASC
+		LIMIT $1
+	`, sampleSize)
+	if err != nil {
+		return 0, fmt.Errorf("query encrypted sample: %w", err)
+	}
+	defer rows.Close()
+
+	verifiedCount := 0
+	for rows.Next() {
+		var (
+			id           int64
+			plainPIN     string
+			pinEncrypted string
+			nonce        string
+			keyVersion   int
+			pinHMAC      string
+		)
+		if err := rows.Scan(&id, &plainPIN, &pinEncrypted, &nonce, &keyVersion, &pinHMAC); err != nil {
+			return verifiedCount, fmt.Errorf("scan sample row: %w", err)
+		}
+
+		decrypted, decErr := mgr.DecryptPIN(pinEncrypted, nonce, keyVersion)
+		if decErr != nil {
+			return verifiedCount, fmt.Errorf("row %d decrypt failed: %w", id, decErr)
+		}
+
+		computedHMAC := mgr.ComputeHMAC(decrypted)
+		// If the HMAC in the DB is a quarantined tombstone (starts with DUP_), compare to canonical portion
+		if strings.HasPrefix(pinHMAC, "DUP_") {
+			parts := strings.Split(pinHMAC, "_")
+			if len(parts) >= 3 && parts[len(parts)-1] != computedHMAC {
+				return verifiedCount, fmt.Errorf("row %d quarantined HMAC mismatch: expected suffix %s, got %s", id, parts[len(parts)-1], computedHMAC)
+			}
+		} else if computedHMAC != pinHMAC {
+			return verifiedCount, fmt.Errorf("row %d HMAC mismatch: stored=%s computed=%s", id, pinHMAC, computedHMAC)
+		}
+
+		// If plaintext pin is still present before wipe (and not masked), compare
+		if plainPIN != "" && !strings.Contains(plainPIN, "*") && plainPIN != decrypted {
+			return verifiedCount, fmt.Errorf("row %d plaintext mismatch: stored=%s decrypted=%s", id, plainPIN, decrypted)
+		}
+
+		verifiedCount++
+	}
+
+	return verifiedCount, rows.Err()
+}
+
 // VerificationReport details the exact verification status of vouchers_vault.
 type VerificationReport struct {
 	TotalRows              int64 `json:"total_rows"`

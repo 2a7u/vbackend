@@ -15,6 +15,7 @@ import (
 
 func main() {
 	dryRun := flag.Bool("dry-run", false, "Simulate migration without modifying data")
+	verifySample := flag.Int("verify-sample", 100, "Number of encrypted rows to decrypt and compare before wipe (default 100)")
 	dbURLFlag := flag.String("db-url", "", "PostgreSQL connection string (defaults to DATABASE_URL env)")
 	flag.Parse()
 
@@ -101,8 +102,8 @@ func main() {
 		}
 	}
 
-	// Step 3: Verification Gate Check
-	fmt.Println("\n[STEP 4/4] POST-MIGRATION VERIFICATION GATE CHECK:")
+	// Step 4: Verification Gate Check & 100-Row Decrypt-and-Compare
+	fmt.Println("\n[STEP 4/4] POST-MIGRATION VERIFICATION GATE & SAMPLE DECRYPT CHECK:")
 	var postUnencrypted, postMissingHMAC, postDuplicates int64
 	_ = pool.QueryRow(ctx, "SELECT COUNT(*) FROM vouchers_vault WHERE pin_encrypted = '' OR pin_encrypted IS NULL").Scan(&postUnencrypted)
 	_ = pool.QueryRow(ctx, "SELECT COUNT(*) FROM vouchers_vault WHERE pin_hmac = '' OR pin_hmac IS NULL").Scan(&postMissingHMAC)
@@ -126,7 +127,18 @@ func main() {
 		os.Exit(1)
 	}
 
-	fmt.Println("\n>>> VERIFICATION GATE PASSED: READY FOR MIGRATION 000004 & 000005 <<<")
+	// Run Decrypt-and-Compare sample verification
+	if *verifySample > 0 {
+		fmt.Printf("\n[SAMPLE CHECK] Running AES-256-GCM decrypt-and-compare on sample of %d rows...\n", *verifySample)
+		verifiedCount, verifyErr := vault.VerifySampleDecryption(ctx, pool, vaultMgr, *verifySample)
+		if verifyErr != nil {
+			fmt.Printf(">>> SAMPLE DECRYPT-AND-COMPARE FAILED: %v <<<\n", verifyErr)
+			os.Exit(1)
+		}
+		fmt.Printf("  * Successfully decrypted and verified HMAC on %d sample rows (100%% match)\n", verifiedCount)
+	}
+
+	fmt.Println("\n>>> VERIFICATION GATE & SAMPLE CHECK PASSED: READY FOR MIGRATION 000004 & 000005 <<<")
 	fmt.Println("All vouchers have been encrypted and fingerprinted.")
 	fmt.Println("Safe to run:")
 	fmt.Println("  go run ./cmd/migrate -up")

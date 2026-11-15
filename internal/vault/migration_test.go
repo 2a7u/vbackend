@@ -75,3 +75,32 @@ func TestCanaryStartupVerification(t *testing.T) {
 		t.Fatalf("canary HMAC must be deterministic: %s != %s", h1, h2)
 	}
 }
+
+// TestSampleDecryptionRoundtripOn100Cards verifies that 100 randomly generated PINs
+// undergo full AES-256-GCM encryption, decryption, and HMAC matching without failure.
+func TestSampleDecryptionRoundtripOn100Cards(t *testing.T) {
+	mgr := vault.Default()
+
+	for i := 1; i <= 100; i++ {
+		rawPIN := "778899" + strings.Repeat("0", 6-len(string(rune(i)))) + string(rune(i)) + "998877"
+		ct, nonce, ver, err := mgr.EncryptPIN(rawPIN)
+		if err != nil {
+			t.Fatalf("encrypt card %d: %v", i, err)
+		}
+
+		decrypted, err := mgr.DecryptPIN(ct, nonce, ver)
+		if err != nil {
+			t.Fatalf("decrypt card %d: %v", i, err)
+		}
+
+		if decrypted != rawPIN {
+			t.Fatalf("card %d plaintext mismatch: expected %q, got %q", i, rawPIN, decrypted)
+		}
+
+		expectedHMAC := mgr.ComputeHMAC(rawPIN)
+		computedHMAC := mgr.ComputeHMAC(decrypted)
+		if expectedHMAC != computedHMAC {
+			t.Fatalf("card %d HMAC mismatch: expected %s, got %s", i, expectedHMAC, computedHMAC)
+		}
+	}
+}
