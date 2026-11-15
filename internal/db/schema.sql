@@ -643,6 +643,28 @@ ALTER TABLE vouchers_vault ADD COLUMN IF NOT EXISTS key_version INT NOT NULL DEF
 ALTER TABLE vouchers_vault ADD COLUMN IF NOT EXISTS pin_hmac TEXT NOT NULL DEFAULT '';
 ALTER TABLE vouchers_vault ADD COLUMN IF NOT EXISTS net_profit BIGINT NOT NULL DEFAULT 0;
 
+-- Idempotent historical backfill for net_profit on existing sold vouchers
+UPDATE vouchers_vault 
+SET net_profit = GREATEST(0, (selling_price - cost_price)::BIGINT) 
+WHERE is_sold = TRUE AND net_profit = 0 AND selling_price > cost_price;
+
+-- System settings table for cryptographic canaries and configuration
+CREATE TABLE IF NOT EXISTS system_settings (
+    key         TEXT PRIMARY KEY,
+    value       TEXT NOT NULL,
+    updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- Legacy migration duplicates log (ensures old duplicates are audited, never dropped silently)
+CREATE TABLE IF NOT EXISTS legacy_migration_duplicates (
+    id                 BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    legacy_voucher_id  BIGINT NOT NULL,
+    serial_number      TEXT NOT NULL,
+    pin_hmac           TEXT NOT NULL,
+    reason             TEXT NOT NULL,
+    detected_at        TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 CREATE UNIQUE INDEX IF NOT EXISTS idx_vouchers_vault_pin_hmac ON vouchers_vault (pin_hmac) WHERE pin_hmac <> '';
 
 -- 2.2 Multi-Tier Pricing & Custom Subscriber Overrides

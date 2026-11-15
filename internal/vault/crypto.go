@@ -1,6 +1,7 @@
 package vault
 
 import (
+	"context"
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/hmac"
@@ -13,7 +14,17 @@ import (
 	"os"
 	"strings"
 	"sync"
+
+	"github.com/jackc/pgx/v5/pgxpool"
 )
+
+// CRITICAL SECURITY INVARIANT:
+// VAULT_HMAC_SECRET must NEVER be changed after initial deployment.
+// All permanent duplicate vouchers are indexed by HMAC-SHA256(PIN, VAULT_HMAC_SECRET).
+// Modifying this secret would cause hash mismatches, allowing duplicate PINs to be accepted
+// and breaking global duplicate detection.
+
+const CanaryPayload = "VENUS_HMAC_SECRET_CANARY_FINGERPRINT_VERIFICATION_2026"
 
 var (
 	ErrInvalidCiphertext = errors.New("vault: invalid ciphertext or corrupted data")
@@ -81,6 +92,13 @@ func (v *VaultManager) SetKey(version int, rawKey string) {
 func (v *VaultManager) EncryptPIN(pin string) (encryptedHex, nonceHex string, keyVer int, err error) {
 	v.mu.RLock()
 	keyVer = v.currentVer
+	v.mu.RUnlock()
+	return v.EncryptPINWithVersion(pin, keyVer)
+}
+
+// EncryptPINWithVersion encrypts a plaintext PIN with an explicitly specified key version.
+func (v *VaultManager) EncryptPINWithVersion(pin string, keyVer int) (encryptedHex, nonceHex string, version int, err error) {
+	v.mu.RLock()
 	key, ok := v.keys[keyVer]
 	v.mu.RUnlock()
 
@@ -106,6 +124,51 @@ func (v *VaultManager) EncryptPIN(pin string) (encryptedHex, nonceHex string, ke
 	ciphertext := gcm.Seal(nil, nonce, []byte(pin), nil)
 
 	return hex.EncodeToString(ciphertext), hex.EncodeToString(nonce), keyVer, nil
+}
+
+// VerifyStartup checks that VAULT_HMAC_SECRET is present and produces consistent fingerprints.
+// If pool is provided, it verifies the canary against the database, failing fast
+// if the secret has drifted or changed.
+func (v *VaultManager) VerifyStartup(ctx context.Context, pool *pgxpool.Pool) error {
+	v.mu.RLock()
+	secret := v.hmacSecret
+	v.mu.RUnlock()
+
+	if len(secret) == 0 {
+		return errors.New("vault: VAULT_HMAC_SECRET is uninitialized or empty")
+	}
+
+	canaryHash := v.ComputeHMAC(CanaryPayload)
+	if canaryHash == "" {
+		return errors.New("vault: failed to compute canary HMAC")
+	}
+
+	if pool == nil {
+		return nil
+	}
+
+	// Verify or seed canary in DB
+	var storedCanary string
+	err := pool.QueryRow(ctx,
+		`SELECT value FROM system_settings WHERE key = 'vault_hmac_canary'`,
+	).Scan(&storedCanary)
+
+	if err != nil {
+		// Seed the canary for future boots
+		_, _ = pool.Exec(ctx,
+			`INSERT INTO system_settings (key, value)
+			 VALUES ('vault_hmac_canary', $1)
+			 ON CONFLICT (key) DO NOTHING`,
+			canaryHash,
+		)
+		return nil
+	}
+
+	if storedCanary != canaryHash {
+		return fmt.Errorf("FATAL: VAULT_HMAC_SECRET has changed! Stored canary %s != Computed %s. Refusing to boot to prevent cryptographic duplicate guard corruption", storedCanary, canaryHash)
+	}
+
+	return nil
 }
 
 // DecryptPIN decrypts an AES-256-GCM encrypted PIN using the specified key version.

@@ -81,6 +81,9 @@ func main() {
 
 	// Vault, Pricing, Hierarchy & Radar Services (Phase 2)
 	vaultMgr := vault.Default()
+	if err := vaultMgr.VerifyStartup(ctx, pool); err != nil {
+		log.Fatalf("CRITICAL SECURITY VIOLATION: %v", err)
+	}
 	pricingSvc := pricing.NewService(pool)
 	hierarchySvc := hierarchy.NewService(pool, ledgerSvc)
 	radarSvc := radar.NewService(pool)
@@ -267,10 +270,12 @@ func main() {
 	admin.Post("/hierarchy/users/:id/parent", fintechH.SetParentAgent)
 	admin.Post("/hierarchy/agents/:id/commissions", fintechH.SetAgentCommission)
 	admin.Get("/hierarchy/commissions", fintechH.ListAgentCommissions)
+	admin.Get("/hierarchy/agents/:id/report", fintechH.GetAgentCommissionReport)
 
 	// Phase 2: Inventory Radar & Thresholds
 	admin.Get("/radar/summary", fintechH.GetInventoryRadar)
 	admin.Post("/radar/thresholds", fintechH.SetCategoryThreshold)
+	admin.Post("/vault/rotate-keys", fintechH.RotateVaultKeys)
 
 	// Admin Activation Codes management
 	admin.Post("/activation-codes/generate", adminH.GenerateActivationCodes)

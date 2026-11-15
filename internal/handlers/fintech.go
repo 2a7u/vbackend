@@ -1024,6 +1024,124 @@ func (h *FintechHandler) ListAgentCommissions(c *fiber.Ctx) error {
 	return c.JSON(list)
 }
 
+// GetAgentCommissionReport generates a comprehensive commission statement and activity report for an agent.
+// GET /api/admin/hierarchy/agents/:id/report
+func (h *FintechHandler) GetAgentCommissionReport(c *fiber.Ctx) error {
+	agentID, err := strconv.ParseInt(c.Params("id"), 10, 64)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid agent id"})
+	}
+
+	// 1. Agent profile
+	var (
+		email, fullName, storeName string
+		balance                    int64
+	)
+	err = h.Pool.QueryRow(c.Context(),
+		`SELECT email, COALESCE(full_name, ''), COALESCE(store_name, ''), wallet_balance
+		 FROM users WHERE id = $1`, agentID,
+	).Scan(&email, &fullName, &storeName, &balance)
+	if err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "agent not found"})
+	}
+
+	// 2. Child Points
+	childRows, err := h.Pool.Query(c.Context(),
+		`SELECT id, email, COALESCE(store_name, full_name, ''), wallet_balance, created_at
+		 FROM users WHERE parent_agent_id = $1 ORDER BY id DESC`, agentID,
+	)
+	var childPoints []fiber.Map
+	if err == nil {
+		defer childRows.Close()
+		for childRows.Next() {
+			var (
+				cid           int64
+				cEmail, cName string
+				cBal          int64
+				cCreated      time.Time
+			)
+			if err := childRows.Scan(&cid, &cEmail, &cName, &cBal, &cCreated); err == nil {
+				childPoints = append(childPoints, fiber.Map{
+					"id":             cid,
+					"email":          cEmail,
+					"name":           cName,
+					"wallet_balance": cBal,
+					"created_at":     cCreated,
+				})
+			}
+		}
+	}
+	if childPoints == nil {
+		childPoints = []fiber.Map{}
+	}
+
+	// 3. Totals
+	var totalEarned, totalReversed int64
+	var countEarned, countReversed int64
+	_ = h.Pool.QueryRow(c.Context(),
+		`SELECT COALESCE(SUM(credit), 0), COUNT(*)
+		 FROM ledger_entries
+		 WHERE account_id = $1 AND ref_type = 'agent_commission'`, agentID,
+	).Scan(&totalEarned, &countEarned)
+
+	_ = h.Pool.QueryRow(c.Context(),
+		`SELECT COALESCE(SUM(debit), 0), COUNT(*)
+		 FROM ledger_entries
+		 WHERE account_id = $1 AND ref_type = 'agent_commission_reversal'`, agentID,
+	).Scan(&totalReversed, &countReversed)
+
+	// 4. Recent commission entries
+	entryRows, err := h.Pool.Query(c.Context(),
+		`SELECT tx_id, debit, credit, balance_after, ref_type, ref_id, created_at
+		 FROM ledger_entries
+		 WHERE account_id = $1 AND ref_type IN ('agent_commission', 'agent_commission_reversal')
+		 ORDER BY id DESC LIMIT 50`, agentID,
+	)
+	var entries []fiber.Map
+	if err == nil {
+		defer entryRows.Close()
+		for entryRows.Next() {
+			var (
+				txID, refType, refID string
+				debit, credit, bal   int64
+				createdAt            time.Time
+			)
+			if err := entryRows.Scan(&txID, &debit, &credit, &bal, &refType, &refID, &createdAt); err == nil {
+				entries = append(entries, fiber.Map{
+					"tx_id":         txID,
+					"debit":         debit,
+					"credit":        credit,
+					"balance_after": bal,
+					"ref_type":      refType,
+					"ref_id":        refID,
+					"created_at":    createdAt,
+				})
+			}
+		}
+	}
+	if entries == nil {
+		entries = []fiber.Map{}
+	}
+
+	return c.JSON(fiber.Map{
+		"agent": fiber.Map{
+			"id":             agentID,
+			"email":          email,
+			"full_name":      fullName,
+			"store_name":     storeName,
+			"wallet_balance": balance,
+		},
+		"total_commission_earned":   totalEarned,
+		"total_commission_reversed": totalReversed,
+		"net_commission":            totalEarned - totalReversed,
+		"commission_sales_count":    countEarned,
+		"reversals_count":           countReversed,
+		"child_points_count":        len(childPoints),
+		"child_points":              childPoints,
+		"recent_entries":            entries,
+	})
+}
+
 // GetInventoryRadar returns real-time inventory levels, burn rates, and low stock alarms.
 // GET /api/admin/radar/summary
 func (h *FintechHandler) GetInventoryRadar(c *fiber.Ctx) error {
@@ -1065,4 +1183,33 @@ func (h *FintechHandler) SetCategoryThreshold(c *fiber.Ctx) error {
 	})
 
 	return c.JSON(fiber.Map{"success": true})
+}
+
+// RotateVaultKeys re-encrypts stored voucher PINs to a target key version in batches.
+// POST /api/admin/vault/rotate-keys
+func (h *FintechHandler) RotateVaultKeys(c *fiber.Ctx) error {
+	var req struct {
+		TargetVersion int `json:"target_version"`
+		BatchSize     int `json:"batch_size"`
+	}
+	if err := c.BodyParser(&req); err != nil || req.TargetVersion <= 0 {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid target_version"})
+	}
+	if req.BatchSize <= 0 {
+		req.BatchSize = 100
+	}
+
+	report, err := vault.ReencryptVaultVouchers(c.Context(), h.Pool, h.VaultMgr, req.TargetVersion, req.BatchSize)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	h.audit(c, "ROTATE_VAULT_KEYS", "vouchers_vault", fmt.Sprintf("v%d", req.TargetVersion), map[string]any{
+		"target_version": req.TargetVersion,
+		"reencrypted":    report.Reencrypted,
+		"failed":         report.Failed,
+		"total":          report.TotalVouchers,
+	})
+
+	return c.JSON(report)
 }

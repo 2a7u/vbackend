@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -149,6 +150,71 @@ func (s *Service) ResolvePrice(ctx context.Context, userID int64, productID stri
 
 	// 3. Fallback to Catalog Default
 	s.setCache(cacheKey, resolved)
+	return resolved, nil
+}
+
+// ResolvePriceTx resolves price strictly inside a PostgreSQL transaction directly from the DB,
+// completely bypassing in-memory cache to guarantee that financial deductions never use stale prices.
+func (s *Service) ResolvePriceTx(ctx context.Context, tx pgx.Tx, userID int64, productID string, catalogDefaultPrice int64) (ResolvedPrice, error) {
+	resolved := ResolvedPrice{
+		ProductID:     productID,
+		Price:         catalogDefaultPrice,
+		Source:        "catalog_default",
+		OriginalPrice: catalogDefaultPrice,
+	}
+
+	if tx == nil {
+		return resolved, nil
+	}
+
+	// 1. Check Subscriber Override directly inside transaction
+	if userID > 0 {
+		var customPrice int64
+		err := tx.QueryRow(ctx,
+			`SELECT custom_price
+			 FROM subscriber_price_overrides
+			 WHERE user_id = $1 AND product_id = $2`,
+			userID, productID,
+		).Scan(&customPrice)
+		if err == nil && customPrice >= 0 {
+			resolved.Price = customPrice
+			resolved.Source = "subscriber_override"
+			return resolved, nil
+		}
+	}
+
+	// 2. Check Assigned Tier or Default Tier directly inside transaction
+	var tierID *int64
+	if userID > 0 {
+		_ = tx.QueryRow(ctx, `SELECT price_tier_id FROM users WHERE id = $1`, userID).Scan(&tierID)
+	}
+
+	var effectiveTierID int64
+	var tierCode string
+	if tierID != nil && *tierID > 0 {
+		effectiveTierID = *tierID
+		_ = tx.QueryRow(ctx, `SELECT code FROM price_tiers WHERE id = $1`, effectiveTierID).Scan(&tierCode)
+	} else {
+		// Fallback to default tier
+		_ = tx.QueryRow(ctx, `SELECT id, code FROM price_tiers WHERE is_default = TRUE LIMIT 1`).Scan(&effectiveTierID, &tierCode)
+	}
+
+	if effectiveTierID > 0 {
+		var tierPrice int64
+		err := tx.QueryRow(ctx,
+			`SELECT price
+			 FROM tier_prices
+			 WHERE tier_id = $1 AND product_id = $2`,
+			effectiveTierID, productID,
+		).Scan(&tierPrice)
+		if err == nil && tierPrice > 0 {
+			resolved.Price = tierPrice
+			resolved.Source = "tier_price"
+			resolved.TierCode = tierCode
+			return resolved, nil
+		}
+	}
+
 	return resolved, nil
 }
 

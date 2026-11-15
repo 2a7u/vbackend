@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"os"
+	"strconv"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -50,6 +52,16 @@ func NewService(pool *pgxpool.Pool, ledgerSvc *ledger.Service) *Service {
 	}
 }
 
+// maxDepth returns the configured depth limit or defaults to 25.
+func (s *Service) maxDepth() int {
+	if env := os.Getenv("MAX_HIERARCHY_DEPTH"); env != "" {
+		if d, err := strconv.Atoi(env); err == nil && d > 0 {
+			return d
+		}
+	}
+	return MaxHierarchyDepth
+}
+
 // CheckCyclePreventsInfiniteLoop verifies that assigning proposedParentID to childID
 // does not create a cycle in the agent hierarchy.
 func (s *Service) CheckCyclePreventsInfiniteLoop(ctx context.Context, childID, proposedParentID int64) error {
@@ -64,7 +76,8 @@ func (s *Service) CheckCyclePreventsInfiniteLoop(ctx context.Context, childID, p
 	visited := make(map[int64]bool)
 	visited[childID] = true
 
-	for depth := 0; depth < MaxHierarchyDepth; depth++ {
+	limit := s.maxDepth()
+	for depth := 0; depth < limit; depth++ {
 		if current == childID {
 			return ErrCyclicHierarchy
 		}
@@ -72,6 +85,10 @@ func (s *Service) CheckCyclePreventsInfiniteLoop(ctx context.Context, childID, p
 			return ErrCyclicHierarchy
 		}
 		visited[current] = true
+
+		if s.Pool == nil {
+			return nil
+		}
 
 		var nextParent *int64
 		err := s.Pool.QueryRow(ctx,
@@ -180,9 +197,23 @@ func (s *Service) ProcessSaleCommission(ctx context.Context, tx pgx.Tx, subPoint
 }
 
 // ReverseCommission reverses a previously awarded commission on order refund in the same transaction.
+// It is strictly idempotent: attempting to reverse the same refID twice is a safe no-op.
 func (s *Service) ReverseCommission(ctx context.Context, tx pgx.Tx, parentAgentID int64, commissionAmount int64, refID string) error {
 	if parentAgentID <= 0 || commissionAmount <= 0 {
 		return nil
+	}
+
+	// Idempotency check: verify if this reversal was already recorded in ledger_entries
+	if tx != nil {
+		var alreadyReversed bool
+		err := tx.QueryRow(ctx,
+			`SELECT EXISTS(
+				SELECT 1 FROM ledger_entries
+				WHERE ref_type = 'agent_commission_reversal' AND ref_id = $1
+			)`, refID).Scan(&alreadyReversed)
+		if err == nil && alreadyReversed {
+			return nil // Idempotent: already reversed, do not debit twice
+		}
 	}
 
 	// 1. Reverse Double-Entry Ledger legs (Debit: Parent Agent, Credit: Settlement)

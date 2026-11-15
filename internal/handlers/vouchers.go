@@ -245,7 +245,6 @@ func (h *VouchersHandler) GetVouchers(c *fiber.Ctx) error {
 					"id":                 id,
 					"brand_id":           bId,
 					"voucher_id":         vId,
-					"pin":                pin,
 					"pin_masked":         maskedPIN,
 					"serial_number":      sn,
 					"cost_price":         cost,
@@ -313,10 +312,11 @@ func (h *VouchersHandler) DispenseVoucher(c *fiber.Ctx) error {
 	}
 	defer tx.Rollback(c.Context())
 
-	// 1. Resolve unit selling price for this specific subscriber (Resolution order: Override -> Tier -> Catalog Default)
+	// 1. Resolve unit selling price for this specific subscriber strictly inside the transaction
+	// (Resolution order: Override -> Tier -> Catalog Default; NO stale in-memory cache used for money)
 	unitSellingPrice := int64(req.SellingPrice)
 	if h.PricingSvc != nil && uid > 0 {
-		resolved, pErr := h.PricingSvc.ResolvePrice(c.Context(), uid, req.VoucherID, unitSellingPrice)
+		resolved, pErr := h.PricingSvc.ResolvePriceTx(c.Context(), tx, uid, req.VoucherID, unitSellingPrice)
 		if pErr == nil && resolved.Price > 0 {
 			unitSellingPrice = resolved.Price
 		}
