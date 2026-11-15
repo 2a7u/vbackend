@@ -67,6 +67,12 @@
     .badge-plan-plus { background-color: #F0FDF4; color: #15803D; border: 1px solid #BBF7D0; }
     .badge-plan-business { background-color: #FAF5FF; color: #7E22CE; border: 1px solid #E9D5FF; }
     .badge-plan-trial { background-color: #FFF7ED; color: #C2410C; border: 1px solid #FFEDD5; }
+    @media print {
+      body * { visibility: hidden; }
+      #modal-statement, #modal-statement * { visibility: visible; }
+      #modal-statement { position: absolute; left: 0; top: 0; width: 100%; max-height: none; border: none; box-shadow: none; padding: 0; }
+      .no-print { display: none !important; }
+    }
   </style>
 </head>
 <body class="min-h-screen flex flex-col antialiased selection:bg-brand selection:text-white">
@@ -1709,6 +1715,56 @@
     </div>
   </div>
 
+  <!-- FINTECH MODAL: EDIT FRAUD RULE -->
+  <div id="modal-edit-fraud-rule" class="fixed inset-0 z-50 flex items-center justify-center p-4 modal-backdrop hidden">
+    <div class="w-full max-w-md bg-white rounded-3xl shadow-2xl border border-slate-100 p-6 space-y-4">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 rounded-xl bg-red-50 text-red-600 flex items-center justify-center text-sm font-black">
+            <i class="fa-solid fa-sliders"></i>
+          </div>
+          <div>
+            <h3 class="text-sm font-black text-slate-800">تعديل حدود وإجراءات قاعدة الاحتيال</h3>
+            <p class="text-[10px] text-slate-400 font-medium" id="edit-rule-title">تحديث الإعدادات والحفظ اللحظي</p>
+          </div>
+        </div>
+        <button onclick="closeModal('modal-edit-fraud-rule')" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
+      </div>
+
+      <form onsubmit="handleSaveFraudRule(event)" class="space-y-4">
+        <input type="hidden" id="edit-rule-id">
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">قيمة الحد / المشغل (Threshold Value)</label>
+          <input type="number" id="edit-rule-threshold" required min="0" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-black text-slate-800 outline-none focus:border-brand">
+          <p class="text-[10px] text-slate-400 mt-1">المبلغ بالدينار العراقي أو عدد التكرارات حسب نوع القاعدة.</p>
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">النافذة الزمنية بالثواني (Time Window)</label>
+          <input type="number" id="edit-rule-window" required min="0" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-brand">
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">الإجراء المتخذ عند الانتهاك</label>
+          <select id="edit-rule-action" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-brand">
+            <option value="alert">إشعار أمني فقط (Alert)</option>
+            <option value="freeze_wallet">تجميد المحفظة فوراً (Freeze Wallet)</option>
+          </select>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <input type="checkbox" id="edit-rule-active" class="w-4 h-4 rounded text-brand">
+          <label for="edit-rule-active" class="text-xs font-bold text-slate-700">تفعيل القاعدة في محرك المخاطر</label>
+        </div>
+
+        <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+          <button type="button" onclick="closeModal('modal-edit-fraud-rule')" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-xs font-bold transition">إلغاء</button>
+          <button type="submit" class="px-5 py-2 bg-brand hover:bg-brand-dark text-white rounded-xl text-xs font-bold shadow-md shadow-brand/20 transition">حفظ وتحديث المحرك</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <!-- FINTECH MODAL 3: INTERACTIVE ACCOUNT STATEMENT -->
   <div id="modal-statement" class="fixed inset-0 z-50 flex items-center justify-center p-4 modal-backdrop hidden">
     <div class="w-full max-w-4xl bg-white rounded-3xl shadow-2xl border border-slate-100 p-6 space-y-4 max-h-[90vh] overflow-y-auto">
@@ -1720,9 +1776,18 @@
             <p class="text-xs text-brand font-bold">VENUS POS Enterprise Ledger Protocol</p>
           </div>
         </div>
-        <div class="flex items-center gap-2">
+        <div class="flex items-center gap-2 no-print">
+          <a id="statement-whatsapp-link" href="#" target="_blank" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition">
+            <i class="fa-brands fa-whatsapp text-sm"></i><span>مشاركة واتساب</span>
+          </a>
+          <a id="statement-excel-link" href="#" target="_blank" class="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-xl text-xs font-bold flex items-center gap-1.5 transition">
+            <i class="fa-solid fa-file-excel text-emerald-600"></i><span>Excel</span>
+          </a>
+          <a id="statement-csv-link" href="#" target="_blank" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold flex items-center gap-1.5 transition">
+            <i class="fa-solid fa-file-csv text-slate-600"></i><span>CSV</span>
+          </a>
           <button onclick="window.print()" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold flex items-center gap-1.5 transition">
-            <i class="fa-solid fa-print"></i>طباعة
+            <i class="fa-solid fa-print"></i><span>طباعة / PDF</span>
           </button>
           <button onclick="closeModal('modal-statement')" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
         </div>
@@ -3068,6 +3133,9 @@
                 <span class="text-slate-500 font-bold text-[11px]">الإجراء:</span>
                 <span class="font-bold text-[11px] ${r.action === 'freeze_wallet' ? 'text-red-600' : 'text-amber-600'}">${r.action === 'freeze_wallet' ? 'تجميد المحفظة' : 'تنبيه أمني'}</span>
               </div>
+              <button onclick="openEditRuleModal(${r.id}, '${r.name_ar}', ${r.threshold_value}, ${r.time_window_sec}, '${r.action}', ${r.is_active})" class="w-full mt-2 py-1.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5">
+                <i class="fa-solid fa-pen-to-square text-brand"></i><span>تعديل وضبط القاعدة</span>
+              </button>
             </div>
           </div>
         `).join('');
@@ -3132,6 +3200,45 @@
 
         showToast('تم إلغاء تجميد المحفظة بنجاح وبث التحديث لحظياً');
         closeModal('modal-unfreeze-wallet');
+        loadFraudData();
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    }
+
+    function openEditRuleModal(id, nameAr, threshold, windowSec, action, isActive) {
+      document.getElementById('edit-rule-id').value = id;
+      document.getElementById('edit-rule-title').innerText = `${nameAr} (معرف #${id})`;
+      document.getElementById('edit-rule-threshold').value = threshold;
+      document.getElementById('edit-rule-window').value = windowSec;
+      document.getElementById('edit-rule-action').value = action;
+      document.getElementById('edit-rule-active').checked = !!isActive;
+      openModal('modal-edit-fraud-rule');
+    }
+
+    async function handleSaveFraudRule(e) {
+      e.preventDefault();
+      const id = document.getElementById('edit-rule-id').value;
+      const threshold = parseInt(document.getElementById('edit-rule-threshold').value, 10);
+      const windowSec = parseInt(document.getElementById('edit-rule-window').value, 10);
+      const action = document.getElementById('edit-rule-action').value;
+      const isActive = document.getElementById('edit-rule-active').checked;
+
+      try {
+        const res = await apiFetch(`/api/admin/fintech/fraud/rules/${id}`, {
+          method: 'PUT',
+          body: JSON.stringify({
+            threshold_value: threshold,
+            time_window_sec: windowSec,
+            action: action,
+            is_active: isActive
+          })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'فشل تحديث قاعدة الاحتيال');
+
+        showToast('تم تحديث إعدادات القاعدة وتطبيقها فورياً على المحرك');
+        closeModal('modal-edit-fraud-rule');
         loadFraudData();
       } catch (err) {
         showToast(err.message, 'error');
@@ -3212,9 +3319,17 @@
               <td class="py-2.5 px-3 ${r.discrepancy === 0 ? 'text-emerald-600' : 'text-rose-600 font-black'}">${r.discrepancy.toLocaleString()} د.ع</td>
               <td class="py-2.5 px-3">${statusBadge}</td>
               <td class="py-2.5 px-3">
-                <a href="/api/admin/fintech/reconcile/reports/${r.id}/export" target="_blank" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold inline-flex items-center gap-1 transition">
-                  <i class="fa-solid fa-file-csv text-emerald-600"></i>CSV
-                </a>
+                <div class="flex items-center gap-1.5">
+                  <a href="/api/admin/fintech/reconcile/reports/${r.id}/export?format=excel" target="_blank" class="px-2 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-lg text-xs font-bold inline-flex items-center gap-1 transition" title="تصدير إلى Excel">
+                    <i class="fa-solid fa-file-excel text-emerald-600"></i>Excel
+                  </a>
+                  <a href="/api/admin/fintech/reconcile/reports/${r.id}/export?format=csv" target="_blank" class="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold inline-flex items-center gap-1 transition" title="تصدير CSV مع UTF-8 BOM">
+                    <i class="fa-solid fa-file-csv text-slate-600"></i>CSV
+                  </a>
+                  <a href="https://wa.me/?text=${encodeURIComponent('تقرير مطابقة فينوس POS لتاريخ ' + r.report_date + ' - الفارق: ' + r.discrepancy + ' د.ع (' + (isMatch ? 'مطابق 100%' : 'فارق محاسبي') + ')')}" target="_blank" class="px-2 py-1 bg-green-50 hover:bg-green-100 text-green-700 border border-green-200 rounded-lg text-xs font-bold inline-flex items-center gap-1 transition" title="مشاركة التقرير عبر واتساب">
+                    <i class="fa-brands fa-whatsapp text-green-600"></i>
+                  </a>
+                </div>
               </td>
             </tr>
           `;
@@ -3410,6 +3525,20 @@
 
         const u = data.user;
         const entries = data.entries || [];
+
+        const waLink = document.getElementById('statement-whatsapp-link');
+        if (waLink) {
+          const waMsg = `كشف حساب VENUS POS لـ ${u.store_name || u.full_name || u.email}\nالرصيد الحالي: ${u.current_balance.toLocaleString()} د.ع\nسقف الائتمان: ${u.credit_limit.toLocaleString()} د.ع\nعدد الحركات: ${data.entries_count}\nإجمالي الإيداعات: ${data.total_credits.toLocaleString()} د.ع\nإجمالي السحوبات: ${data.total_debits.toLocaleString()} د.ع`;
+          waLink.href = `https://wa.me/?text=${encodeURIComponent(waMsg)}`;
+        }
+        const xlLink = document.getElementById('statement-excel-link');
+        if (xlLink) {
+          xlLink.href = `/api/admin/fintech/statements/${userId}?format=excel`;
+        }
+        const csvLink = document.getElementById('statement-csv-link');
+        if (csvLink) {
+          csvLink.href = `/api/admin/fintech/statements/${userId}?format=csv`;
+        }
 
         container.innerHTML = `
           <div class="border border-slate-200 rounded-2xl p-5 space-y-4">

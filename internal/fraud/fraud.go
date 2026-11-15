@@ -1,9 +1,12 @@
 package fraud
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
+	"os"
 	"sync"
 	"time"
 
@@ -51,8 +54,9 @@ type txTimestamp struct {
 }
 
 type Engine struct {
-	Pool *pgxpool.Pool
-	Hub  Broadcaster
+	Pool       *pgxpool.Pool
+	Hub        Broadcaster
+	WebhookURL string
 
 	mu      sync.RWMutex
 	history map[int64][]txTimestamp // user_id -> sliding window history
@@ -60,11 +64,13 @@ type Engine struct {
 }
 
 func NewEngine(pool *pgxpool.Pool, hub Broadcaster) *Engine {
+	webhook := os.Getenv("FRAUD_WEBHOOK_URL")
 	e := &Engine{
-		Pool:    pool,
-		Hub:     hub,
-		history: make(map[int64][]txTimestamp),
-		rules:   make(map[string]Rule),
+		Pool:       pool,
+		Hub:        hub,
+		WebhookURL: webhook,
+		history:    make(map[int64][]txTimestamp),
+		rules:      make(map[string]Rule),
 	}
 	if pool != nil {
 		_ = e.RefreshRules(context.Background())
@@ -239,18 +245,40 @@ func (e *Engine) handleViolation(ctx context.Context, tx pgx.Tx, req CheckReques
 		}
 	}
 
+	alertPayload := map[string]any{
+		"event_id":     eventID,
+		"user_id":      req.UserID,
+		"rule_code":    rule.RuleCode,
+		"rule_name_ar": rule.NameAR,
+		"severity":     severity,
+		"action_taken": rule.Action,
+		"reason":       reason,
+		"amount":       req.AmountIQD,
+		"time":         time.Now().UTC(),
+	}
+
 	if e.Hub != nil {
-		e.Hub.Broadcast(0, "fraud_alert", map[string]any{
-			"event_id":     eventID,
-			"user_id":      req.UserID,
-			"rule_code":    rule.RuleCode,
-			"rule_name_ar": rule.NameAR,
-			"severity":     severity,
-			"action_taken": rule.Action,
-			"reason":       reason,
-			"amount":       req.AmountIQD,
-			"time":         time.Now().UTC(),
-		})
+		e.Hub.Broadcast(0, "fraud_alert", alertPayload)
+	}
+
+	// Dispatch to external webhook if configured (Requirement 1d)
+	if e.WebhookURL != "" {
+		go func(webhook string, payload map[string]any) {
+			b, err := json.Marshal(payload)
+			if err != nil {
+				return
+			}
+			client := &http.Client{Timeout: 5 * time.Second}
+			httpReq, err := http.NewRequest("POST", webhook, bytes.NewBuffer(b))
+			if err == nil {
+				httpReq.Header.Set("Content-Type", "application/json")
+				httpReq.Header.Set("User-Agent", "VENUS-POS-Fintech-FraudEngine/1.0")
+				resp, err := client.Do(httpReq)
+				if err == nil && resp != nil && resp.Body != nil {
+					_ = resp.Body.Close()
+				}
+			}
+		}(e.WebhookURL, alertPayload)
 	}
 
 	_ = execer

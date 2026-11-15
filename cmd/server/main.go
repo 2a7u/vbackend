@@ -23,6 +23,7 @@ import (
 	"venus_backend/internal/ledger"
 	"venus_backend/internal/middleware"
 	"venus_backend/internal/reconcile"
+	"venus_backend/internal/scheduler"
 )
 
 func getenv(key, fallback string) string {
@@ -74,6 +75,16 @@ func main() {
 	fraudEngine := fraud.NewEngine(pool, hub)
 	reconcileSvc := reconcile.NewService(pool)
 	fintechH := handlers.NewFintechHandler(pool, hub, ledgerSvc, fraudEngine, reconcileSvc)
+
+	// Idempotent Opening-Ledger migration from existing balances
+	if err := ledgerSvc.SeedOpeningBalancesFromLegacy(ctx); err != nil {
+		log.Printf("opening ledger migration notice: %v", err)
+	}
+
+	// Financial cron scheduler: daily integrity check, daily reconciliation, daily/monthly close
+	cronSched := scheduler.NewScheduler(pool, hub, ledgerSvc, reconcileSvc)
+	cronSched.Start(ctx)
+	defer cronSched.Stop()
 
 	adminH := &handlers.AdminHandler{Pool: pool, Hub: hub, LedgerSvc: ledgerSvc, FraudEngine: fraudEngine}
 	// R1: one-time clean reset (reset_v2_clean) — runs exactly ONCE per deploy,

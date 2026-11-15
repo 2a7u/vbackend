@@ -31,6 +31,90 @@ type IntegritySummary struct {
 	IsClean             bool                 `json:"is_clean"`
 }
 
+// ChainRecord represents an entry in an account's cryptographic hash chain.
+type ChainRecord struct {
+	ID           int64
+	TxID         uuid.UUID
+	AccountID    int64
+	Debit        int64
+	Credit       int64
+	BalanceAfter int64
+	CreatedAt    time.Time
+	PrevHash     string
+	Hash         string
+}
+
+// VerifyAccountRecords verifies hash linkage, SHA-256 integrity, and balance continuity across an entry sequence.
+func VerifyAccountRecords(accountID int64, records []ChainRecord) []IntegrityViolation {
+	var violations []IntegrityViolation
+	var prevHash = GenesisHash
+	var prevBalance int64 = 0
+	isFirst := true
+
+	for _, rec := range records {
+		// 1. Verify prev_hash linkage
+		if isFirst {
+			if rec.PrevHash != GenesisHash {
+				violations = append(violations, IntegrityViolation{
+					AccountID:     accountID,
+					EntryID:       rec.ID,
+					TxID:          rec.TxID.String(),
+					ViolationType: "INVALID_GENESIS_PREV_HASH",
+					ExpectedValue: GenesisHash,
+					ActualValue:   rec.PrevHash,
+					DetectedAt:    time.Now().UTC(),
+				})
+			}
+			isFirst = false
+		} else {
+			if rec.PrevHash != prevHash {
+				violations = append(violations, IntegrityViolation{
+					AccountID:     accountID,
+					EntryID:       rec.ID,
+					TxID:          rec.TxID.String(),
+					ViolationType: "BROKEN_HASH_CHAIN",
+					ExpectedValue: prevHash,
+					ActualValue:   rec.PrevHash,
+					DetectedAt:    time.Now().UTC(),
+				})
+			}
+		}
+
+		// 2. Recompute cryptographic SHA-256 hash
+		expectedHash := CalculateEntryHash(rec.PrevHash, rec.TxID, accountID, rec.Debit, rec.Credit, rec.BalanceAfter, rec.CreatedAt)
+		if rec.Hash != expectedHash {
+			violations = append(violations, IntegrityViolation{
+				AccountID:     accountID,
+				EntryID:       rec.ID,
+				TxID:          rec.TxID.String(),
+				ViolationType: "HASH_TAMPERED",
+				ExpectedValue: expectedHash,
+				ActualValue:   rec.Hash,
+				DetectedAt:    time.Now().UTC(),
+			})
+		}
+
+		// 3. Mathematical balance continuity
+		expectedBalance := prevBalance + rec.Credit - rec.Debit
+		if rec.BalanceAfter != expectedBalance {
+			violations = append(violations, IntegrityViolation{
+				AccountID:     accountID,
+				EntryID:       rec.ID,
+				TxID:          rec.TxID.String(),
+				ViolationType: "BALANCE_CALCULATION_ERROR",
+				ExpectedValue: fmt.Sprintf("%d", expectedBalance),
+				ActualValue:   fmt.Sprintf("%d", rec.BalanceAfter),
+				DetectedAt:    time.Now().UTC(),
+			})
+		}
+
+		prevHash = rec.Hash
+		prevBalance = rec.BalanceAfter
+	}
+
+	return violations
+}
+
 // VerifyAccountChain verifies the cryptographic hash chain and mathematical balance
 // continuity for a single account from genesis to the latest entry.
 func VerifyAccountChain(ctx context.Context, pool *pgxpool.Pool, accountID int64) ([]IntegrityViolation, error) {
@@ -46,83 +130,17 @@ func VerifyAccountChain(ctx context.Context, pool *pgxpool.Pool, accountID int64
 	}
 	defer rows.Close()
 
-	var violations []IntegrityViolation
-	var prevHash = GenesisHash
-	var prevBalance int64 = 0
-	isFirst := true
-
+	var records []ChainRecord
 	for rows.Next() {
-		var id int64
-		var txID uuid.UUID
-		var debit, credit, balanceAfter int64
-		var createdAt time.Time
-		var recordedPrevHash, recordedHash string
-
-		if err := rows.Scan(&id, &txID, &debit, &credit, &balanceAfter, &createdAt, &recordedPrevHash, &recordedHash); err != nil {
+		var r ChainRecord
+		r.AccountID = accountID
+		if err := rows.Scan(&r.ID, &r.TxID, &r.Debit, &r.Credit, &r.BalanceAfter, &r.CreatedAt, &r.PrevHash, &r.Hash); err != nil {
 			return nil, err
 		}
-
-		// 1. Verify prev_hash linkage
-		if isFirst {
-			if recordedPrevHash != GenesisHash {
-				violations = append(violations, IntegrityViolation{
-					AccountID:     accountID,
-					EntryID:       id,
-					TxID:          txID.String(),
-					ViolationType: "INVALID_GENESIS_PREV_HASH",
-					ExpectedValue: GenesisHash,
-					ActualValue:   recordedPrevHash,
-					DetectedAt:    time.Now().UTC(),
-				})
-			}
-			isFirst = false
-		} else {
-			if recordedPrevHash != prevHash {
-				violations = append(violations, IntegrityViolation{
-					AccountID:     accountID,
-					EntryID:       id,
-					TxID:          txID.String(),
-					ViolationType: "BROKEN_HASH_CHAIN",
-					ExpectedValue: prevHash,
-					ActualValue:   recordedPrevHash,
-					DetectedAt:    time.Now().UTC(),
-				})
-			}
-		}
-
-		// 2. Recompute cryptographic SHA-256 hash
-		expectedHash := CalculateEntryHash(recordedPrevHash, txID, accountID, debit, credit, balanceAfter, createdAt)
-		if recordedHash != expectedHash {
-			violations = append(violations, IntegrityViolation{
-				AccountID:     accountID,
-				EntryID:       id,
-				TxID:          txID.String(),
-				ViolationType: "HASH_TAMPERED",
-				ExpectedValue: expectedHash,
-				ActualValue:   recordedHash,
-				DetectedAt:    time.Now().UTC(),
-			})
-		}
-
-		// 3. Mathematical balance continuity
-		expectedBalance := prevBalance + credit - debit
-		if balanceAfter != expectedBalance {
-			violations = append(violations, IntegrityViolation{
-				AccountID:     accountID,
-				EntryID:       id,
-				TxID:          txID.String(),
-				ViolationType: "BALANCE_CALCULATION_ERROR",
-				ExpectedValue: fmt.Sprintf("%d", expectedBalance),
-				ActualValue:   fmt.Sprintf("%d", balanceAfter),
-				DetectedAt:    time.Now().UTC(),
-			})
-		}
-
-		prevHash = recordedHash
-		prevBalance = balanceAfter
+		records = append(records, r)
 	}
 
-	return violations, nil
+	return VerifyAccountRecords(accountID, records), nil
 }
 
 // VerifyGlobalIntegrity runs a complete cryptographic and double-entry audit across all accounts.

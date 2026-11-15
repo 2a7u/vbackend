@@ -1,8 +1,12 @@
 package handlers
 
 import (
+	"bytes"
+	"encoding/csv"
+	"encoding/json"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -236,6 +240,31 @@ func (h *FintechHandler) ListFraudEvents(c *fiber.Ctx) error {
 	return c.JSON(events)
 }
 
+// audit writes structured before/after audit entries into audit_logs.
+func (h *FintechHandler) audit(c *fiber.Ctx, action, entity, entityID string, details map[string]any) {
+	if h == nil || h.Pool == nil {
+		return
+	}
+	cl := middleware.ClaimsFrom(c)
+	uid := int64(0)
+	email, name, store := "", "", ""
+	if cl != nil {
+		uid = cl.UserID
+		email = cl.Email
+	}
+	if uid > 0 {
+		_ = h.Pool.QueryRow(c.Context(),
+			`SELECT email, full_name, store_name FROM users WHERE id = $1`, uid,
+		).Scan(&email, &name, &store)
+	}
+	ip := c.IP()
+	detailsJSON, _ := json.Marshal(details)
+	_, _ = h.Pool.Exec(c.Context(),
+		`INSERT INTO audit_logs (user_id, user_email, user_name, store_name, action, entity, entity_id, details, ip_address)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9)`,
+		nullableInt64(uid), email, name, store, action, entity, entityID, string(detailsJSON), ip)
+}
+
 // UnfreezeWallet unlocks a subscriber's account.
 // POST /api/admin/fintech/wallets/:id/unfreeze
 func (h *FintechHandler) UnfreezeWallet(c *fiber.Ctx) error {
@@ -253,6 +282,12 @@ func (h *FintechHandler) UnfreezeWallet(c *fiber.Ctx) error {
 	if err := h.FraudEngine.UnfreezeWallet(c.Context(), id, adminID, req.Reason); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "unfreeze: " + err.Error()})
 	}
+
+	h.audit(c, "WALLET_UNFREEZE", "user", strconv.FormatInt(id, 10), map[string]any{
+		"reason": req.Reason,
+		"before": map[string]any{"wallet_status": "frozen"},
+		"after":  map[string]any{"wallet_status": "active"},
+	})
 
 	return c.JSON(fiber.Map{"success": true, "message": "تم إلغاء تجميد المحفظة بنجاح"})
 }
@@ -273,6 +308,9 @@ func (h *FintechHandler) SetCreditLimit(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "credit_limit must be >= 0"})
 	}
 
+	var oldLimit int64
+	_ = h.Pool.QueryRow(c.Context(), `SELECT COALESCE(credit_limit, 0) FROM users WHERE id = $1`, id).Scan(&oldLimit)
+
 	res, err := h.Pool.Exec(c.Context(),
 		`UPDATE users
 		 SET credit_limit = $1, updated_at = now()
@@ -285,6 +323,12 @@ func (h *FintechHandler) SetCreditLimit(c *fiber.Ctx) error {
 	if res.RowsAffected() == 0 {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "user not found"})
 	}
+
+	h.audit(c, "SET_CREDIT_LIMIT", "user", strconv.FormatInt(id, 10), map[string]any{
+		"reason": req.Reason,
+		"before": map[string]any{"credit_limit": oldLimit},
+		"after":  map[string]any{"credit_limit": req.CreditLimit},
+	})
 
 	if h.Hub != nil {
 		h.Hub.Broadcast(id, "credit_limit_updated", fiber.Map{
@@ -366,6 +410,15 @@ func (h *FintechHandler) RunReconciliation(c *fiber.Ctx) error {
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "reconciliation error: " + err.Error()})
 	}
+
+	h.audit(c, "MANUAL_RECONCILIATION", "reconciliation_reports", strconv.FormatInt(report.ID, 10), map[string]any{
+		"report_date": report.ReportDate,
+		"status":      report.Status,
+		"discrepancy": report.Discrepancy,
+		"inflow":      report.TotalGatewayVolume + report.ManualTopups,
+		"system_bal":  report.TotalSystemBalance,
+	})
+
 	return c.JSON(report)
 }
 
@@ -402,13 +455,15 @@ func (h *FintechHandler) ListReconciliationReports(c *fiber.Ctx) error {
 	return c.JSON(reports)
 }
 
-// ExportReconciliationReportCSV exports an existing report to CSV format.
-// GET /api/admin/fintech/reconcile/reports/:id/export
+// ExportReconciliationReportCSV exports an existing report to CSV format (with UTF-8 BOM) or Excel HTML format.
+// GET /api/admin/fintech/reconcile/reports/:id/export?format=csv|excel
 func (h *FintechHandler) ExportReconciliationReportCSV(c *fiber.Ctx) error {
 	id, err := strconv.ParseInt(c.Params("id"), 10, 64)
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid report id"})
 	}
+
+	format := c.Query("format", "csv")
 
 	var rep reconcile.ReconciliationReport
 	var rDate time.Time
@@ -428,6 +483,13 @@ func (h *FintechHandler) ExportReconciliationReportCSV(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "report not found"})
 	}
 	rep.ReportDate = rDate.Format("2006-01-02")
+
+	if format == "excel" || format == "xls" {
+		excelData := reconcile.GenerateExcelHTML(&rep)
+		c.Set("Content-Type", "application/vnd.ms-excel; charset=utf-8")
+		c.Set("Content-Disposition", fmt.Sprintf("attachment; filename=reconciliation_%s.xls", rep.ReportDate))
+		return c.Send(excelData)
+	}
 
 	csvData := reconcile.GenerateCSV(&rep)
 	c.Set("Content-Type", "text/csv; charset=utf-8")
@@ -461,6 +523,16 @@ func (h *FintechHandler) SealFinancialClose(c *fiber.Ctx) error {
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "close error: " + err.Error()})
 	}
+
+	h.audit(c, "SEAL_FINANCIAL_CLOSE", "financial_closes", strconv.FormatInt(closeRec.ID, 10), map[string]any{
+		"period_type":  closeRec.PeriodType,
+		"period_date":  closeRec.PeriodDate,
+		"closing_hash": closeRec.ClosingHash,
+		"net_revenue":  closeRec.NetRevenue,
+		"liability":    closeRec.TotalWalletLiability,
+		"tx_count":     closeRec.TransactionCount,
+	})
+
 	return c.JSON(closeRec)
 }
 
@@ -568,17 +640,57 @@ func (h *FintechHandler) GetAccountStatement(c *fiber.Ctx) error {
 		}
 	}
 
+	format := c.Query("format")
+	if format == "csv" || format == "excel" {
+		if format == "excel" {
+			c.Set("Content-Type", "application/vnd.ms-excel; charset=utf-8")
+			c.Set("Content-Disposition", fmt.Sprintf(`attachment; filename="statement_user_%d.xls"`, user.ID))
+			var sb strings.Builder
+			sb.WriteString(`<!DOCTYPE html><html><head><meta charset="utf-8"></head><body>`)
+			sb.WriteString(fmt.Sprintf(`<h3>كشف حساب المشترك: %s (%s)</h3>`, user.StoreName, user.Email))
+			sb.WriteString(fmt.Sprintf(`<p>الرصيد النهائي: %d د.ع | سقف الائتمان: %d د.ع</p>`, int64(user.Balance), user.CreditLimit))
+			sb.WriteString(`<table border="1"><tr><th>رقم الحركة</th><th>التاريخ</th><th>النوع</th><th>مدين</th><th>دائن</th><th>الرصيد بعد الحركة</th><th>الهاش</th></tr>`)
+			for _, e := range entries {
+				sb.WriteString(fmt.Sprintf(`<tr><td>%s</td><td>%s</td><td>%s</td><td>%v</td><td>%v</td><td>%v</td><td>%s</td></tr>`,
+					e["tx_id"], e["created_at"].(time.Time).Format("2006-01-02 15:04:05"), e["ref_type"], e["debit"], e["credit"], e["balance_after"], e["hash"]))
+			}
+			sb.WriteString(`</table></body></html>`)
+			return c.SendString(sb.String())
+		}
+
+		// CSV with UTF-8 BOM
+		c.Set("Content-Type", "text/csv; charset=utf-8")
+		c.Set("Content-Disposition", fmt.Sprintf(`attachment; filename="statement_user_%d.csv"`, user.ID))
+		var b bytes.Buffer
+		b.Write([]byte{0xEF, 0xBB, 0xBF}) // UTF-8 BOM
+		w := csv.NewWriter(&b)
+		_ = w.Write([]string{"tx_id", "created_at", "ref_type", "debit", "credit", "balance_after", "hash"})
+		for _, e := range entries {
+			_ = w.Write([]string{
+				fmt.Sprint(e["tx_id"]),
+				e["created_at"].(time.Time).Format("2006-01-02 15:04:05"),
+				fmt.Sprint(e["ref_type"]),
+				fmt.Sprint(e["debit"]),
+				fmt.Sprint(e["credit"]),
+				fmt.Sprint(e["balance_after"]),
+				fmt.Sprint(e["hash"]),
+			})
+		}
+		w.Flush()
+		return c.Send(b.Bytes())
+	}
+
 	return c.JSON(fiber.Map{
 		"user": fiber.Map{
-			"id":             user.ID,
-			"email":          user.Email,
-			"full_name":      user.FullName,
-			"store_name":     user.StoreName,
-			"phone":          user.Phone,
+			"id":              user.ID,
+			"email":           user.Email,
+			"full_name":       user.FullName,
+			"store_name":      user.StoreName,
+			"phone":           user.Phone,
 			"current_balance": int64(user.Balance),
-			"credit_limit":   user.CreditLimit,
-			"wallet_status":  user.WalletStatus,
-			"created_at":     user.CreatedAt,
+			"credit_limit":    user.CreditLimit,
+			"wallet_status":   user.WalletStatus,
+			"created_at":      user.CreatedAt,
 		},
 		"total_credits": totalCredits,
 		"total_debits":  totalDebits,

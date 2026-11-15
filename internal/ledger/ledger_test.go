@@ -102,10 +102,119 @@ func (a *MockAccountSimulator) ApplyDebit(debit int64) error {
 	return nil
 }
 
-func (a *MockAccountSimulator) ApplyCredit(credit int64) {
+func (a *MockAccountSimulator) ApplyCredit(credit int64) error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
+
+	if a.WalletStatus == "frozen" {
+		return ledger.ErrWalletFrozen
+	}
 	a.Balance += credit
+	return nil
+}
+
+func (a *MockAccountSimulator) TransferTo(dest *MockAccountSimulator, amount int64) error {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	if a.WalletStatus == "frozen" {
+		return ledger.ErrWalletFrozen
+	}
+	if a.Balance+a.CreditLimit < amount {
+		return ledger.ErrInsufficientFunds
+	}
+
+	dest.mu.Lock()
+	defer dest.mu.Unlock()
+	if dest.WalletStatus == "frozen" {
+		return ledger.ErrWalletFrozen
+	}
+
+	a.Balance -= amount
+	dest.Balance += amount
+	return nil
+}
+
+// TestConcurrentFrozenWalletRejectionUnder100ParallelRequests verifies requirement 4:
+// A frozen wallet receiving 100 parallel requests (purchases, top-ups, transfers)
+// must reject EVERY request with ErrWalletFrozen and exactly ZERO balance change.
+func TestConcurrentFrozenWalletRejectionUnder100ParallelRequests(t *testing.T) {
+	initialFrozenBalance := int64(750000) // 750,000 IQD initial balance
+	initialPeerBalance := int64(200000)   // 200,000 IQD initial balance
+
+	frozenWallet := &MockAccountSimulator{
+		Balance:      initialFrozenBalance,
+		CreditLimit:  100000,
+		WalletStatus: "frozen",
+		PrevHash:     ledger.GenesisHash,
+	}
+
+	peerWallet := &MockAccountSimulator{
+		Balance:      initialPeerBalance,
+		CreditLimit:  50000,
+		WalletStatus: "active",
+		PrevHash:     ledger.GenesisHash,
+	}
+
+	const goroutines = 100
+	var wg sync.WaitGroup
+	var rejectedCount int64
+	var unexpectedSuccessCount int64
+
+	wg.Add(goroutines)
+	for i := 0; i < goroutines; i++ {
+		reqType := i % 3
+		go func(idx int, rType int) {
+			defer wg.Done()
+			var err error
+
+			switch rType {
+			case 0: // Purchase / Debit
+				err = frozenWallet.ApplyDebit(15000)
+			case 1: // Top-up / Credit
+				err = frozenWallet.ApplyCredit(25000)
+			case 2: // Transfer
+				err = frozenWallet.TransferTo(peerWallet, 10000)
+			}
+
+			if err == ledger.ErrWalletFrozen {
+				atomic.AddInt64(&rejectedCount, 1)
+			} else {
+				atomic.AddInt64(&unexpectedSuccessCount, 1)
+			}
+		}(i, reqType)
+	}
+
+	wg.Wait()
+
+	if rejectedCount != goroutines {
+		t.Fatalf("expected exactly %d rejections, got %d (unexpected successes: %d)",
+			goroutines, rejectedCount, unexpectedSuccessCount)
+	}
+
+	if unexpectedSuccessCount != 0 {
+		t.Fatalf("frozen wallet breached! %d operations succeeded unexpectedly", unexpectedSuccessCount)
+	}
+
+	// Assert zero balance change on frozen wallet
+	frozenWallet.mu.Lock()
+	finalFrozenBalance := frozenWallet.Balance
+	frozenWallet.mu.Unlock()
+
+	if finalFrozenBalance != initialFrozenBalance {
+		t.Fatalf("balance change detected on frozen wallet! expected %d, got %d",
+			initialFrozenBalance, finalFrozenBalance)
+	}
+
+	// Assert zero balance change on peer wallet
+	peerWallet.mu.Lock()
+	finalPeerBalance := peerWallet.Balance
+	peerWallet.mu.Unlock()
+
+	if finalPeerBalance != initialPeerBalance {
+		t.Fatalf("peer wallet balance altered! expected %d, got %d",
+			initialPeerBalance, finalPeerBalance)
+	}
 }
 
 // TestConcurrentWalletRaceCondition verifies that under 100 parallel concurrent goroutines,
