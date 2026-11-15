@@ -365,11 +365,11 @@ func main() {
 	admin.Get("/export/subscribers", enterpriseH.ExportSubscribersCSV)
 
 	// R5B: domain-isolated web console hosting:
-	// - console.urukiq.com: serves Flutter Web Admin Console
+	// - console.urukiq.com: serves Native Go Admin Console (embedded console.html)
 	// - vapi.urukiq.com: API only (returns status JSON on /, 404 on /console)
-	adminDist := getenv("ADMIN_DIST_DIR", "./admin_dist")
+	adminDist := getenv("ADMIN_DIST_DIR", "")
 	registerConsoleRoutes(app, adminDist)
-	log.Printf("domain-isolated routing enabled (console.urukiq.com -> %s)", adminDist)
+	log.Printf("domain-isolated routing enabled (console.urukiq.com -> embedded Native Go Console, override: %s)", adminDist)
 
 	go func() {
 		log.Printf("VENUS POS backend listening on :%s", port)

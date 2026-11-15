@@ -217,7 +217,7 @@ func GetTabsFintech() string {
           </div>
 
           <div class="bg-white rounded-3xl border border-slate-200/80 shadow-sm overflow-hidden p-4 space-y-3">
-            <h3 class="text-sm font-black text-slate-800">قائمة الوكلاء وسقوف الائتمان والمديونية الحالية</h3>
+            <h3 class="text-sm font-black text-slate-800">قائمة الوكلاء والائتمان والمديونية الحالية</h3>
             <div class="overflow-x-auto">
               <table class="w-full text-right border-collapse text-xs">
                 <thead>

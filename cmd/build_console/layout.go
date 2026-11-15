@@ -63,8 +63,8 @@ func GetLoginView() string {
   <div id="view-login" class="min-h-screen bg-slate-50 flex items-center justify-center p-4">
     <div class="w-full max-w-md bg-white rounded-3xl shadow-xl border border-slate-100 p-8 space-y-6">
       <div class="text-center space-y-2">
-        <div class="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-brand-light text-brand text-2xl font-black mb-2 shadow-sm">
-          <i class="fa-solid fa-gem"></i>
+        <div class="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-brand-light text-brand text-2xl font-black mb-2 shadow-sm overflow-hidden">
+          <img src="/assets/appicon.png" class="w-full h-full object-contain" alt="VENUS POS">
         </div>
         <h1 class="text-2xl font-black text-slate-900 tracking-tight">منصة VENUS POS</h1>
         <p class="text-xs font-medium text-slate-500">لوحة التحكم السحابية الموحدة — الدخول الإداري الآمن</p>
@@ -111,8 +111,8 @@ func GetSidebarDesktop() string {
       <aside class="hidden lg:flex flex-col w-64 bg-white border-l border-slate-200/80 p-4 space-y-4 select-none flex-shrink-0">
         <!-- Logo & Brand Header -->
         <div class="flex items-center gap-3 px-2 py-1">
-          <div class="w-10 h-10 rounded-2xl bg-brand text-white flex items-center justify-center text-lg font-black shadow-md shadow-brand/20">
-            <i class="fa-solid fa-gem"></i>
+          <div class="w-10 h-10 rounded-2xl overflow-hidden bg-brand-light flex items-center justify-center shadow-md shadow-brand/20 flex-shrink-0">
+            <img src="/assets/appicon.png" class="w-full h-full object-contain" alt="VENUS">
           </div>
           <div>
             <span class="font-black text-slate-900 text-sm tracking-wide block">VENUS POS</span>
@@ -172,7 +172,7 @@ func GetSidebarDesktop() string {
               <i class="fa-solid fa-hand-holding-dollar w-4 text-center text-slate-400"></i><span>الائتمان</span>
             </button>
             <button onclick="switchTab('close')" id="nav-close" class="nav-tab-btn w-full flex items-center gap-3 px-3.5 py-2.5 rounded-2xl text-xs font-bold text-slate-600 hover:bg-slate-50 transition">
-              <i class="fa-solid fa-file-invoice-dollar w-4 text-center text-slate-400"></i><span>الإغلاق المالي</span>
+              <i class="fa-solid fa-file-invoice-dollar w-4 text-center text-slate-400"></i><span>كشوف الحساب</span>
             </button>
             <button onclick="switchTab('pricing')" id="nav-pricing" class="nav-tab-btn w-full flex items-center gap-3 px-3.5 py-2.5 rounded-2xl text-xs font-bold text-slate-600 hover:bg-slate-50 transition">
               <i class="fa-solid fa-tags w-4 text-center text-slate-400"></i><span>الأسعار</span>
@@ -221,7 +221,9 @@ func GetMobileDrawer() string {
       <aside id="mobile-sidebar" class="fixed inset-y-0 right-0 z-50 w-72 bg-white p-5 flex flex-col space-y-4 shadow-2xl transform translate-x-full transition-transform duration-300 lg:hidden">
         <div class="flex items-center justify-between pb-2 border-b border-slate-100">
           <div class="flex items-center gap-2">
-            <div class="w-9 h-9 rounded-xl bg-brand text-white flex items-center justify-center font-black"><i class="fa-solid fa-gem"></i></div>
+            <div class="w-9 h-9 rounded-xl overflow-hidden bg-brand-light flex items-center justify-center font-black flex-shrink-0">
+              <img src="/assets/appicon.png" class="w-full h-full object-contain" alt="VENUS">
+            </div>
             <span class="font-black text-slate-900 text-sm">VENUS POS</span>
           </div>
           <button onclick="toggleMobileSidebar()" class="p-2 text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
@@ -255,7 +257,7 @@ func GetMobileDrawer() string {
             <i class="fa-solid fa-hand-holding-dollar w-4 text-slate-400"></i><span>الائتمان</span>
           </button>
           <button onclick="switchTab('close'); toggleMobileSidebar()" class="w-full text-right px-3.5 py-2.5 rounded-xl hover:bg-slate-50 text-slate-700 flex items-center gap-3">
-            <i class="fa-solid fa-file-invoice-dollar w-4 text-slate-400"></i><span>الإغلاق المالي</span>
+            <i class="fa-solid fa-file-invoice-dollar w-4 text-slate-400"></i><span>كشوف الحساب</span>
           </button>
           <button onclick="switchTab('pricing'); toggleMobileSidebar()" class="w-full text-right px-3.5 py-2.5 rounded-xl hover:bg-slate-50 text-slate-700 flex items-center gap-3">
             <i class="fa-solid fa-tags w-4 text-slate-400"></i><span>الأسعار</span>
@@ -290,6 +292,7 @@ func GetTopHeader() string {
         <header class="bg-white border-b border-slate-200/80 px-4 sm:px-6 py-3 flex items-center justify-between gap-4 z-10 flex-shrink-0">
           <div class="flex items-center gap-3">
             <button onclick="toggleMobileSidebar()" class="lg:hidden p-2 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-600"><i class="fa-solid fa-bars text-sm"></i></button>
+            <img src="/assets/appicon.png" class="w-7 h-7 rounded-lg object-contain lg:hidden shadow-sm" alt="Logo">
             <div class="flex items-center gap-2">
               <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
               <span id="current-tab-title" class="text-sm font-black text-slate-800">الرئيسية</span>
