@@ -139,6 +139,7 @@ func GenerateStatementExcelXLSX(userEmail, userName string, balance, creditLimit
 }
 
 // ShapeArabic shapes Arabic text using Unicode presentation forms and reverses character order for RTL display.
+// For mixed text containing Latin words or numbers, it preserves LTR orientation for Latin/numeric runs.
 func ShapeArabic(text string) string {
 	if text == "" {
 		return ""
@@ -153,8 +154,19 @@ func ShapeArabic(text string) string {
 	if !hasArabic {
 		return text
 	}
-	// Shape characters contextually, then reverse runes for RTL
-	return reverseRunes(goarabic.ToGlyph(text))
+
+	words := strings.Fields(text)
+	var reversedWords []string
+	for i := len(words) - 1; i >= 0; i-- {
+		w := words[i]
+		if isArabicWord(w) {
+			reversedWords = append(reversedWords, reverseRunes(goarabic.ToGlyph(w)))
+		} else {
+			// Latin word or numbers: preserve LTR order
+			reversedWords = append(reversedWords, w)
+		}
+	}
+	return strings.Join(reversedWords, " ")
 }
 
 // ShapeArabicBidi shapes text preserving LTR numbers and Latin words while shaping and reversing Arabic words.

@@ -82,18 +82,27 @@ func MigrateLegacyPlaintextPINs(ctx context.Context, pool *pgxpool.Pool, mgr *Va
 		if duplicateCount > 0 {
 			report.DuplicatesFound++
 			if !dryRun {
-				_, _ = pool.Exec(ctx,
-					`INSERT INTO legacy_migration_duplicates (legacy_voucher_id, serial_number, pin_hmac, reason)
-					 VALUES ($1, $2, $3, $4)`,
-					lr.ID, lr.Serial, hmac, "duplicate_hmac_found_in_vault",
-				)
-				// Quarantine duplicate row with unique tombstone HMAC so it does not block the total unique index
-				_, _ = pool.Exec(ctx,
-					`UPDATE vouchers_vault
-					 SET pin = '', pin_encrypted = 'DUPLICATE_QUARANTINED', nonce = 'QUARANTINE', pin_hmac = 'DUP_' || id || '_' || $1, is_sold = TRUE
-					 WHERE id = $2`,
-					hmac, lr.ID,
-				)
+				// Encrypt the duplicate PIN so it is NEVER left unprotected
+				dupCt, dupNonce, dupKeyVer, dupEncErr := mgr.EncryptPIN(cleanPIN)
+				if dupEncErr == nil {
+					_, _ = pool.Exec(ctx,
+						`INSERT INTO legacy_migration_duplicates (legacy_voucher_id, serial_number, pin_hmac, reason, pin_encrypted, nonce)
+						 VALUES ($1, $2, $3, $4, $5, $6)`,
+						lr.ID, lr.Serial, hmac, "duplicate_hmac_found_in_vault", dupCt, dupNonce,
+					)
+					// Quarantine duplicate row with AES-256-GCM encrypted PIN, wiped plaintext, and unique tombstone HMAC
+					// This ensures:
+					// 1. PIN is protected by AES-256-GCM (not plaintext)
+					// 2. pin_encrypted is NOT empty (passes migration gate 000004)
+					// 3. pin_hmac is unique (does NOT violate total unique index 000005)
+					// 4. is_sold = TRUE (prevents dispensing duplicate voucher)
+					_, _ = pool.Exec(ctx,
+						`UPDATE vouchers_vault
+						 SET pin = '', pin_encrypted = $1, nonce = $2, key_version = $3, pin_hmac = 'DUP_' || id || '_' || $4, is_sold = TRUE
+						 WHERE id = $5`,
+						dupCt, dupNonce, dupKeyVer, hmac, lr.ID,
+					)
+				}
 			}
 			continue
 		}

@@ -13,6 +13,8 @@ CREATE TABLE IF NOT EXISTS legacy_migration_duplicates (
     serial_number     TEXT NOT NULL DEFAULT '',
     pin_hmac          TEXT NOT NULL,
     reason            TEXT NOT NULL DEFAULT '',
+    pin_encrypted     TEXT NOT NULL DEFAULT '',
+    nonce             TEXT NOT NULL DEFAULT '',
     detected_at       TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 

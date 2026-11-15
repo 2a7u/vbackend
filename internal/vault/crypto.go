@@ -114,7 +114,12 @@ func (v *VaultManager) SetKey(version int, rawKey string) {
 	}
 }
 
-// EncryptPIN encrypts a plaintext PIN using AES-256-GCM with a unique 12-byte cryptographically secure random nonce.
+// CurrentVersion returns the active key version.
+func (v *VaultManager) CurrentVersion() int {
+	v.mu.RLock()
+	defer v.mu.RUnlock()
+	return v.currentVer
+}
 func (v *VaultManager) EncryptPIN(pin string) (encryptedHex, nonceHex string, keyVer int, err error) {
 	v.mu.RLock()
 	keyVer = v.currentVer
