@@ -79,6 +79,12 @@ func main() {
 	}
 	log.Println("schema migrated successfully")
 
+	if n, err := migrations.ApplyPending(ctx, pool); err != nil {
+		log.Fatalf("apply versioned migrations: %v", err)
+	} else if n > 0 {
+		log.Printf("applied %d pending database migrations", n)
+	}
+
 	hub := handlers.NewWSHub()
 
 	// Fintech Core Services (Phase 1)
