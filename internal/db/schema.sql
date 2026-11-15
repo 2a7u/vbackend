@@ -413,5 +413,28 @@ ALTER TABLE zaincash_transactions ADD COLUMN IF NOT EXISTS msisdn TEXT NOT NULL 
 ALTER TABLE zaincash_transactions ADD COLUMN IF NOT EXISTS completed_at TIMESTAMPTZ;
 CREATE INDEX IF NOT EXISTS idx_zaincash_tx ON zaincash_transactions (transaction_id, order_id);
 
+-- -----------------------------------------------------------------------------
+-- subscription_plans: dynamic pricing, duration, and discounts for mobile & console
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS subscription_plans (
+    id                 BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    plan_key           TEXT NOT NULL UNIQUE,
+    title              TEXT NOT NULL,
+    original_price_iqd NUMERIC(12,2) NOT NULL DEFAULT 0,
+    price_iqd          NUMERIC(12,2) NOT NULL DEFAULT 0,
+    discount_percent   INTEGER NOT NULL DEFAULT 0,
+    duration_days      INTEGER NOT NULL DEFAULT 30,
+    badge_text         TEXT NOT NULL DEFAULT '',
+    updated_at         TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+INSERT INTO subscription_plans (plan_key, title, original_price_iqd, price_iqd, discount_percent, duration_days, badge_text)
+VALUES 
+  ('super_economy', 'سوبر اقتصادي', 15000, 15000, 0, 30, 'الأوفر'),
+  ('plus', 'بلص', 55000, 55000, 0, 180, 'الأكثر شعبية'),
+  ('business', 'أعمال', 125000, 125000, 0, 365, 'أفضل قيمة')
+ON CONFLICT (plan_key) DO NOTHING;
+
+
 
 

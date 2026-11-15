@@ -589,3 +589,113 @@ func (h *AuthHandler) RedeemActivationCode(c *fiber.Ctx) error {
 		},
 	})
 }
+
+// GetSubscriptionPlans returns the list of active subscription plans and discounts.
+// GET /api/subscriptions/plans
+func (h *AuthHandler) GetSubscriptionPlans(c *fiber.Ctx) error {
+	rows, err := h.Pool.Query(c.Context(),
+		`SELECT plan_key, title, original_price_iqd, price_iqd, discount_percent, duration_days, badge_text, updated_at
+		 FROM subscription_plans
+		 ORDER BY duration_days ASC`)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "database error: " + err.Error()})
+	}
+	defer rows.Close()
+
+	plans := make([]fiber.Map, 0)
+	for rows.Next() {
+		var (
+			key       string
+			title     string
+			origPrice float64
+			price     float64
+			discount  int
+			duration  int
+			badge     string
+			updatedAt time.Time
+		)
+		if err := rows.Scan(&key, &title, &origPrice, &price, &discount, &duration, &badge, &updatedAt); err == nil {
+			plans = append(plans, fiber.Map{
+				"plan_key":           key,
+				"title":              title,
+				"original_price_iqd": origPrice,
+				"price_iqd":          price,
+				"discount_percent":   discount,
+				"duration_days":      duration,
+				"badge_text":         badge,
+				"updated_at":         updatedAt,
+			})
+		}
+	}
+	return c.JSON(fiber.Map{"success": true, "plans": plans})
+}
+
+// UpdateSubscriptionPlans (admin) updates plan prices, discounts, and duration.
+// PUT /api/admin/subscriptions/plans
+func (h *AuthHandler) UpdateSubscriptionPlans(c *fiber.Ctx) error {
+	var req struct {
+		Plans []struct {
+			PlanKey          string  `json:"plan_key"`
+			Title            string  `json:"title"`
+			OriginalPriceIQD float64 `json:"original_price_iqd"`
+			PriceIQD         float64 `json:"price_iqd"`
+			DiscountPercent  int     `json:"discount_percent"`
+			DurationDays     int     `json:"duration_days"`
+			BadgeText        string  `json:"badge_text"`
+		} `json:"plans"`
+		PlanKey          string  `json:"plan_key"`
+		Title            string  `json:"title"`
+		OriginalPriceIQD float64 `json:"original_price_iqd"`
+		PriceIQD         float64 `json:"price_iqd"`
+		DiscountPercent  int     `json:"discount_percent"`
+		DurationDays     int     `json:"duration_days"`
+		BadgeText        string  `json:"badge_text"`
+	}
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid JSON body"})
+	}
+
+	tx, err := h.Pool.Begin(c.Context())
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "database error"})
+	}
+	defer tx.Rollback(c.Context())
+
+	upsertPlan := func(planKey, title string, origPrice, price float64, discPct, duration int, badge string) error {
+		_, err := tx.Exec(c.Context(),
+			`INSERT INTO subscription_plans (plan_key, title, original_price_iqd, price_iqd, discount_percent, duration_days, badge_text, updated_at)
+			 VALUES ($1, $2, $3, $4, $5, $6, $7, now())
+			 ON CONFLICT (plan_key) DO UPDATE
+			 SET title = EXCLUDED.title,
+			     original_price_iqd = EXCLUDED.original_price_iqd,
+			     price_iqd = EXCLUDED.price_iqd,
+			     discount_percent = EXCLUDED.discount_percent,
+			     duration_days = EXCLUDED.duration_days,
+			     badge_text = EXCLUDED.badge_text,
+			     updated_at = now()`,
+			planKey, title, origPrice, price, discPct, duration, badge)
+		return err
+	}
+
+	if len(req.Plans) > 0 {
+		for _, p := range req.Plans {
+			if p.PlanKey == "" {
+				continue
+			}
+			if err := upsertPlan(p.PlanKey, p.Title, p.OriginalPriceIQD, p.PriceIQD, p.DiscountPercent, p.DurationDays, p.BadgeText); err != nil {
+				return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "could not update plan: " + err.Error()})
+			}
+		}
+	} else if req.PlanKey != "" {
+		if err := upsertPlan(req.PlanKey, req.Title, req.OriginalPriceIQD, req.PriceIQD, req.DiscountPercent, req.DurationDays, req.BadgeText); err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "could not update plan: " + err.Error()})
+		}
+	} else {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "plan_key or plans array required"})
+	}
+
+	if err := tx.Commit(c.Context()); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "commit failed: " + err.Error()})
+	}
+	return c.JSON(fiber.Map{"success": true, "message": "تم حفظ أسعار وتخفيضات الباقات بنجاح"})
+}

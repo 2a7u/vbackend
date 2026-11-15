@@ -950,6 +950,159 @@ func (h *AdminHandler) ListZainCashTransactions(c *fiber.Ctx) error {
 	return c.JSON(list)
 }
 
+// AdminManageSubscription handles full subscription control for a subscriber.
+// POST /api/admin/users/:id/subscription
+func (h *AdminHandler) AdminManageSubscription(c *fiber.Ctx) error {
+	id, err := paramID(c)
+	if err != nil || id <= 0 {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid user id"})
+	}
+
+	var req struct {
+		Action   string `json:"action"`    // "set_plan", "add_days", "sub_days", "cancel"
+		PlanName string `json:"plan_name"` // e.g. "سوبر اقتصادي", "بلص", "أعمال", "مشترك تجريبي"
+		Days     int    `json:"days"`      // number of days to extend or reduce
+		Note     string `json:"note"`
+	}
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid JSON body"})
+	}
+
+	tx, err := h.Pool.Begin(c.Context())
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "database error"})
+	}
+	defer tx.Rollback(c.Context())
+
+	var (
+		currentPlan   string
+		currentEndsAt *time.Time
+		walletBal     float64
+		statusVal     string
+	)
+	err = tx.QueryRow(c.Context(),
+		`SELECT COALESCE(plan_name, 'مشترك تجريبي'), subscription_ends_at, COALESCE(wallet_balance, 0), COALESCE(status, 'active')
+		 FROM users WHERE id = $1 FOR UPDATE`, id).Scan(&currentPlan, &currentEndsAt, &walletBal, &statusVal)
+	if err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "user not found"})
+	}
+
+	var updatedPlan = currentPlan
+	var updatedEndsAt = currentEndsAt
+	var updatedStatus = statusVal
+
+	switch req.Action {
+	case "set_plan":
+		newPlan := strings.TrimSpace(req.PlanName)
+		if newPlan == "" {
+			newPlan = "مشترك تجريبي"
+		}
+		days := req.Days
+		if days <= 0 {
+			switch newPlan {
+			case "أعمال":
+				days = 365
+			case "بلص":
+				days = 180
+			case "سوبر اقتصادي":
+				days = 30
+			default:
+				days = 2
+			}
+		}
+		updatedPlan = newPlan
+		updatedStatus = "active"
+		err = tx.QueryRow(c.Context(),
+			`UPDATE users
+			 SET plan_name = $1,
+			     subscription_ends_at = GREATEST(COALESCE(subscription_ends_at, now()), now()) + ($2 || ' days')::interval,
+			     status = 'active',
+			     updated_at = now()
+			 WHERE id = $3
+			 RETURNING subscription_ends_at`, newPlan, itoa(int64(days)), id).Scan(&updatedEndsAt)
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "could not update plan: " + err.Error()})
+		}
+
+	case "add_days":
+		days := req.Days
+		if days <= 0 {
+			days = 30
+		}
+		updatedStatus = "active"
+		err = tx.QueryRow(c.Context(),
+			`UPDATE users
+			 SET subscription_ends_at = GREATEST(COALESCE(subscription_ends_at, now()), now()) + ($1 || ' days')::interval,
+			     status = 'active',
+			     updated_at = now()
+			 WHERE id = $2
+			 RETURNING subscription_ends_at`, itoa(int64(days)), id).Scan(&updatedEndsAt)
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "could not extend subscription: " + err.Error()})
+		}
+
+	case "sub_days":
+		days := req.Days
+		if days <= 0 {
+			days = 7
+		}
+		err = tx.QueryRow(c.Context(),
+			`UPDATE users
+			 SET subscription_ends_at = COALESCE(subscription_ends_at, now()) - ($1 || ' days')::interval,
+			     updated_at = now()
+			 WHERE id = $2
+			 RETURNING subscription_ends_at`, itoa(int64(days)), id).Scan(&updatedEndsAt)
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "could not reduce subscription: " + err.Error()})
+		}
+
+	case "cancel":
+		updatedPlan = "منتهي"
+		updatedStatus = "expired"
+		err = tx.QueryRow(c.Context(),
+			`UPDATE users
+			 SET subscription_ends_at = now() - interval '1 hour',
+			     plan_name = 'منتهي',
+			     updated_at = now()
+			 WHERE id = $1
+			 RETURNING subscription_ends_at`, id).Scan(&updatedEndsAt)
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "could not cancel subscription: " + err.Error()})
+		}
+
+	default:
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "unknown action"})
+	}
+
+	if err := tx.Commit(c.Context()); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "commit failed: " + err.Error()})
+	}
+
+	h.audit(c, "MANAGE_SUBSCRIPTION", "user", itoa(id), map[string]any{
+		"action": req.Action, "plan": updatedPlan, "ends_at": updatedEndsAt, "days": req.Days, "note": req.Note,
+	})
+
+	// Real-time broadcast to mobile app via WebSocket
+	if h.Hub != nil {
+		h.Hub.Broadcast(id, "subscription_updated", fiber.Map{
+			"user_id":              id,
+			"plan_name":            updatedPlan,
+			"subscription_plan":    updatedPlan,
+			"subscription_ends_at": updatedEndsAt,
+			"status":               updatedStatus,
+			"action":               req.Action,
+		})
+	}
+
+	return c.JSON(fiber.Map{
+		"success":              true,
+		"message":              "تم تعديل اشتراك المشترك بنجاح",
+		"plan_name":            updatedPlan,
+		"subscription_ends_at": updatedEndsAt,
+		"status":               updatedStatus,
+	})
+}
+
 // itoa is a tiny int64 -> string helper to avoid importing strconv everywhere.
 func itoa(v int64) string {
 	if v == 0 {

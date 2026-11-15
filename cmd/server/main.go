@@ -121,6 +121,7 @@ func main() {
 
 	// Unified authoritative sync state (public fallback to UID 1 or header-based UID).
 	api.Get("/sync/state", syncH.GetSyncState)
+	api.Get("/subscriptions/plans", authH.GetSubscriptionPlans)
 	api.Post("/subscriptions/redeem-code", authH.RedeemActivationCode)
 
 	// Public ZainCash browser, webhook, and payment endpoints (NO Authorization header required).
@@ -193,6 +194,8 @@ func main() {
 	// Admin Activation Codes management
 	admin.Post("/activation-codes/generate", adminH.GenerateActivationCodes)
 	admin.Get("/activation-codes", adminH.ListActivationCodes)
+	admin.Put("/subscriptions/plans", authH.UpdateSubscriptionPlans)
+	admin.Post("/users/:id/subscription", adminH.AdminManageSubscription)
 
 	// Admin Voucher Vault management
 	admin.Get("/vouchers", vouchersH.GetVouchers)

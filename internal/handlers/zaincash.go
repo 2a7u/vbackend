@@ -388,7 +388,7 @@ func (h *ZainCashHandler) CheckoutZainCash(c *fiber.Ctx) error {
                 <text x="50" y="74" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif" font-size="12" font-weight="900" fill="white" text-anchor="middle" letter-spacing="1">zain CASH</text>
             </svg>
         </div>
-        <div class="badge">ZainCash UAT Sandbox</div>
+        <div class="badge">بوابة الدفع الإلكتروني — زين كاش</div>
         <h1>بوابة الدفع الإلكتروني زين كاش</h1>
         <p class="sub">إتمام دفع وتغذية محفظة VENUS POS</p>
         
@@ -432,11 +432,11 @@ func (h *ZainCashHandler) CheckoutZainCash(c *fiber.Ctx) error {
             </div>
 
             <div class="notice-box">
-                ℹ️ <b>بيئة فحص واختبار رسمية (UAT):</b> البيانات أعلاه معبأة برقم الفحص التجريبي المعتمد من زين كاش. اضغط على الزر أدناه لتأكيد خصم المبلغ وتغذية المحفظة فوراً.
+                ℹ️ <b>بوابة دفع رسمية مشفرة:</b> يرجى إدخال بيانات محفظة زين كاش لتأكيد خصم المبلغ وتغذية المحفظة أو تفعيل الاشتراك فوراً.
             </div>
 
             <button type="submit" class="btn-confirm">
-                تأكيد الدفع واقتطاع المبلغ (ZainCash UAT)
+                تأكيد الدفع واقتطاع المبلغ عبر زين كاش
             </button>
         </form>
 
@@ -563,7 +563,7 @@ func (h *ZainCashHandler) RedirectZainCash(c *fiber.Ctx) error {
                 <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" />
             </svg>
         </div>
-        <div class="badge">ZainCash UAT Success</div>
+        <div class="badge">تمت العملية بنجاح عبر زين كاش</div>
         <h1>تمت عملية الدفع بنجاح!</h1>
         <p class="sub">تم تأكيد العملية وإيداع الرصيد في محفظتك فوراً.</p>
 

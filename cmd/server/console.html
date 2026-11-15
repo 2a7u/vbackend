@@ -484,8 +484,123 @@
           <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
               <h2 class="text-xl font-black text-slate-800">رموز التفعيل والخطط</h2>
-              <p class="text-xs text-slate-500 mt-0.5">توليد أكواد التفعيل المسبقة الدفع وإرسالها للمشتركين</p>
+              <p class="text-xs text-slate-500 mt-0.5">تحديد أسعار وتخفيضات الباقات وتوليد أكواد التفعيل المسبقة الدفع</p>
             </div>
+          </div>
+
+          <!-- Subscription Plans & Discounts Management Card -->
+          <div class="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm space-y-4">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
+              <div>
+                <h3 class="text-sm font-black text-slate-800 flex items-center gap-2">
+                  <i class="fa-solid fa-tags text-purple-600"></i>
+                  <span>إدارة أسعار وتخفيضات باقات الاشتراك (Discounts)</span>
+                </h3>
+                <p class="text-[11px] text-slate-500 mt-0.5">تحديد الأسعار الأصلية وأسعار العروض المخفضة ونسب الخصم والشارات المعروضة داخل تطبيق المشتركين</p>
+              </div>
+              <button onclick="loadSubscriptionPlans()" class="text-xs text-brand font-bold hover:underline flex items-center gap-1 self-start sm:self-auto">
+                <i class="fa-solid fa-rotate-right"></i>
+                <span>إعادة تحميل</span>
+              </button>
+            </div>
+
+            <form onsubmit="handleSavePlanDiscounts(event)" class="space-y-4">
+              <div class="grid grid-cols-1 md:grid-cols-3 gap-4" id="plans-discounts-grid">
+                <!-- Super Economy Plan Card -->
+                <div class="p-4 rounded-2xl border border-slate-200 bg-slate-50/50 space-y-3">
+                  <div class="flex items-center justify-between">
+                    <span class="font-black text-xs text-slate-800 flex items-center gap-1.5">
+                      <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block"></span>
+                      سوبر اقتصادي (شهري)
+                    </span>
+                    <span class="text-[10px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-md font-bold">30 يوم</span>
+                  </div>
+                  <div>
+                    <label class="block text-[11px] font-bold text-slate-600 mb-1">السعر الأصلي (د.ع)</label>
+                    <input type="number" id="plan-orig-super_economy" value="25000" class="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-bold outline-none focus:border-brand">
+                  </div>
+                  <div>
+                    <label class="block text-[11px] font-bold text-slate-600 mb-1">سعر العرض المخفض (د.ع)</label>
+                    <input type="number" id="plan-price-super_economy" value="15000" class="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-black text-emerald-600 outline-none focus:border-brand">
+                  </div>
+                  <div class="grid grid-cols-2 gap-2">
+                    <div>
+                      <label class="block text-[11px] font-bold text-slate-600 mb-1">نسبة الخصم %</label>
+                      <input type="number" id="plan-disc-super_economy" value="40" min="0" max="100" class="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-bold outline-none focus:border-brand">
+                    </div>
+                    <div>
+                      <label class="block text-[11px] font-bold text-slate-600 mb-1">الشارة (Badge)</label>
+                      <input type="text" id="plan-badge-super_economy" value="عرض خاص" class="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-bold outline-none focus:border-brand">
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Plus Plan Card -->
+                <div class="p-4 rounded-2xl border border-purple-200 bg-purple-50/30 space-y-3">
+                  <div class="flex items-center justify-between">
+                    <span class="font-black text-xs text-purple-900 flex items-center gap-1.5">
+                      <span class="w-2.5 h-2.5 rounded-full bg-purple-600 inline-block"></span>
+                      بلص (نصف سنوي)
+                    </span>
+                    <span class="text-[10px] bg-purple-100 text-purple-800 px-2 py-0.5 rounded-md font-bold">180 يوم</span>
+                  </div>
+                  <div>
+                    <label class="block text-[11px] font-bold text-slate-600 mb-1">السعر الأصلي (د.ع)</label>
+                    <input type="number" id="plan-orig-plus" value="90000" class="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-bold outline-none focus:border-brand">
+                  </div>
+                  <div>
+                    <label class="block text-[11px] font-bold text-slate-600 mb-1">سعر العرض المخفض (د.ع)</label>
+                    <input type="number" id="plan-price-plus" value="55000" class="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-black text-purple-700 outline-none focus:border-brand">
+                  </div>
+                  <div class="grid grid-cols-2 gap-2">
+                    <div>
+                      <label class="block text-[11px] font-bold text-slate-600 mb-1">نسبة الخصم %</label>
+                      <input type="number" id="plan-disc-plus" value="38" min="0" max="100" class="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-bold outline-none focus:border-brand">
+                    </div>
+                    <div>
+                      <label class="block text-[11px] font-bold text-slate-600 mb-1">الشارة (Badge)</label>
+                      <input type="text" id="plan-badge-plus" value="الأكثر طلباً - وفر 35K" class="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-bold outline-none focus:border-brand">
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Business Plan Card -->
+                <div class="p-4 rounded-2xl border border-amber-200 bg-amber-50/30 space-y-3">
+                  <div class="flex items-center justify-between">
+                    <span class="font-black text-xs text-amber-900 flex items-center gap-1.5">
+                      <span class="w-2.5 h-2.5 rounded-full bg-amber-500 inline-block"></span>
+                      أعمال (سنوي VIP)
+                    </span>
+                    <span class="text-[10px] bg-amber-100 text-amber-800 px-2 py-0.5 rounded-md font-bold">365 يوم</span>
+                  </div>
+                  <div>
+                    <label class="block text-[11px] font-bold text-slate-600 mb-1">السعر الأصلي (د.ع)</label>
+                    <input type="number" id="plan-orig-business" value="180000" class="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-bold outline-none focus:border-brand">
+                  </div>
+                  <div>
+                    <label class="block text-[11px] font-bold text-slate-600 mb-1">سعر العرض المخفض (د.ع)</label>
+                    <input type="number" id="plan-price-business" value="125000" class="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-black text-amber-700 outline-none focus:border-brand">
+                  </div>
+                  <div class="grid grid-cols-2 gap-2">
+                    <div>
+                      <label class="block text-[11px] font-bold text-slate-600 mb-1">نسبة الخصم %</label>
+                      <input type="number" id="plan-disc-business" value="30" min="0" max="100" class="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-bold outline-none focus:border-brand">
+                    </div>
+                    <div>
+                      <label class="block text-[11px] font-bold text-slate-600 mb-1">الشارة (Badge)</label>
+                      <input type="text" id="plan-badge-business" value="أفضل قيمة سنوية" class="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-bold outline-none focus:border-brand">
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="flex justify-end pt-2 border-t border-slate-100">
+                <button type="submit" id="btn-save-discounts" class="px-5 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-bold text-xs shadow-sm flex items-center gap-2 transition">
+                  <i class="fa-solid fa-floppy-disk"></i>
+                  <span>حفظ وتطبيق التخفيضات فوراً على التطبيق</span>
+                </button>
+              </div>
+            </form>
           </div>
 
           <!-- Generator Card -->
@@ -613,7 +728,7 @@
           <div class="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden p-4 space-y-3">
             <h3 class="text-sm font-black text-slate-800 flex items-center gap-2">
               <i class="fa-solid fa-receipt text-rose-500"></i>
-              <span>سجل عمليات ZainCash v2 UAT & Live</span>
+              <span>سجل عمليات دفع زين كاش (ZainCash)</span>
             </h3>
 
             <div class="overflow-x-auto">
@@ -1014,6 +1129,90 @@
     </div>
   </div>
 
+  <!-- 6. MANAGE SUBSCRIPTION MODAL -->
+  <div id="modal-manage-subscription" class="fixed inset-0 z-50 flex items-center justify-center p-4 modal-backdrop hidden">
+    <div class="w-full max-w-lg bg-white rounded-3xl shadow-2xl border border-slate-100 p-6 space-y-5 max-h-[90vh] overflow-y-auto">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 rounded-xl bg-purple-100 text-purple-600 flex items-center justify-center font-bold">
+            <i class="fa-solid fa-bolt"></i>
+          </div>
+          <div>
+            <h3 class="text-base font-black text-slate-800">إدارة اشتراك المشترك</h3>
+            <p class="text-[11px] text-slate-400">تمديد المدة، تغيير أو خفض الباقة، أو إلغاء الاشتراك فوراً</p>
+          </div>
+        </div>
+        <button onclick="closeModal('modal-manage-subscription')" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
+      </div>
+
+      <!-- Subscriber Quick Info Card -->
+      <div class="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 space-y-2 text-xs">
+        <div class="flex items-center justify-between">
+          <span class="font-black text-slate-800" id="sub-modal-user-name">--</span>
+          <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold" id="sub-modal-plan-badge">--</span>
+        </div>
+        <div class="grid grid-cols-2 gap-2 text-slate-500 text-[11px]">
+          <div>البريد: <span class="font-medium text-slate-700" id="sub-modal-email">--</span></div>
+          <div>نقطة البيع: <span class="font-medium text-slate-700" id="sub-modal-store">--</span></div>
+          <div>تاريخ الانتهاء: <span class="font-bold text-slate-800" id="sub-modal-ends-at">--</span></div>
+          <div>الوقت المتبقي: <span class="font-bold text-purple-600" id="sub-modal-remaining">--</span></div>
+        </div>
+      </div>
+
+      <!-- Section 1: Change / Demote Plan -->
+      <div class="space-y-2 border-t border-slate-100 pt-3">
+        <label class="block text-xs font-bold text-slate-700">تغيير أو ترقية / خفض الباقة</label>
+        <div class="flex gap-2">
+          <select id="sub-modal-select-plan" class="flex-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-brand">
+            <option value="تجريبي">تجريبي (48 ساعة)</option>
+            <option value="سوبر اقتصادي">سوبر اقتصادي (30 يوم)</option>
+            <option value="بلص">بلص (180 يوم)</option>
+            <option value="أعمال">أعمال (365 يوم)</option>
+          </select>
+          <button type="button" onclick="executeSubscriptionAction('set_plan')" class="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold transition">
+            تحديث الباقة
+          </button>
+        </div>
+      </div>
+
+      <!-- Section 2: Extend / Reduce Days -->
+      <div class="space-y-2 border-t border-slate-100 pt-3">
+        <label class="block text-xs font-bold text-slate-700">تمديد أو تقليل المدة (بالأيام)</label>
+        <div class="flex items-center gap-2">
+          <input type="number" id="sub-modal-days-input" value="30" min="1" max="1000" class="w-28 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-brand">
+          <button type="button" onclick="executeSubscriptionAction('add_days')" class="flex-1 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5">
+            <i class="fa-solid fa-calendar-plus"></i>
+            <span>+ تمديد المدة</span>
+          </button>
+          <button type="button" onclick="executeSubscriptionAction('sub_days')" class="flex-1 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5">
+            <i class="fa-solid fa-calendar-minus"></i>
+            <span>- خصم أيام</span>
+          </button>
+        </div>
+        <p class="text-[10px] text-slate-400">التمديد يضيف أياماً إلى تاريخ الانتهاء الحالي، وخصم الأيام يقرّب موعد انتهاء الاشتراك.</p>
+      </div>
+
+      <!-- Section 3: Instant Cancellation & Lock -->
+      <div class="p-3.5 rounded-2xl bg-rose-50 border border-rose-200 space-y-2">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-black text-rose-700 flex items-center gap-1.5">
+            <i class="fa-solid fa-triangle-exclamation"></i>
+            <span>إلغاء الاشتراك الفوري (قفل التطبيق)</span>
+          </span>
+          <button type="button" onclick="executeSubscriptionAction('cancel')" class="px-3.5 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1">
+            <i class="fa-solid fa-ban"></i>
+            <span>إلغاء الاشتراك الآن</span>
+          </button>
+        </div>
+        <p class="text-[10px] text-rose-600">سيتم جعل تاريخ الاشتراك منتهياً فوراً وبث إشعار WebSocket في اللحظة نفسها لإغلاق ميزات التطبيق لدى المشترك.</p>
+      </div>
+
+      <div class="pt-2 flex justify-end border-t border-slate-100">
+        <button type="button" onclick="closeModal('modal-manage-subscription')" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-xs font-bold">إغلاق</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Global Toast Notification -->
   <div id="toast" class="fixed bottom-5 left-5 z-50 transform translate-y-20 opacity-0 transition-all duration-300 pointer-events-none">
     <div id="toast-inner" class="flex items-center gap-2.5 px-4 py-3 rounded-2xl shadow-xl text-xs font-bold text-white bg-slate-900 border border-slate-800">
@@ -1127,6 +1326,7 @@
         document.getElementById('admin-user-email').innerText = currentUser.email || '';
       }
       switchTab('stats');
+      loadSubscriptionPlans();
     }
 
     // Login Handler
@@ -1211,7 +1411,7 @@
       // Load Tab-specific data
       if (tabId === 'stats') loadStats();
       if (tabId === 'users') loadUsers();
-      if (tabId === 'activation') loadActivationCodes();
+      if (tabId === 'activation') { loadActivationCodes(); loadSubscriptionPlans(); }
       if (tabId === 'wallet') { loadUsers(); loadZainCashTransactions(); }
       if (tabId === 'cards') loadDigitalCards();
       if (tabId === 'audit') loadAuditLogs();
@@ -1354,6 +1554,9 @@
             <td class="py-3 px-4 text-slate-400 text-[11px]">${formatDate(u.created_at)}</td>
             <td class="py-3 px-4 text-center">
               <div class="flex items-center justify-center gap-1">
+                <button onclick="openManageSubscriptionModal(${u.id})" title="إدارة وتمديد الاشتراك" class="p-1.5 rounded-lg text-purple-600 hover:bg-purple-50 transition">
+                  <i class="fa-solid fa-bolt"></i>
+                </button>
                 <button onclick="openWalletAdjustModal(${u.id})" title="شحن / تعديل الرصيد" class="p-1.5 rounded-lg text-emerald-600 hover:bg-emerald-50 transition">
                   <i class="fa-solid fa-wallet"></i>
                 </button>
@@ -1972,6 +2175,177 @@
         }).join('');
       } catch (err) {
         console.error('loadAuditLogs error:', err);
+      }
+    }
+
+    // =========================================================================
+    // SUBSCRIPTION & PLANS DISCOUNT MANAGEMENT
+    // =========================================================================
+    let currentManagingUserId = null;
+
+    function openManageSubscriptionModal(userId) {
+      const u = allUsers.find(x => x.id === userId);
+      if (!u) {
+        showToast('لم يتم العثور على المشترك', 'error');
+        return;
+      }
+      currentManagingUserId = userId;
+      document.getElementById('sub-modal-user-name').innerText = `${u.full_name || 'مشترك'} (#${u.id})`;
+      document.getElementById('sub-modal-email').innerText = u.email || '—';
+      document.getElementById('sub-modal-store').innerText = u.store_name || 'نقطة بيع';
+      
+      const plan = u.plan_name || 'تجريبي';
+      const badge = document.getElementById('sub-modal-plan-badge');
+      badge.innerText = plan;
+      badge.className = `px-2.5 py-0.5 rounded-full text-[10px] font-bold ${plan.includes('أعمال') ? 'bg-amber-100 text-amber-800' : plan.includes('بلص') ? 'bg-purple-100 text-purple-800' : 'bg-emerald-100 text-emerald-800'}`;
+
+      const endsAtEl = document.getElementById('sub-modal-ends-at');
+      const remEl = document.getElementById('sub-modal-remaining');
+      if (u.subscription_ends_at) {
+        const endsDate = new Date(u.subscription_ends_at);
+        endsAtEl.innerText = endsDate.toLocaleString('ar-IQ');
+        const diffMs = endsDate - new Date();
+        if (diffMs > 0) {
+          const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+          const hours = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+          remEl.innerText = `${days} يوم و ${hours} ساعة`;
+          remEl.className = 'font-bold text-emerald-600';
+        } else {
+          remEl.innerText = 'منتهي الصلاحية';
+          remEl.className = 'font-bold text-rose-600';
+        }
+      } else {
+        endsAtEl.innerText = 'مفتوح / غير محدد';
+        remEl.innerText = 'دائم';
+        remEl.className = 'font-bold text-slate-600';
+      }
+
+      const planSelect = document.getElementById('sub-modal-select-plan');
+      if (planSelect) {
+        for (let i = 0; i < planSelect.options.length; i++) {
+          if (planSelect.options[i].value === plan) {
+            planSelect.selectedIndex = i;
+            break;
+          }
+        }
+      }
+
+      openModal('modal-manage-subscription');
+    }
+
+    async function executeSubscriptionAction(action) {
+      if (!currentManagingUserId) return;
+      let body = { action };
+      if (action === 'set_plan') {
+        body.plan = document.getElementById('sub-modal-select-plan').value;
+      } else if (action === 'add_days' || action === 'sub_days') {
+        const days = parseInt(document.getElementById('sub-modal-days-input').value, 10);
+        if (!days || days <= 0) {
+          showToast('يرجى تحديد عدد الأيام بشكل صحيح', 'error');
+          return;
+        }
+        body.days = days;
+      } else if (action === 'cancel') {
+        if (!confirm('هل أنت متأكد من رغبتك في إلغاء الاشتراك وإيقاف الخدمة عن المشترك فوراً؟')) {
+          return;
+        }
+      }
+
+      try {
+        const res = await apiFetch(`/api/admin/users/${currentManagingUserId}/subscription`, {
+          method: 'POST',
+          body: JSON.stringify(body)
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'فشل تعديل الاشتراك');
+
+        showToast(data.message || 'تم تحديث اشتراك المشترك بنجاح');
+        await loadUsers();
+        // Update modal with fresh user data
+        const updated = allUsers.find(x => x.id === currentManagingUserId);
+        if (updated) {
+          openManageSubscriptionModal(currentManagingUserId);
+        } else {
+          closeModal('modal-manage-subscription');
+        }
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    }
+
+    async function loadSubscriptionPlans() {
+      try {
+        const res = await apiFetch('/api/subscriptions/plans');
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data && data.plans) {
+          data.plans.forEach(p => {
+            const orig = document.getElementById(`plan-orig-${p.plan_key}`);
+            const price = document.getElementById(`plan-price-${p.plan_key}`);
+            const disc = document.getElementById(`plan-disc-${p.plan_key}`);
+            const badge = document.getElementById(`plan-badge-${p.plan_key}`);
+            if (orig && p.original_price_iqd !== undefined) orig.value = p.original_price_iqd;
+            if (price && p.price_iqd !== undefined) price.value = p.price_iqd;
+            if (disc && p.discount_percent !== undefined) disc.value = p.discount_percent;
+            if (badge && p.badge_text !== undefined) badge.value = p.badge_text;
+          });
+        }
+      } catch (err) {
+        console.error('loadSubscriptionPlans error:', err);
+      }
+    }
+
+    async function handleSavePlanDiscounts(event) {
+      event.preventDefault();
+      const btn = document.getElementById('btn-save-discounts');
+      const origText = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> جاري الحفظ...';
+
+      const plans = [
+        {
+          plan_key: 'super_economy',
+          title: 'سوبر اقتصادي',
+          original_price_iqd: parseFloat(document.getElementById('plan-orig-super_economy')?.value || '25000'),
+          price_iqd: parseFloat(document.getElementById('plan-price-super_economy')?.value || '15000'),
+          discount_percent: parseInt(document.getElementById('plan-disc-super_economy')?.value || '40', 10),
+          duration_days: 30,
+          badge_text: document.getElementById('plan-badge-super_economy')?.value || 'عرض خاص'
+        },
+        {
+          plan_key: 'plus',
+          title: 'بلص',
+          original_price_iqd: parseFloat(document.getElementById('plan-orig-plus')?.value || '90000'),
+          price_iqd: parseFloat(document.getElementById('plan-price-plus')?.value || '55000'),
+          discount_percent: parseInt(document.getElementById('plan-disc-plus')?.value || '38', 10),
+          duration_days: 180,
+          badge_text: document.getElementById('plan-badge-plus')?.value || 'الأكثر طلباً - وفر 35K'
+        },
+        {
+          plan_key: 'business',
+          title: 'أعمال',
+          original_price_iqd: parseFloat(document.getElementById('plan-orig-business')?.value || '180000'),
+          price_iqd: parseFloat(document.getElementById('plan-price-business')?.value || '125000'),
+          discount_percent: parseInt(document.getElementById('plan-disc-business')?.value || '30', 10),
+          duration_days: 365,
+          badge_text: document.getElementById('plan-badge-business')?.value || 'أفضل قيمة سنوية'
+        }
+      ];
+
+      try {
+        const res = await apiFetch('/api/admin/subscriptions/plans', {
+          method: 'PUT',
+          body: JSON.stringify({ plans })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'تعذر حفظ أسعار الباقات');
+
+        showToast(data.message || 'تم حفظ وتطبيق أسعار وتخفيضات الباقات بنجاح');
+      } catch (err) {
+        showToast(err.message, 'error');
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = origText;
       }
     }
   </script>
