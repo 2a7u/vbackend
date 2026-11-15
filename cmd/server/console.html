@@ -1,0 +1,1979 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>VENUS POS — لوحة الإدارة السحابية</title>
+  <link rel="icon" type="image/png" href="/assets/appicon.png">
+  
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  
+  <!-- Tailwind CSS via CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              DEFAULT: '#0058BC',
+              dark: '#004799',
+              light: '#EBF3FF',
+              surface: '#FAF9FE',
+              accent: '#3B82F6',
+            }
+          },
+          fontFamily: {
+            cairo: ['Cairo', 'sans-serif'],
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    body {
+      font-family: 'Cairo', sans-serif;
+      background-color: #FAF9FE;
+      color: #1E293B;
+      -webkit-tap-highlight-color: transparent;
+    }
+    /* Custom scrollbars */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #F1F5F9;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #CBD5E1;
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #94A3B8;
+    }
+    .modal-backdrop {
+      background: rgba(15, 23, 42, 0.6);
+      backdrop-filter: blur(4px);
+    }
+    .badge-plan-super { background-color: #E0F2FE; color: #0369A1; border: 1px solid #BAE6FD; }
+    .badge-plan-plus { background-color: #F0FDF4; color: #15803D; border: 1px solid #BBF7D0; }
+    .badge-plan-business { background-color: #FAF5FF; color: #7E22CE; border: 1px solid #E9D5FF; }
+    .badge-plan-trial { background-color: #FFF7ED; color: #C2410C; border: 1px solid #FFEDD5; }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col antialiased selection:bg-brand selection:text-white">
+
+  <!-- ========================================================================= -->
+  <!-- 1. LOGIN SCREEN (Visible if !token)                                       -->
+  <!-- ========================================================================= -->
+  <div id="login-view" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-md">
+    <div class="w-full max-w-md bg-white rounded-3xl shadow-2xl border border-slate-100 overflow-hidden transform transition-all p-8">
+      <div class="text-center mb-8">
+        <div class="inline-flex p-3 rounded-2xl bg-brand-light border border-blue-100 shadow-inner mb-4">
+          <img src="/assets/appicon.png" alt="VENUS POS" class="w-16 h-16 rounded-xl object-contain drop-shadow">
+        </div>
+        <h1 class="text-2xl font-black text-slate-800 tracking-tight">VENUS POS</h1>
+        <p class="text-sm font-semibold text-brand mt-1">لوحة الإدارة السحابية الموحدة</p>
+        <p class="text-xs text-slate-400 mt-1">سجل الدخول لإدارة نقاط البيع، الاشتراكات، والعمليات</p>
+      </div>
+
+      <div id="login-error" class="hidden mb-4 p-3 rounded-xl bg-red-50 border border-red-200 text-red-600 text-sm flex items-center gap-2">
+        <i class="fa-solid fa-circle-exclamation text-base flex-shrink-0"></i>
+        <span id="login-error-msg">بيانات الدخول غير صحيحة</span>
+      </div>
+
+      <form id="login-form" onsubmit="handleLogin(event)" class="space-y-4">
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1.5">البريد الإلكتروني للإدارة</label>
+          <div class="relative">
+            <span class="absolute inset-y-0 right-0 flex items-center pr-3.5 text-slate-400">
+              <i class="fa-solid fa-envelope"></i>
+            </span>
+            <input type="email" id="login-email" required
+              value="Mahmoudraheem76@gmail.com"
+              class="w-full pr-10 pl-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:bg-white focus:border-brand focus:ring-2 focus:ring-brand/20 outline-none transition"
+              placeholder="admin@example.com">
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1.5">كلمة المرور</label>
+          <div class="relative">
+            <span class="absolute inset-y-0 right-0 flex items-center pr-3.5 text-slate-400">
+              <i class="fa-solid fa-lock"></i>
+            </span>
+            <input type="password" id="login-password" required
+              class="w-full pr-10 pl-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:bg-white focus:border-brand focus:ring-2 focus:ring-brand/20 outline-none transition"
+              placeholder="••••••••">
+          </div>
+        </div>
+
+        <button type="submit" id="login-btn"
+          class="w-full py-3 px-4 bg-brand hover:bg-brand-dark text-white rounded-xl font-bold text-sm shadow-lg shadow-brand/30 hover:shadow-brand/40 active:scale-[0.99] transition flex items-center justify-center gap-2 mt-6">
+          <span>تسجيل الدخول</span>
+          <i class="fa-solid fa-arrow-left text-xs"></i>
+        </button>
+      </form>
+
+      <div class="mt-8 text-center border-t border-slate-100 pt-4">
+        <span class="text-xs text-slate-400">نظام إدارة VENUS v2.0 • مشفر ومحمي عبر Cloud Engine</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- 2. MAIN APP VIEW (Visible when authenticated)                              -->
+  <!-- ========================================================================= -->
+  <div id="app-view" class="hidden min-h-screen flex flex-col">
+
+    <!-- Top Navigation Bar -->
+    <header class="sticky top-0 z-40 bg-white/95 backdrop-blur border-b border-slate-200 px-4 lg:px-8 py-3 flex items-center justify-between gap-4">
+      <div class="flex items-center gap-3">
+        <button onclick="toggleMobileSidebar()" class="lg:hidden p-2 rounded-xl text-slate-600 hover:bg-slate-100">
+          <i class="fa-solid fa-bars text-lg"></i>
+        </button>
+        <div class="flex items-center gap-2.5">
+          <img src="/assets/appicon.png" alt="Logo" class="w-9 h-9 rounded-xl object-contain drop-shadow-sm">
+          <div>
+            <h1 class="text-base font-black text-slate-800 leading-tight">VENUS POS</h1>
+            <span class="text-[11px] font-semibold text-brand">لوحة الإدارة السحابية</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Center Server Status & Baghdad Time -->
+      <div class="hidden md:flex items-center gap-4 text-xs">
+        <div class="flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 font-semibold">
+          <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+          <span>السيرفر السحابي متصل</span>
+        </div>
+        <div class="flex items-center gap-1.5 text-slate-500 font-medium">
+          <i class="fa-regular fa-clock text-slate-400"></i>
+          <span id="baghdad-clock">--:--:-- (بغداد UTC+3)</span>
+        </div>
+      </div>
+
+      <!-- Left Admin Profile & Logout -->
+      <div class="flex items-center gap-3">
+        <div class="hidden sm:flex items-center gap-2 px-3 py-1 bg-slate-50 rounded-xl border border-slate-200">
+          <div class="w-7 h-7 rounded-lg bg-brand text-white flex items-center justify-center font-bold text-xs">
+            <i class="fa-solid fa-user-shield text-xs"></i>
+          </div>
+          <div class="text-right">
+            <div id="admin-user-name" class="text-xs font-bold text-slate-800 leading-none">مدير النظام</div>
+            <div id="admin-user-email" class="text-[10px] text-slate-400 leading-none mt-1">Mahmoudraheem76@gmail.com</div>
+          </div>
+        </div>
+
+        <button onclick="handleLogout()" title="تسجيل الخروج"
+          class="p-2.5 rounded-xl text-slate-500 hover:text-red-600 hover:bg-red-50 border border-slate-200 transition">
+          <i class="fa-solid fa-arrow-right-from-bracket text-sm"></i>
+        </button>
+      </div>
+    </header>
+
+    <!-- Main Container with Sidebar + Content -->
+    <div class="flex-1 flex overflow-hidden">
+
+      <!-- Desktop Sidebar (Fixed Right in RTL) -->
+      <aside class="hidden lg:flex flex-col w-64 bg-white border-l border-slate-200 p-4 space-y-1 select-none flex-shrink-0">
+        <div class="text-[11px] font-bold text-slate-400 px-3 py-2 uppercase tracking-wider">الأقسام الرئيسية</div>
+        
+        <button onclick="switchTab('stats')" id="nav-stats"
+          class="nav-tab-btn flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-50 transition active:scale-[0.99]">
+          <i class="fa-solid fa-chart-pie w-5 text-center text-slate-400"></i>
+          <span>لوحة الإحصائيات</span>
+        </button>
+
+        <button onclick="switchTab('users')" id="nav-users"
+          class="nav-tab-btn flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-50 transition active:scale-[0.99]">
+          <i class="fa-solid fa-users w-5 text-center text-slate-400"></i>
+          <span>المشتركين ونقاط البيع</span>
+        </button>
+
+        <button onclick="switchTab('activation')" id="nav-activation"
+          class="nav-tab-btn flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-50 transition active:scale-[0.99]">
+          <i class="fa-solid fa-key w-5 text-center text-slate-400"></i>
+          <span>رموز التفعيل والخطط</span>
+        </button>
+
+        <button onclick="switchTab('wallet')" id="nav-wallet"
+          class="nav-tab-btn flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-50 transition active:scale-[0.99]">
+          <i class="fa-solid fa-wallet w-5 text-center text-slate-400"></i>
+          <span>المحافظ وزين كاش</span>
+        </button>
+
+        <button onclick="switchTab('cards')" id="nav-cards"
+          class="nav-tab-btn flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-50 transition active:scale-[0.99]">
+          <i class="fa-solid fa-id-card w-5 text-center text-slate-400"></i>
+          <span>البطاقات وخزنة الأكواد</span>
+        </button>
+
+        <button onclick="switchTab('audit')" id="nav-audit"
+          class="nav-tab-btn flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-50 transition active:scale-[0.99]">
+          <i class="fa-solid fa-shield-halved w-5 text-center text-slate-400"></i>
+          <span>سجل الرقابة والحذوفات</span>
+        </button>
+
+        <!-- System Health Box -->
+        <div class="mt-auto pt-4 border-t border-slate-100">
+          <div class="p-3 bg-slate-50 rounded-2xl border border-slate-200 text-xs">
+            <div class="flex items-center justify-between text-slate-500 mb-1">
+              <span>قاعدة البيانات:</span>
+              <span class="font-bold text-emerald-600">PostgreSQL v16</span>
+            </div>
+            <div class="flex items-center justify-between text-slate-500 mb-1">
+              <span>البنية السحابية:</span>
+              <span class="font-bold text-brand">Railway Global</span>
+            </div>
+            <div class="flex items-center justify-between text-slate-500">
+              <span>المنطقة:</span>
+              <span class="font-bold text-slate-700">بغداد (UTC+3)</span>
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      <!-- Mobile Drawer Backdrop & Menu -->
+      <div id="mobile-sidebar-backdrop" onclick="toggleMobileSidebar()" class="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm hidden lg:hidden"></div>
+      <div id="mobile-sidebar" class="fixed top-0 bottom-0 right-0 z-50 w-72 bg-white shadow-2xl p-5 flex flex-col space-y-2 transform translate-x-full transition-transform duration-300 lg:hidden">
+        <div class="flex items-center justify-between mb-4 border-b border-slate-100 pb-3">
+          <div class="flex items-center gap-2">
+            <img src="/assets/appicon.png" class="w-8 h-8 rounded-lg">
+            <span class="font-black text-slate-800">قائمة لوحة التحكم</span>
+          </div>
+          <button onclick="toggleMobileSidebar()" class="p-2 text-slate-400 hover:text-slate-600">
+            <i class="fa-solid fa-xmark text-lg"></i>
+          </button>
+        </div>
+
+        <button onclick="switchTab('stats'); toggleMobileSidebar()" class="flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-sm font-bold text-slate-700 hover:bg-slate-50">
+          <i class="fa-solid fa-chart-pie w-5 text-brand"></i>
+          <span>لوحة الإحصائيات</span>
+        </button>
+        <button onclick="switchTab('users'); toggleMobileSidebar()" class="flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-sm font-bold text-slate-700 hover:bg-slate-50">
+          <i class="fa-solid fa-users w-5 text-brand"></i>
+          <span>المشتركين ونقاط البيع</span>
+        </button>
+        <button onclick="switchTab('activation'); toggleMobileSidebar()" class="flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-sm font-bold text-slate-700 hover:bg-slate-50">
+          <i class="fa-solid fa-key w-5 text-brand"></i>
+          <span>رموز التفعيل والخطط</span>
+        </button>
+        <button onclick="switchTab('wallet'); toggleMobileSidebar()" class="flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-sm font-bold text-slate-700 hover:bg-slate-50">
+          <i class="fa-solid fa-wallet w-5 text-brand"></i>
+          <span>المحافظ وزين كاش</span>
+        </button>
+        <button onclick="switchTab('cards'); toggleMobileSidebar()" class="flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-sm font-bold text-slate-700 hover:bg-slate-50">
+          <i class="fa-solid fa-id-card w-5 text-brand"></i>
+          <span>البطاقات وخزنة الأكواد</span>
+        </button>
+        <button onclick="switchTab('audit'); toggleMobileSidebar()" class="flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-sm font-bold text-slate-700 hover:bg-slate-50">
+          <i class="fa-solid fa-shield-halved w-5 text-brand"></i>
+          <span>سجل الرقابة والحذوفات</span>
+        </button>
+      </div>
+
+      <!-- Content Area -->
+      <main class="flex-1 overflow-y-auto p-4 lg:p-8 space-y-6">
+
+        <!-- =================================================================== -->
+        <!-- TAB 1: DASHBOARD STATS                                              -->
+        <!-- =================================================================== -->
+        <section id="tab-content-stats" class="tab-pane space-y-6">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <h2 class="text-xl font-black text-slate-800">لوحة الإحصائيات العامة</h2>
+              <p class="text-xs text-slate-500 mt-0.5">مؤشرات الأداء المباشرة لشبكة VENUS POS</p>
+            </div>
+            <div class="flex items-center gap-2">
+              <button onclick="loadStats()" class="px-3.5 py-2 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 rounded-xl font-bold text-xs shadow-sm flex items-center gap-2 transition">
+                <i class="fa-solid fa-rotate-right text-brand"></i>
+                <span>تحديث المؤشرات</span>
+              </button>
+              <button onclick="openAddUserModal()" class="px-3.5 py-2 bg-brand hover:bg-brand-dark text-white rounded-xl font-bold text-xs shadow-sm flex items-center gap-2 transition">
+                <i class="fa-solid fa-user-plus"></i>
+                <span>مشترك جديد</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- KPI Cards Grid -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+            <!-- 1. Subscribers -->
+            <div class="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm">
+              <div class="flex items-center justify-between text-slate-400 mb-2">
+                <span class="text-xs font-bold text-slate-600">المشتركين</span>
+                <div class="w-8 h-8 rounded-xl bg-blue-50 text-brand flex items-center justify-center">
+                  <i class="fa-solid fa-users"></i>
+                </div>
+              </div>
+              <div class="text-2xl font-black text-slate-800" id="stat-subscribers">0</div>
+              <div class="text-[11px] font-semibold text-emerald-600 mt-1 flex items-center gap-1">
+                <i class="fa-solid fa-circle-check"></i>
+                <span id="stat-active-subscribers">0 نشط</span>
+              </div>
+            </div>
+
+            <!-- 2. Wallet Balance -->
+            <div class="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm">
+              <div class="flex items-center justify-between text-slate-400 mb-2">
+                <span class="text-xs font-bold text-slate-600">رصيد المحافظ</span>
+                <div class="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                  <i class="fa-solid fa-wallet"></i>
+                </div>
+              </div>
+              <div class="text-2xl font-black text-slate-800" id="stat-wallet">0 د.ع</div>
+              <div class="text-[11px] text-slate-400 mt-1">إجمالي أرصدة المشتركين</div>
+            </div>
+
+            <!-- 3. Sales Count -->
+            <div class="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm">
+              <div class="flex items-center justify-between text-slate-400 mb-2">
+                <span class="text-xs font-bold text-slate-600">حركات البيع</span>
+                <div class="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
+                  <i class="fa-solid fa-receipt"></i>
+                </div>
+              </div>
+              <div class="text-2xl font-black text-slate-800" id="stat-sales-count">0</div>
+              <div class="text-[11px] text-slate-400 mt-1">سيم كارت وبطاقات</div>
+            </div>
+
+            <!-- 4. Total Profits -->
+            <div class="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm">
+              <div class="flex items-center justify-between text-slate-400 mb-2">
+                <span class="text-xs font-bold text-slate-600">صافي الأرباح</span>
+                <div class="w-8 h-8 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
+                  <i class="fa-solid fa-chart-line"></i>
+                </div>
+              </div>
+              <div class="text-2xl font-black text-slate-800" id="stat-profits">0 د.ع</div>
+              <div class="text-[11px] text-slate-400 mt-1">المحققة بنقاط البيع</div>
+            </div>
+
+            <!-- 5. Activation Codes -->
+            <div class="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm">
+              <div class="flex items-center justify-between text-slate-400 mb-2">
+                <span class="text-xs font-bold text-slate-600">كودات التفعيل</span>
+                <div class="w-8 h-8 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center">
+                  <i class="fa-solid fa-key"></i>
+                </div>
+              </div>
+              <div class="text-2xl font-black text-slate-800" id="stat-codes">0</div>
+              <div class="text-[11px] font-semibold text-purple-600 mt-1">
+                <span id="stat-active-codes">0 متاح للبيع</span>
+              </div>
+            </div>
+
+            <!-- 6. ZainCash Transactions -->
+            <div class="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm">
+              <div class="flex items-center justify-between text-slate-400 mb-2">
+                <span class="text-xs font-bold text-slate-600">عمليات زين كاش</span>
+                <div class="w-8 h-8 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center">
+                  <i class="fa-solid fa-money-bill-transfer"></i>
+                </div>
+              </div>
+              <div class="text-2xl font-black text-slate-800" id="stat-zaincash">0</div>
+              <div class="text-[11px] font-semibold text-emerald-600 mt-1">
+                <span id="stat-zaincash-success">0 ناجحة</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Quick Shortcuts Row -->
+          <div class="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm space-y-4">
+            <h3 class="text-sm font-black text-slate-800">إجراءات سريعة</h3>
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <button onclick="openAddUserModal()" class="p-4 rounded-2xl bg-slate-50 hover:bg-brand-light hover:border-brand/30 border border-slate-200 transition text-right group">
+                <i class="fa-solid fa-user-plus text-brand text-lg mb-2 block group-hover:scale-110 transition-transform"></i>
+                <div class="font-bold text-xs text-slate-800">إضافة مشترك جديد</div>
+                <div class="text-[10px] text-slate-400 mt-0.5">تسجيل نقطة بيع جديدة</div>
+              </button>
+              <button onclick="switchTab('activation')" class="p-4 rounded-2xl bg-slate-50 hover:bg-brand-light hover:border-brand/30 border border-slate-200 transition text-right group">
+                <i class="fa-solid fa-wand-magic-sparkles text-purple-600 text-lg mb-2 block group-hover:scale-110 transition-transform"></i>
+                <div class="font-bold text-xs text-slate-800">توليد كودات تفعيل</div>
+                <div class="text-[10px] text-slate-400 mt-0.5">سوبر اقتصادي / بلص / أعمال</div>
+              </button>
+              <button onclick="switchTab('wallet')" class="p-4 rounded-2xl bg-slate-50 hover:bg-brand-light hover:border-brand/30 border border-slate-200 transition text-right group">
+                <i class="fa-solid fa-money-bill-wave text-emerald-600 text-lg mb-2 block group-hover:scale-110 transition-transform"></i>
+                <div class="font-bold text-xs text-slate-800">شحن محفظة يدوي</div>
+                <div class="text-[10px] text-slate-400 mt-0.5">تحويل رصيد لمشترك فوراً</div>
+              </button>
+              <button onclick="openAddCardModal()" class="p-4 rounded-2xl bg-slate-50 hover:bg-brand-light hover:border-brand/30 border border-slate-200 transition text-right group">
+                <i class="fa-solid fa-plus-circle text-indigo-600 text-lg mb-2 block group-hover:scale-110 transition-transform"></i>
+                <div class="font-bold text-xs text-slate-800">إضافة بطاقة رقمية</div>
+                <div class="text-[10px] text-slate-400 mt-0.5">تحديث كروت الشحن والألعاب</div>
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <!-- =================================================================== -->
+        <!-- TAB 2: SUBSCRIBERS & USERS                                          -->
+        <!-- =================================================================== -->
+        <section id="tab-content-users" class="tab-pane hidden space-y-6">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <h2 class="text-xl font-black text-slate-800">المشتركين ونقاط البيع</h2>
+              <p class="text-xs text-slate-500 mt-0.5">إدارة الحسابات، الأرصدة، الخطط، وسجلات الدخول</p>
+            </div>
+            <div class="flex items-center gap-2">
+              <button onclick="openAddUserModal()" class="px-4 py-2 bg-brand hover:bg-brand-dark text-white rounded-xl font-bold text-xs shadow-sm flex items-center gap-2 transition">
+                <i class="fa-solid fa-user-plus"></i>
+                <span>إضافة مشترك جديد</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Filters & Search Toolbar -->
+          <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col md:flex-row items-center justify-between gap-3">
+            <div class="relative w-full md:w-80">
+              <span class="absolute inset-y-0 right-0 flex items-center pr-3.5 text-slate-400">
+                <i class="fa-solid fa-magnifying-glass text-xs"></i>
+              </span>
+              <input type="text" id="user-search-input" oninput="renderUsersTable()"
+                placeholder="بحث بالاسم، المتجر، الهاتف، البريد..."
+                class="w-full pr-9 pl-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:bg-white focus:border-brand focus:ring-2 focus:ring-brand/20 outline-none">
+            </div>
+
+            <div class="flex items-center gap-1.5 overflow-x-auto w-full md:w-auto pb-1 md:pb-0">
+              <button onclick="setUserFilter('all')" id="filter-user-all" class="filter-pill px-3 py-1.5 rounded-xl text-xs font-bold bg-brand text-white transition">الكل</button>
+              <button onclick="setUserFilter('subscriber')" id="filter-user-subscriber" class="filter-pill px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-100 text-slate-600 hover:bg-slate-200 transition">المشتركين</button>
+              <button onclick="setUserFilter('admin')" id="filter-user-admin" class="filter-pill px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-100 text-slate-600 hover:bg-slate-200 transition">المدراء</button>
+              <button onclick="setUserFilter('active')" id="filter-user-active" class="filter-pill px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-100 text-slate-600 hover:bg-slate-200 transition">نشط</button>
+              <button onclick="setUserFilter('blocked')" id="filter-user-blocked" class="filter-pill px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-100 text-slate-600 hover:bg-slate-200 transition">محظور</button>
+            </div>
+          </div>
+
+          <!-- Users Table Container -->
+          <div class="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
+            <div class="overflow-x-auto">
+              <table class="w-full text-right border-collapse text-xs">
+                <thead>
+                  <tr class="bg-slate-50/80 border-b border-slate-200 text-slate-500 font-bold">
+                    <th class="py-3.5 px-4">المشترك / المتجر</th>
+                    <th class="py-3.5 px-4">معلومات الاتصال</th>
+                    <th class="py-3.5 px-4">رصيد المحفظة</th>
+                    <th class="py-3.5 px-4">الخطة والاشتراك</th>
+                    <th class="py-3.5 px-4">الحالة</th>
+                    <th class="py-3.5 px-4">تاريخ التسجيل</th>
+                    <th class="py-3.5 px-4 text-center">إجراءات</th>
+                  </tr>
+                </thead>
+                <tbody id="users-table-body" class="divide-y divide-slate-100 font-medium">
+                  <tr>
+                    <td colspan="7" class="py-8 text-center text-slate-400">جاري تحميل المشتركين...</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- =================================================================== -->
+        <!-- TAB 3: ACTIVATION CODES                                             -->
+        <!-- =================================================================== -->
+        <section id="tab-content-activation" class="tab-pane hidden space-y-6">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <h2 class="text-xl font-black text-slate-800">رموز التفعيل والخطط</h2>
+              <p class="text-xs text-slate-500 mt-0.5">توليد أكواد التفعيل المسبقة الدفع وإرسالها للمشتركين</p>
+            </div>
+          </div>
+
+          <!-- Generator Card -->
+          <div class="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm space-y-4">
+            <h3 class="text-sm font-black text-slate-800 flex items-center gap-2">
+              <i class="fa-solid fa-wand-magic-sparkles text-brand"></i>
+              <span>توليد أكواد تفعيل جديدة</span>
+            </h3>
+
+            <form onsubmit="handleGenerateCodes(event)" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
+              <div>
+                <label class="block text-xs font-bold text-slate-700 mb-1.5">اختر الباقة / الخطة</label>
+                <select id="gen-plan" onchange="onPlanChange()" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-brand">
+                  <option value="سوبر اقتصادي" data-days="30" data-price="15000">سوبر اقتصادي (15,000 د.ع / 30 يوم)</option>
+                  <option value="بلص" data-days="180" data-price="55000">بلص (55,000 د.ع / 6 أشهر)</option>
+                  <option value="أعمال" data-days="365" data-price="125000">أعمال (125,000 د.ع / سنة كاملة)</option>
+                </select>
+              </div>
+
+              <div>
+                <label class="block text-xs font-bold text-slate-700 mb-1.5">المدة (بالأيام)</label>
+                <input type="number" id="gen-days" value="30" min="1" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-brand">
+              </div>
+
+              <div>
+                <label class="block text-xs font-bold text-slate-700 mb-1.5">عدد الأكواد المطلوبة</label>
+                <select id="gen-count" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-brand">
+                  <option value="1">كود واحد (1)</option>
+                  <option value="5">5 أكواد</option>
+                  <option value="10">10 أكواد</option>
+                  <option value="20">20 كود</option>
+                </select>
+              </div>
+
+              <button type="submit" id="btn-gen-codes" class="w-full py-2.5 px-4 bg-brand hover:bg-brand-dark text-white rounded-xl font-bold text-xs shadow-sm flex items-center justify-center gap-2 transition">
+                <i class="fa-solid fa-bolt"></i>
+                <span>توليد الأكواد فوراً</span>
+              </button>
+            </form>
+          </div>
+
+          <!-- Codes Table -->
+          <div class="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden space-y-3 p-4">
+            <div class="flex items-center justify-between">
+              <h3 class="text-sm font-black text-slate-800">سجل الأكواد المولدة</h3>
+              <button onclick="loadActivationCodes()" class="text-xs text-brand font-bold hover:underline flex items-center gap-1">
+                <i class="fa-solid fa-rotate-right"></i>
+                <span>تحديث</span>
+              </button>
+            </div>
+
+            <div class="overflow-x-auto">
+              <table class="w-full text-right border-collapse text-xs">
+                <thead>
+                  <tr class="bg-slate-50/80 border-b border-slate-200 text-slate-500 font-bold">
+                    <th class="py-3 px-3">رمز التفعيل</th>
+                    <th class="py-3 px-3">الخطة</th>
+                    <th class="py-3 px-3">المدة والسعر</th>
+                    <th class="py-3 px-3">الحالة</th>
+                    <th class="py-3 px-3">المستخدم بواسطة</th>
+                    <th class="py-3 px-3">تاريخ الإنشاء / الاستخدام</th>
+                    <th class="py-3 px-3 text-center">مشاركة</th>
+                  </tr>
+                </thead>
+                <tbody id="codes-table-body" class="divide-y divide-slate-100 font-medium">
+                  <tr>
+                    <td colspan="7" class="py-8 text-center text-slate-400">جاري تحميل الأكواد...</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- =================================================================== -->
+        <!-- TAB 4: WALLET & ZAINCASH                                            -->
+        <!-- =================================================================== -->
+        <section id="tab-content-wallet" class="tab-pane hidden space-y-6">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <h2 class="text-xl font-black text-slate-800">شحن المحافظ وبوابة زين كاش</h2>
+              <p class="text-xs text-slate-500 mt-0.5">الشحن اليدوي المباشر وسجل حركات بوابة الدفع الإلكتروني</p>
+            </div>
+            <button onclick="loadZainCashTransactions()" class="px-3.5 py-2 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 rounded-xl font-bold text-xs shadow-sm flex items-center gap-2 transition">
+              <i class="fa-solid fa-rotate-right text-brand"></i>
+              <span>تحديث السجل</span>
+            </button>
+          </div>
+
+          <!-- Quick Topup Box -->
+          <div class="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm space-y-4">
+            <h3 class="text-sm font-black text-slate-800 flex items-center gap-2">
+              <i class="fa-solid fa-hand-holding-dollar text-emerald-600"></i>
+              <span>شحن يدوي سريع لمحفظة مشترك</span>
+            </h3>
+
+            <form onsubmit="handleDirectWalletTopup(event)" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
+              <div>
+                <label class="block text-xs font-bold text-slate-700 mb-1.5">اختر المشترك</label>
+                <select id="topup-user-select" required class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-brand">
+                  <option value="">-- اختر المشترك --</option>
+                </select>
+              </div>
+
+              <div>
+                <label class="block text-xs font-bold text-slate-700 mb-1.5">المبلغ (د.ع)</label>
+                <input type="number" id="topup-amount" required min="1000" step="500" placeholder="مثلاً: 25000"
+                  class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-brand">
+              </div>
+
+              <div>
+                <label class="block text-xs font-bold text-slate-700 mb-1.5">ملاحظة / سبب الشحن</label>
+                <input type="text" id="topup-note" placeholder="شحن يدوي مباشر من الإدارة"
+                  class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 outline-none focus:border-brand">
+              </div>
+
+              <button type="submit" id="btn-topup-submit" class="w-full py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs shadow-sm flex items-center justify-center gap-2 transition">
+                <i class="fa-solid fa-plus-circle"></i>
+                <span>شحن الرصيد فوراً</span>
+              </button>
+            </form>
+          </div>
+
+          <!-- ZainCash Ledger -->
+          <div class="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden p-4 space-y-3">
+            <h3 class="text-sm font-black text-slate-800 flex items-center gap-2">
+              <i class="fa-solid fa-receipt text-rose-500"></i>
+              <span>سجل عمليات ZainCash v2 UAT & Live</span>
+            </h3>
+
+            <div class="overflow-x-auto">
+              <table class="w-full text-right border-collapse text-xs">
+                <thead>
+                  <tr class="bg-slate-50/80 border-b border-slate-200 text-slate-500 font-bold">
+                    <th class="py-3 px-3">رقم الطلب (Order ID)</th>
+                    <th class="py-3 px-3">معرّف الحركة</th>
+                    <th class="py-3 px-3">المشترك / المتجر</th>
+                    <th class="py-3 px-3">رقم المحفظة</th>
+                    <th class="py-3 px-3">المبلغ</th>
+                    <th class="py-3 px-3">الغرض</th>
+                    <th class="py-3 px-3">الحالة</th>
+                    <th class="py-3 px-3">التاريخ والوقت</th>
+                  </tr>
+                </thead>
+                <tbody id="zaincash-table-body" class="divide-y divide-slate-100 font-medium">
+                  <tr>
+                    <td colspan="8" class="py-8 text-center text-slate-400">جاري تحميل عمليات زين كاش...</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- =================================================================== -->
+        <!-- TAB 5: DIGITAL CARDS & VOUCHER VAULT                                -->
+        <!-- =================================================================== -->
+        <section id="tab-content-cards" class="tab-pane hidden space-y-6">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <h2 class="text-xl font-black text-slate-800">البطاقات الرقمية وخزنة الأكواد</h2>
+              <p class="text-xs text-slate-500 mt-0.5">كتالوج كروت الشحن، الألعاب، وخزنة أكواد الـ PIN المشفرة</p>
+            </div>
+            <div class="flex items-center gap-2">
+              <button onclick="openAddCardModal()" class="px-4 py-2 bg-brand hover:bg-brand-dark text-white rounded-xl font-bold text-xs shadow-sm flex items-center gap-2 transition">
+                <i class="fa-solid fa-plus-circle"></i>
+                <span>إضافة بطاقة جديدة</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Cards Catalog Grid -->
+          <div class="space-y-3">
+            <h3 class="text-sm font-black text-slate-800">كتالوج البطاقات المعروضة بالنقاط</h3>
+            <div id="cards-grid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+              <!-- Dynamically populated -->
+            </div>
+          </div>
+
+          <!-- Voucher Vault Upload Section -->
+          <div class="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm space-y-4">
+            <h3 class="text-sm font-black text-slate-800 flex items-center gap-2">
+              <i class="fa-solid fa-vault text-indigo-600"></i>
+              <span>رفع أكواد PIN إلى خزنة البطاقات (Voucher Vault)</span>
+            </h3>
+
+            <form onsubmit="handleUploadVouchers(event)" class="space-y-4">
+              <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div>
+                  <label class="block text-xs font-bold text-slate-700 mb-1.5">معرّف البطاقة (Voucher ID)</label>
+                  <input type="text" id="vault-voucher-id" required placeholder="مثال: ZAIN_5000"
+                    class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-brand">
+                </div>
+                <div>
+                  <label class="block text-xs font-bold text-slate-700 mb-1.5">سعر التكلفة (د.ع)</label>
+                  <input type="number" id="vault-cost" required min="0" placeholder="4800"
+                    class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-brand">
+                </div>
+                <div>
+                  <label class="block text-xs font-bold text-slate-700 mb-1.5">سعر البيع المقترح (د.ع)</label>
+                  <input type="number" id="vault-sell" required min="0" placeholder="5000"
+                    class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-brand">
+                </div>
+              </div>
+
+              <div>
+                <label class="block text-xs font-bold text-slate-700 mb-1.5">الأكواد (PIN وسيريال في كل سطر مفصولين بفاصلة أو مسافة)</label>
+                <textarea id="vault-raw-pins" required rows="5" placeholder="1234567890123456, SN987654321
+1234567890123457, SN987654322"
+                  class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono text-slate-800 outline-none focus:border-brand"></textarea>
+              </div>
+
+              <button type="submit" id="btn-upload-vault" class="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-xs shadow-sm flex items-center gap-2 transition">
+                <i class="fa-solid fa-cloud-arrow-up"></i>
+                <span>تخزين الأكواد في الخزنة المشفرة</span>
+              </button>
+            </form>
+          </div>
+        </section>
+
+        <!-- =================================================================== -->
+        <!-- TAB 6: AUDIT LOGS                                                   -->
+        <!-- =================================================================== -->
+        <section id="tab-content-audit" class="tab-pane hidden space-y-6">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <h2 class="text-xl font-black text-slate-800">سجل الرقابة والحذوفات</h2>
+              <p class="text-xs text-slate-500 mt-0.5">التتبع الفوري لكافة عمليات الحذف، البيع، والشحن عبر نقاط البيع</p>
+            </div>
+            <button onclick="loadAuditLogs()" class="px-3.5 py-2 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 rounded-xl font-bold text-xs shadow-sm flex items-center gap-2 transition">
+              <i class="fa-solid fa-rotate-right text-brand"></i>
+              <span>تحديث السجل</span>
+            </button>
+          </div>
+
+          <!-- Audit Table -->
+          <div class="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden p-4 space-y-3">
+            <div class="overflow-x-auto">
+              <table class="w-full text-right border-collapse text-xs">
+                <thead>
+                  <tr class="bg-slate-50/80 border-b border-slate-200 text-slate-500 font-bold">
+                    <th class="py-3 px-3">التاريخ والوقت (بغداد)</th>
+                    <th class="py-3 px-3">المستخدم / المتجر</th>
+                    <th class="py-3 px-3">الإجراء</th>
+                    <th class="py-3 px-3">الكيان</th>
+                    <th class="py-3 px-3">التفاصيل</th>
+                    <th class="py-3 px-3">عنوان IP</th>
+                  </tr>
+                </thead>
+                <tbody id="audit-table-body" class="divide-y divide-slate-100 font-medium">
+                  <tr>
+                    <td colspan="6" class="py-8 text-center text-slate-400">جاري تحميل سجل الرقابة...</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+      </main>
+    </div>
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- MODALS                                                                    -->
+  <!-- ========================================================================= -->
+
+  <!-- 1. ADD SUBSCRIBER MODAL -->
+  <div id="modal-add-user" class="fixed inset-0 z-50 flex items-center justify-center p-4 modal-backdrop hidden">
+    <div class="w-full max-w-lg bg-white rounded-3xl shadow-2xl border border-slate-100 p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+        <h3 class="text-base font-black text-slate-800">إضافة مشترك / مدير جديد</h3>
+        <button onclick="closeModal('modal-add-user')" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
+      </div>
+
+      <form onsubmit="handleCreateUser(event)" class="space-y-3.5">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">الاسم الكامل</label>
+            <input type="text" id="add-user-name" required class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-brand">
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">اسم المتجر / النقطة</label>
+            <input type="text" id="add-user-store" required class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-brand">
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">البريد الإلكتروني</label>
+            <input type="email" id="add-user-email" required class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 outline-none focus:border-brand">
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">رقم الهاتف</label>
+            <input type="tel" id="add-user-phone" required placeholder="07XXXXXXXX" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-brand">
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">كلمة المرور (6 أحرف فأكثر)</label>
+          <input type="password" id="add-user-password" required minlength="6" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 outline-none focus:border-brand">
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">الدور والصلاحية</label>
+            <select id="add-user-role" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-brand">
+              <option value="subscriber">مشترك نقطة بيع (Subscriber)</option>
+              <option value="admin">مدير نظام (Super Admin)</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">الخطة الابتدائية</label>
+            <select id="add-user-plan" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-brand">
+              <option value="مشترك تجريبي">تجريبي مجاني (2 يوم)</option>
+              <option value="سوبر اقتصادي">سوبر اقتصادي (30 يوم)</option>
+              <option value="بلص">بلص (180 يوم)</option>
+              <option value="أعمال">أعمال (سنة كاملة)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="pt-3 flex items-center justify-end gap-2 border-t border-slate-100">
+          <button type="button" onclick="closeModal('modal-add-user')" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-xs font-bold">إلغاء</button>
+          <button type="submit" id="btn-save-user" class="px-5 py-2 bg-brand hover:bg-brand-dark text-white rounded-xl text-xs font-bold">حفظ المشترك</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- 2. EDIT USER MODAL -->
+  <div id="modal-edit-user" class="fixed inset-0 z-50 flex items-center justify-center p-4 modal-backdrop hidden">
+    <div class="w-full max-w-lg bg-white rounded-3xl shadow-2xl border border-slate-100 p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+        <h3 class="text-base font-black text-slate-800">تعديل بيانات المشترك</h3>
+        <button onclick="closeModal('modal-edit-user')" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
+      </div>
+
+      <form onsubmit="handleUpdateUser(event)" class="space-y-3.5">
+        <input type="hidden" id="edit-user-id">
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">الاسم الكامل</label>
+            <input type="text" id="edit-user-name" required class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-brand">
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">اسم المتجر</label>
+            <input type="text" id="edit-user-store" required class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-brand">
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">البريد الإلكتروني</label>
+            <input type="email" id="edit-user-email" required class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 outline-none focus:border-brand">
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">رقم الهاتف</label>
+            <input type="tel" id="edit-user-phone" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-brand">
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">كلمة مرور جديدة (اتركه فارغاً للإبقاء على الحالية)</label>
+          <input type="password" id="edit-user-password" placeholder="••••••••" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 outline-none focus:border-brand">
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">الخطة</label>
+            <select id="edit-user-plan" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-brand">
+              <option value="مشترك تجريبي">تجريبي</option>
+              <option value="سوبر اقتصادي">سوبر اقتصادي</option>
+              <option value="بلص">بلص</option>
+              <option value="أعمال">أعمال</option>
+              <option value="vip">VIP</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">الحالة</label>
+            <select id="edit-user-status" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-brand">
+              <option value="active">نشط (Active)</option>
+              <option value="blocked">محظور (Blocked)</option>
+              <option value="suspended">معلق (Suspended)</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">الدور</label>
+            <select id="edit-user-role" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-brand">
+              <option value="subscriber">مشترك</option>
+              <option value="admin">مدير</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="pt-3 flex items-center justify-end gap-2 border-t border-slate-100">
+          <button type="button" onclick="closeModal('modal-edit-user')" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-xs font-bold">إلغاء</button>
+          <button type="submit" id="btn-update-user" class="px-5 py-2 bg-brand hover:bg-brand-dark text-white rounded-xl text-xs font-bold">حفظ التعديلات</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- 3. WALLET ADJUST MODAL -->
+  <div id="modal-wallet-adjust" class="fixed inset-0 z-50 flex items-center justify-center p-4 modal-backdrop hidden">
+    <div class="w-full max-w-md bg-white rounded-3xl shadow-2xl border border-slate-100 p-6 space-y-4">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+        <h3 class="text-base font-black text-slate-800">شحن / تعديل رصيد المحفظة</h3>
+        <button onclick="closeModal('modal-wallet-adjust')" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
+      </div>
+
+      <div class="p-3 bg-slate-50 rounded-2xl border border-slate-200 text-xs">
+        <div class="font-bold text-slate-800" id="wallet-modal-user-name">--</div>
+        <div class="text-slate-500 mt-0.5">الرصيد الحالي: <span class="font-bold text-brand" id="wallet-modal-current-bal">0 د.ع</span></div>
+      </div>
+
+      <form onsubmit="handleWalletAdjustment(event)" class="space-y-3.5">
+        <input type="hidden" id="wallet-adjust-user-id">
+
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1.5">نوع العملية</label>
+          <div class="grid grid-cols-2 gap-2">
+            <label class="flex items-center justify-center gap-2 p-2.5 rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-700 font-bold text-xs cursor-pointer">
+              <input type="radio" name="wallet_type" value="credit" checked class="accent-emerald-600">
+              <span>إضافة رصيد (+)</span>
+            </label>
+            <label class="flex items-center justify-center gap-2 p-2.5 rounded-xl border border-red-200 bg-red-50 text-red-700 font-bold text-xs cursor-pointer">
+              <input type="radio" name="wallet_type" value="debit" class="accent-red-600">
+              <span>خصم رصيد (-)</span>
+            </label>
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">المبلغ (دينار عراقي)</label>
+          <input type="number" id="wallet-adjust-amount" required min="500" step="500" placeholder="مثال: 15000"
+            class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-brand">
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">السبب / الملاحظة</label>
+          <input type="text" id="wallet-adjust-note" placeholder="شحن رصيد يدوي / تسوية"
+            class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 outline-none focus:border-brand">
+        </div>
+
+        <div class="pt-3 flex items-center justify-end gap-2 border-t border-slate-100">
+          <button type="button" onclick="closeModal('modal-wallet-adjust')" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-xs font-bold">إلغاء</button>
+          <button type="submit" id="btn-submit-wallet" class="px-5 py-2 bg-brand hover:bg-brand-dark text-white rounded-xl text-xs font-bold">تنفيذ التعديل</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- 4. LOGIN HISTORY MODAL -->
+  <div id="modal-login-history" class="fixed inset-0 z-50 flex items-center justify-center p-4 modal-backdrop hidden">
+    <div class="w-full max-w-lg bg-white rounded-3xl shadow-2xl border border-slate-100 p-6 space-y-4 max-h-[85vh] overflow-y-auto">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+        <h3 class="text-base font-black text-slate-800" id="login-history-title">سجل تسجيل الدخول</h3>
+        <button onclick="closeModal('modal-login-history')" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="w-full text-right text-xs">
+          <thead>
+            <tr class="bg-slate-50 text-slate-500 font-bold border-b border-slate-200">
+              <th class="p-2.5">الوقت</th>
+              <th class="p-2.5">عنوان IP</th>
+              <th class="p-2.5">النتيجة</th>
+            </tr>
+          </thead>
+          <tbody id="login-history-body" class="divide-y divide-slate-100">
+            <tr><td colspan="3" class="text-center py-4 text-slate-400">جاري التحميل...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- 5. ADD DIGITAL CARD MODAL -->
+  <div id="modal-add-card" class="fixed inset-0 z-50 flex items-center justify-center p-4 modal-backdrop hidden">
+    <div class="w-full max-w-md bg-white rounded-3xl shadow-2xl border border-slate-100 p-6 space-y-4">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+        <h3 class="text-base font-black text-slate-800">إضافة بطاقة رقمية جديدة</h3>
+        <button onclick="closeModal('modal-add-card')" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
+      </div>
+
+      <form onsubmit="handleSaveDigitalCard(event)" class="space-y-3.5">
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">عنوان البطاقة</label>
+          <input type="text" id="card-title" required placeholder="مثال: زين العراق 10,000 د.ع"
+            class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-brand">
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">التصنيف</label>
+            <input type="text" id="card-category" required placeholder="اتصالات، ألعاب، تسوق..."
+              class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-brand">
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">رابط الصورة (URL)</label>
+            <input type="text" id="card-image" placeholder="https://..."
+              class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 outline-none focus:border-brand">
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">سعر الشراء (د.ع)</label>
+            <input type="number" id="card-buy" required min="0" placeholder="9500"
+              class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-brand">
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">سعر البيع (د.ع)</label>
+            <input type="number" id="card-sell" required min="0" placeholder="10000"
+              class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-brand">
+          </div>
+        </div>
+
+        <div class="pt-3 flex items-center justify-end gap-2 border-t border-slate-100">
+          <button type="button" onclick="closeModal('modal-add-card')" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-xs font-bold">إلغاء</button>
+          <button type="submit" id="btn-save-card" class="px-5 py-2 bg-brand hover:bg-brand-dark text-white rounded-xl text-xs font-bold">حفظ البطاقة</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Global Toast Notification -->
+  <div id="toast" class="fixed bottom-5 left-5 z-50 transform translate-y-20 opacity-0 transition-all duration-300 pointer-events-none">
+    <div id="toast-inner" class="flex items-center gap-2.5 px-4 py-3 rounded-2xl shadow-xl text-xs font-bold text-white bg-slate-900 border border-slate-800">
+      <i id="toast-icon" class="fa-solid fa-circle-check text-emerald-400"></i>
+      <span id="toast-text">تمت العملية بنجاح</span>
+    </div>
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- JAVASCRIPT LOGIC & API INTEGRATION                                        -->
+  <!-- ========================================================================= -->
+  <script>
+    // State
+    let authToken = localStorage.getItem('venus_admin_token') || '';
+    let currentUser = JSON.parse(localStorage.getItem('venus_admin_user') || 'null');
+    let allUsers = [];
+    let userFilter = 'all';
+    let currentTab = 'stats';
+
+    // Formatters
+    const formatIQD = (num) => {
+      const val = Math.round(Number(num) || 0);
+      return val.toLocaleString('en-US') + ' د.ع';
+    };
+
+    const formatDate = (dateStr) => {
+      if (!dateStr) return '—';
+      try {
+        const d = new Date(dateStr);
+        return d.toLocaleDateString('ar-IQ', { year: 'numeric', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+      } catch (e) {
+        return dateStr;
+      }
+    };
+
+    function showToast(msg, type = 'success') {
+      const toast = document.getElementById('toast');
+      const inner = document.getElementById('toast-inner');
+      const icon = document.getElementById('toast-icon');
+      const text = document.getElementById('toast-text');
+
+      text.innerText = msg;
+      if (type === 'error') {
+        inner.className = 'flex items-center gap-2.5 px-4 py-3 rounded-2xl shadow-xl text-xs font-bold text-white bg-red-600 border border-red-500';
+        icon.className = 'fa-solid fa-circle-exclamation text-white';
+      } else {
+        inner.className = 'flex items-center gap-2.5 px-4 py-3 rounded-2xl shadow-xl text-xs font-bold text-white bg-slate-900 border border-slate-800';
+        icon.className = 'fa-solid fa-circle-check text-emerald-400';
+      }
+
+      toast.classList.remove('translate-y-20', 'opacity-0');
+      setTimeout(() => {
+        toast.classList.add('translate-y-20', 'opacity-0');
+      }, 3500);
+    }
+
+    // Unified fetch with Bearer token & auto-logout on 401
+    async function apiFetch(endpoint, options = {}) {
+      const headers = options.headers || {};
+      headers['Content-Type'] = 'application/json';
+      if (authToken) {
+        headers['Authorization'] = `Bearer ${authToken}`;
+        if (currentUser && currentUser.id) {
+          headers['X-User-Id'] = String(currentUser.id);
+        }
+      }
+      options.headers = headers;
+
+      try {
+        const res = await fetch(endpoint, options);
+        if (res.status === 401) {
+          handleLogout();
+          throw new Error('انتهت صلاحية الجلسة، يرجى تسجيل الدخول مجدداً');
+        }
+        return res;
+      } catch (err) {
+        throw err;
+      }
+    }
+
+    // Live Baghdad clock
+    function updateClock() {
+      const clockEl = document.getElementById('baghdad-clock');
+      if (!clockEl) return;
+      const now = new Date();
+      const baghdadStr = now.toLocaleTimeString('en-US', { timeZone: 'Asia/Baghdad', hour12: false });
+      clockEl.innerText = `${baghdadStr} (بتوقيت بغداد UTC+3)`;
+    }
+    setInterval(updateClock, 1000);
+    updateClock();
+
+    // Init App
+    window.addEventListener('DOMContentLoaded', () => {
+      if (authToken && currentUser && currentUser.role === 'admin') {
+        showApp();
+      } else {
+        showLogin();
+      }
+    });
+
+    function showLogin() {
+      document.getElementById('login-view').classList.remove('hidden');
+      document.getElementById('app-view').classList.add('hidden');
+    }
+
+    function showApp() {
+      document.getElementById('login-view').classList.add('hidden');
+      document.getElementById('app-view').classList.remove('hidden');
+      if (currentUser) {
+        document.getElementById('admin-user-name').innerText = currentUser.full_name || 'مدير النظام';
+        document.getElementById('admin-user-email').innerText = currentUser.email || '';
+      }
+      switchTab('stats');
+    }
+
+    // Login Handler
+    async function handleLogin(e) {
+      e.preventDefault();
+      const email = document.getElementById('login-email').value.trim();
+      const password = document.getElementById('login-password').value;
+      const btn = document.getElementById('login-btn');
+      const errBox = document.getElementById('login-error');
+      const errMsg = document.getElementById('login-error-msg');
+
+      errBox.classList.add('hidden');
+      btn.disabled = true;
+      btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin text-sm"></i> <span>جاري التحقق...</span>`;
+
+      try {
+        const res = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password })
+        });
+        const data = await res.json();
+
+        if (!res.ok) {
+          throw new Error(data.error || 'فشل تسجيل الدخول');
+        }
+
+        if (data.user.role !== 'admin') {
+          throw new Error('هذا الحساب ليس لديه صلاحيات الإدارة السحابية');
+        }
+
+        authToken = data.token;
+        currentUser = data.user;
+        localStorage.setItem('venus_admin_token', authToken);
+        localStorage.setItem('venus_admin_user', JSON.stringify(currentUser));
+
+        showToast('تم تسجيل الدخول بنجاح');
+        showApp();
+      } catch (err) {
+        errMsg.innerText = err.message || 'بيانات الدخول غير صحيحة';
+        errBox.classList.remove('hidden');
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = `<span>تسجيل الدخول</span> <i class="fa-solid fa-arrow-left text-xs"></i>`;
+      }
+    }
+
+    function handleLogout() {
+      authToken = '';
+      currentUser = null;
+      localStorage.removeItem('venus_admin_token');
+      localStorage.removeItem('venus_admin_user');
+      showLogin();
+      showToast('تم تسجيل الخروج');
+    }
+
+    // Tab Switching
+    function switchTab(tabId) {
+      currentTab = tabId;
+      document.querySelectorAll('.tab-pane').forEach(el => el.classList.add('hidden'));
+      const activePane = document.getElementById(`tab-content-${tabId}`);
+      if (activePane) activePane.classList.remove('hidden');
+
+      // Update sidebar styles
+      document.querySelectorAll('.nav-tab-btn').forEach(btn => {
+        btn.classList.remove('bg-brand', 'text-white', 'shadow-sm');
+        btn.classList.add('text-slate-600', 'hover:bg-slate-50');
+        const icon = btn.querySelector('i');
+        if (icon) icon.classList.add('text-slate-400');
+        if (icon) icon.classList.remove('text-white');
+      });
+
+      const activeBtn = document.getElementById(`nav-${tabId}`);
+      if (activeBtn) {
+        activeBtn.classList.remove('text-slate-600', 'hover:bg-slate-50');
+        activeBtn.classList.add('bg-brand', 'text-white', 'shadow-sm');
+        const icon = activeBtn.querySelector('i');
+        if (icon) icon.classList.remove('text-slate-400');
+        if (icon) icon.classList.add('text-white');
+      }
+
+      // Load Tab-specific data
+      if (tabId === 'stats') loadStats();
+      if (tabId === 'users') loadUsers();
+      if (tabId === 'activation') loadActivationCodes();
+      if (tabId === 'wallet') { loadUsers(); loadZainCashTransactions(); }
+      if (tabId === 'cards') loadDigitalCards();
+      if (tabId === 'audit') loadAuditLogs();
+    }
+
+    function toggleMobileSidebar() {
+      const drawer = document.getElementById('mobile-sidebar');
+      const backdrop = document.getElementById('mobile-sidebar-backdrop');
+      if (drawer.classList.contains('translate-x-full')) {
+        drawer.classList.remove('translate-x-full');
+        backdrop.classList.remove('hidden');
+      } else {
+        drawer.classList.add('translate-x-full');
+        backdrop.classList.add('hidden');
+      }
+    }
+
+    // Modal Helpers
+    function openModal(id) {
+      document.getElementById(id).classList.remove('hidden');
+    }
+    function closeModal(id) {
+      document.getElementById(id).classList.add('hidden');
+    }
+
+    // =========================================================================
+    // TAB 1: STATS LOGIC
+    // =========================================================================
+    async function loadStats() {
+      try {
+        const res = await apiFetch('/api/admin/stats');
+        const data = await res.json();
+        if (!res.ok) return;
+
+        document.getElementById('stat-subscribers').innerText = data.total_subscribers || 0;
+        document.getElementById('stat-active-subscribers').innerText = `${data.active_subscribers || 0} نشط`;
+        document.getElementById('stat-wallet').innerText = formatIQD(data.total_wallet_balance || 0);
+        document.getElementById('stat-sales-count').innerText = (data.total_sales_count || 0).toLocaleString();
+        document.getElementById('stat-profits').innerText = formatIQD(data.total_sales_profit || 0);
+        document.getElementById('stat-codes').innerText = (data.total_codes || 0).toLocaleString();
+        document.getElementById('stat-active-codes').innerText = `${data.active_codes || 0} متاح للبيع`;
+        document.getElementById('stat-zaincash').innerText = (data.total_zaincash || 0).toLocaleString();
+        document.getElementById('stat-zaincash-success').innerText = `${data.success_zaincash || 0} ناجحة`;
+      } catch (err) {
+        console.error('loadStats error:', err);
+      }
+    }
+
+    // =========================================================================
+    // TAB 2: USERS & SUBSCRIBERS LOGIC
+    // =========================================================================
+    async function loadUsers() {
+      try {
+        const res = await apiFetch('/api/admin/users');
+        if (!res.ok) return;
+        allUsers = await res.json();
+        renderUsersTable();
+        populateTopupSelect();
+      } catch (err) {
+        console.error('loadUsers error:', err);
+      }
+    }
+
+    function setUserFilter(filter) {
+      userFilter = filter;
+      document.querySelectorAll('.filter-pill').forEach(btn => {
+        btn.classList.remove('bg-brand', 'text-white');
+        btn.classList.add('bg-slate-100', 'text-slate-600');
+      });
+      const active = document.getElementById(`filter-user-${filter}`);
+      if (active) {
+        active.classList.remove('bg-slate-100', 'text-slate-600');
+        active.classList.add('bg-brand', 'text-white');
+      }
+      renderUsersTable();
+    }
+
+    function renderUsersTable() {
+      const tbody = document.getElementById('users-table-body');
+      const query = (document.getElementById('user-search-input')?.value || '').toLowerCase().trim();
+
+      const filtered = allUsers.filter(u => {
+        // Filter by role / status
+        if (userFilter === 'subscriber' && u.role !== 'subscriber') return false;
+        if (userFilter === 'admin' && u.role !== 'admin') return false;
+        if (userFilter === 'active' && u.status !== 'active') return false;
+        if (userFilter === 'blocked' && u.status !== 'blocked') return false;
+
+        // Search query
+        if (query) {
+          const match = (u.full_name || '').toLowerCase().includes(query) ||
+                        (u.store_name || '').toLowerCase().includes(query) ||
+                        (u.email || '').toLowerCase().includes(query) ||
+                        (u.phone || '').includes(query);
+          if (!match) return false;
+        }
+        return true;
+      });
+
+      if (filtered.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="7" class="py-12 text-center text-slate-400 font-medium">لم يتم العثور على أي مشتركين مطابِقين</td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = filtered.map(u => {
+        const isSubscriber = u.role === 'subscriber';
+        const statusBadge = u.status === 'blocked'
+          ? `<span class="px-2.5 py-1 rounded-full text-[10px] font-bold bg-red-100 text-red-700">محظور</span>`
+          : `<span class="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700">نشط</span>`;
+
+        let planBadgeClass = 'badge-plan-trial';
+        const plan = u.plan_name || 'مشترك تجريبي';
+        if (plan.includes('سوبر')) planBadgeClass = 'badge-plan-super';
+        else if (plan.includes('بلص')) planBadgeClass = 'badge-plan-plus';
+        else if (plan.includes('أعمال')) planBadgeClass = 'badge-plan-business';
+
+        return `
+          <tr class="hover:bg-slate-50/60 transition">
+            <td class="py-3 px-4">
+              <div class="flex items-center gap-2.5">
+                <div class="w-8 h-8 rounded-full bg-brand-light text-brand font-black flex items-center justify-center text-xs">
+                  ${(u.full_name || 'U').charAt(0).toUpperCase()}
+                </div>
+                <div>
+                  <div class="font-bold text-slate-800">${u.full_name || 'بدون اسم'}</div>
+                  <div class="text-[11px] text-slate-400 font-medium">${u.store_name || 'نقطة بيع'} <span class="text-[10px] text-slate-300">#${u.id}</span></div>
+                </div>
+              </div>
+            </td>
+            <td class="py-3 px-4">
+              <div class="font-medium text-slate-700">${u.email}</div>
+              <div class="text-[11px] text-slate-400 font-mono">${u.phone || '—'}</div>
+            </td>
+            <td class="py-3 px-4 font-black text-emerald-600">${formatIQD(u.wallet_balance || 0)}</td>
+            <td class="py-3 px-4">
+              <span class="px-2 py-0.5 rounded-lg text-[10px] font-bold ${planBadgeClass}">${plan}</span>
+              <div class="text-[10px] text-slate-400 mt-1">${u.subscription_ends_at ? 'ينتهي: ' + formatDate(u.subscription_ends_at) : 'مفتوح'}</div>
+            </td>
+            <td class="py-3 px-4">${statusBadge}</td>
+            <td class="py-3 px-4 text-slate-400 text-[11px]">${formatDate(u.created_at)}</td>
+            <td class="py-3 px-4 text-center">
+              <div class="flex items-center justify-center gap-1">
+                <button onclick="openWalletAdjustModal(${u.id})" title="شحن / تعديل الرصيد" class="p-1.5 rounded-lg text-emerald-600 hover:bg-emerald-50 transition">
+                  <i class="fa-solid fa-wallet"></i>
+                </button>
+                <button onclick="openEditUserModal(${u.id})" title="تعديل البيانات" class="p-1.5 rounded-lg text-brand hover:bg-brand-light transition">
+                  <i class="fa-solid fa-pen-to-square"></i>
+                </button>
+                <button onclick="viewLoginHistory(${u.id}, '${u.email}')" title="سجل الدخول" class="p-1.5 rounded-lg text-indigo-600 hover:bg-indigo-50 transition">
+                  <i class="fa-solid fa-clock-rotate-left"></i>
+                </button>
+                <button onclick="toggleUserBlock(${u.id}, '${u.status}')" title="${u.status === 'blocked' ? 'فك الحظر' : 'حظر المشترك'}" class="p-1.5 rounded-lg ${u.status === 'blocked' ? 'text-emerald-600 hover:bg-emerald-50' : 'text-amber-600 hover:bg-amber-50'} transition">
+                  <i class="fa-solid ${u.status === 'blocked' ? 'fa-lock-open' : 'fa-lock'}"></i>
+                </button>
+                <button onclick="deleteUserPrompt(${u.id}, '${u.full_name}')" title="حذف المشترك" class="p-1.5 rounded-lg text-red-500 hover:bg-red-50 transition">
+                  <i class="fa-solid fa-trash-can"></i>
+                </button>
+              </div>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function populateTopupSelect() {
+      const select = document.getElementById('topup-user-select');
+      if (!select) return;
+      select.innerHTML = '<option value="">-- اختر المشترك --</option>' +
+        allUsers.filter(u => u.role === 'subscriber').map(u => `
+          <option value="${u.id}">${u.full_name || u.email} (${u.store_name || 'متجر'}) — رصيده: ${formatIQD(u.wallet_balance || 0)}</option>
+        `).join('');
+    }
+
+    // Add User Modal
+    function openAddUserModal() {
+      document.getElementById('add-user-name').value = '';
+      document.getElementById('add-user-store').value = '';
+      document.getElementById('add-user-email').value = '';
+      document.getElementById('add-user-phone').value = '';
+      document.getElementById('add-user-password').value = '';
+      openModal('modal-add-user');
+    }
+
+    async function handleCreateUser(e) {
+      e.preventDefault();
+      const payload = {
+        full_name: document.getElementById('add-user-name').value.trim(),
+        store_name: document.getElementById('add-user-store').value.trim(),
+        email: document.getElementById('add-user-email').value.trim(),
+        phone: document.getElementById('add-user-phone').value.trim(),
+        password: document.getElementById('add-user-password').value,
+        role: document.getElementById('add-user-role').value,
+        plan: document.getElementById('add-user-plan').value,
+      };
+
+      const btn = document.getElementById('btn-save-user');
+      btn.disabled = true;
+      try {
+        const res = await apiFetch('/api/admin/users', {
+          method: 'POST',
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'فشل إضافة المشترك');
+
+        showToast('تمت إضافة المشترك بنجاح');
+        closeModal('modal-add-user');
+        loadUsers();
+        loadStats();
+      } catch (err) {
+        showToast(err.message, 'error');
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    // Edit User Modal
+    function openEditUserModal(id) {
+      const user = allUsers.find(u => u.id === id);
+      if (!user) return;
+
+      document.getElementById('edit-user-id').value = user.id;
+      document.getElementById('edit-user-name').value = user.full_name || '';
+      document.getElementById('edit-user-store').value = user.store_name || '';
+      document.getElementById('edit-user-email').value = user.email || '';
+      document.getElementById('edit-user-phone').value = user.phone || '';
+      document.getElementById('edit-user-password').value = '';
+      document.getElementById('edit-user-plan').value = user.plan_name || 'مشترك تجريبي';
+      document.getElementById('edit-user-status').value = user.status || 'active';
+      document.getElementById('edit-user-role').value = user.role || 'subscriber';
+
+      openModal('modal-edit-user');
+    }
+
+    async function handleUpdateUser(e) {
+      e.preventDefault();
+      const id = document.getElementById('edit-user-id').value;
+      const pwd = document.getElementById('edit-user-password').value;
+
+      const payload = {
+        full_name: document.getElementById('edit-user-name').value.trim(),
+        store_name: document.getElementById('edit-user-store').value.trim(),
+        email: document.getElementById('edit-user-email').value.trim(),
+        phone: document.getElementById('edit-user-phone').value.trim(),
+        plan_name: document.getElementById('edit-user-plan').value,
+        status: document.getElementById('edit-user-status').value,
+        role: document.getElementById('edit-user-role').value,
+      };
+      if (pwd) payload.password = pwd;
+
+      const btn = document.getElementById('btn-update-user');
+      btn.disabled = true;
+      try {
+        const res = await apiFetch(`/api/admin/users/${id}`, {
+          method: 'PUT',
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'فشل تحديث البيانات');
+
+        showToast('تم تحديث بيانات المشترك بنجاح');
+        closeModal('modal-edit-user');
+        loadUsers();
+      } catch (err) {
+        showToast(err.message, 'error');
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    // Toggle Block / Active
+    async function toggleUserBlock(id, currentStatus) {
+      const newStatus = currentStatus === 'blocked' ? 'active' : 'blocked';
+      const confirmMsg = newStatus === 'blocked' ? 'هل أنت متأكد من حظر هذا المشترك؟' : 'هل أنت متأكد من فك الحظر؟';
+      if (!confirm(confirmMsg)) return;
+
+      try {
+        const res = await apiFetch(`/api/admin/users/${id}`, {
+          method: 'PUT',
+          body: JSON.stringify({ status: newStatus })
+        });
+        if (!res.ok) throw new Error('فشل تغيير حالة المشترك');
+        showToast(`تم ${newStatus === 'blocked' ? 'حظر' : 'تفعيل'} المشترك بنجاح`);
+        loadUsers();
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    }
+
+    // Delete User
+    async function deleteUserPrompt(id, name) {
+      if (!confirm(`تحذير: هل أنت متأكد من حذف المشترك (${name}) نهائياً؟ سيتم حذف جميع بياناته ومبيعاته نهائياً!`)) {
+        return;
+      }
+      try {
+        const res = await apiFetch(`/api/admin/users/${id}`, { method: 'DELETE' });
+        if (!res.ok) throw new Error('فشل حذف المشترك');
+        showToast('تم حذف المشترك بنجاح');
+        loadUsers();
+        loadStats();
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    }
+
+    // Login History Modal
+    async function viewLoginHistory(userId, email) {
+      document.getElementById('login-history-title').innerText = `سجل دخول المشترك (${email})`;
+      const tbody = document.getElementById('login-history-body');
+      tbody.innerHTML = `<tr><td colspan="3" class="text-center py-4 text-slate-400">جاري التحميل...</td></tr>`;
+      openModal('modal-login-history');
+
+      try {
+        const res = await apiFetch(`/api/admin/login-history?user_id=${userId}`);
+        const data = await res.json();
+        if (!res.ok || data.length === 0) {
+          tbody.innerHTML = `<tr><td colspan="3" class="text-center py-4 text-slate-400">لا يوجد سجلات دخول سابقة لهذا المشترك</td></tr>`;
+          return;
+        }
+
+        tbody.innerHTML = data.map(item => `
+          <tr class="hover:bg-slate-50">
+            <td class="p-2.5 text-slate-600 font-medium">${formatDate(item.created_at)}</td>
+            <td class="p-2.5 font-mono text-slate-700">${item.ip_address || '—'}</td>
+            <td class="p-2.5">
+              ${item.success 
+                ? '<span class="text-emerald-600 font-bold"><i class="fa-solid fa-check"></i> ناجح</span>' 
+                : '<span class="text-red-500 font-bold"><i class="fa-solid fa-xmark"></i> فاشل</span>'}
+            </td>
+          </tr>
+        `).join('');
+      } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="3" class="text-center py-4 text-red-500">فشل تحميل السجل</td></tr>`;
+      }
+    }
+
+    // =========================================================================
+    // TAB 3: ACTIVATION CODES LOGIC
+    // =========================================================================
+    function onPlanChange() {
+      const select = document.getElementById('gen-plan');
+      const opt = select.options[select.selectedIndex];
+      document.getElementById('gen-days').value = opt.getAttribute('data-days') || '30';
+    }
+
+    async function handleGenerateCodes(e) {
+      e.preventDefault();
+      const planSelect = document.getElementById('gen-plan');
+      const opt = planSelect.options[planSelect.selectedIndex];
+      const planName = opt.value;
+      const durationDays = Number(document.getElementById('gen-days').value) || 30;
+      const count = Number(document.getElementById('gen-count').value) || 1;
+      const priceIQD = Number(opt.getAttribute('data-price')) || 15000;
+
+      const btn = document.getElementById('btn-gen-codes');
+      btn.disabled = true;
+      try {
+        const res = await apiFetch('/api/admin/activation-codes/generate', {
+          method: 'POST',
+          body: JSON.stringify({
+            plan_name: planName,
+            duration_days: durationDays,
+            price_iqd: priceIQD,
+            count: count
+          })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'فشل توليد الأكواد');
+
+        showToast(`تم توليد ${data.codes?.length || count} كود تفعيل بنجاح`);
+        loadActivationCodes();
+      } catch (err) {
+        showToast(err.message, 'error');
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    async function loadActivationCodes() {
+      const tbody = document.getElementById('codes-table-body');
+      try {
+        const res = await apiFetch('/api/admin/activation-codes');
+        const data = await res.json();
+        if (!res.ok) return;
+
+        if (data.length === 0) {
+          tbody.innerHTML = `<tr><td colspan="7" class="py-12 text-center text-slate-400 font-medium">لم يتم توليد أي كودات تفعيل حتى الآن</td></tr>`;
+          return;
+        }
+
+        tbody.innerHTML = data.map(c => {
+          const isUsed = c.is_used;
+          const statusBadge = isUsed 
+            ? `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-500">تم الاستخدام</span>`
+            : `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700">متاح للبيع</span>`;
+
+          const shareText = encodeURIComponent(
+            `مرحباً بك!\nكود تفعيل اشتراكك في نظام VENUS POS:\n` +
+            `الخطة: ${c.plan_name}\n` +
+            `المدة: ${c.duration_days} يوم\n` +
+            `الكود: ${c.code}\n\n` +
+            `للتفعيل: افتح التطبيق -> الإعدادات -> تفعيل كود الاشتراك`
+          );
+
+          return `
+            <tr class="hover:bg-slate-50 transition">
+              <td class="py-3 px-3">
+                <div class="flex items-center gap-1.5 font-mono font-bold text-slate-800">
+                  <span>${c.code}</span>
+                  <button onclick="copyToClipboard('${c.code}')" title="نسخ الكود" class="p-1 text-slate-400 hover:text-brand">
+                    <i class="fa-regular fa-copy"></i>
+                  </button>
+                </div>
+              </td>
+              <td class="py-3 px-3 font-bold text-slate-700">${c.plan_name}</td>
+              <td class="py-3 px-3">${c.duration_days} يوم • ${formatIQD(c.price_iqd)}</td>
+              <td class="py-3 px-3">${statusBadge}</td>
+              <td class="py-3 px-3 text-slate-600">${c.used_by_email || '—'}</td>
+              <td class="py-3 px-3 text-slate-400 text-[11px]">${formatDate(c.created_at)}</td>
+              <td class="py-3 px-3 text-center">
+                <a href="https://wa.me/?text=${shareText}" target="_blank" title="مشاركة عبر واتساب" class="inline-flex p-1.5 rounded-lg text-emerald-600 hover:bg-emerald-50 transition">
+                  <i class="fa-brands fa-whatsapp text-base"></i>
+                </a>
+              </td>
+            </tr>
+          `;
+        }).join('');
+      } catch (err) {
+        console.error('loadActivationCodes error:', err);
+      }
+    }
+
+    function copyToClipboard(text) {
+      navigator.clipboard.writeText(text).then(() => {
+        showToast('تم نسخ الكود للحافظة');
+      }).catch(() => {
+        prompt('انسخ الكود يدوياً:', text);
+      });
+    }
+
+    // =========================================================================
+    // TAB 4: WALLET TOPUP & ZAINCASH LOGIC
+    // =========================================================================
+    function openWalletAdjustModal(userId) {
+      const user = allUsers.find(u => u.id === userId);
+      if (!user) return;
+
+      document.getElementById('wallet-adjust-user-id').value = user.id;
+      document.getElementById('wallet-modal-user-name').innerText = `${user.full_name || user.email} (${user.store_name || 'متجر'})`;
+      document.getElementById('wallet-modal-current-bal').innerText = formatIQD(user.wallet_balance || 0);
+      document.getElementById('wallet-adjust-amount').value = '';
+      document.getElementById('wallet-adjust-note').value = '';
+
+      openModal('modal-wallet-adjust');
+    }
+
+    async function handleWalletAdjustment(e) {
+      e.preventDefault();
+      const userId = document.getElementById('wallet-adjust-user-id').value;
+      const type = document.querySelector('input[name="wallet_type"]:checked')?.value || 'credit';
+      const rawAmount = Number(document.getElementById('wallet-adjust-amount').value);
+      const note = document.getElementById('wallet-adjust-note').value.trim();
+
+      const finalAmount = type === 'debit' ? -Math.abs(rawAmount) : Math.abs(rawAmount);
+
+      const btn = document.getElementById('btn-submit-wallet');
+      btn.disabled = true;
+      try {
+        const res = await apiFetch(`/api/admin/users/${userId}/wallet`, {
+          method: 'POST',
+          body: JSON.stringify({ amount: finalAmount, note: note })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'فشل تعديل الرصيد');
+
+        showToast('تم تعديل رصيد المحفظة بنجاح');
+        closeModal('modal-wallet-adjust');
+        loadUsers();
+        loadStats();
+      } catch (err) {
+        showToast(err.message, 'error');
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    async function handleDirectWalletTopup(e) {
+      e.preventDefault();
+      const userId = document.getElementById('topup-user-select').value;
+      const amount = Number(document.getElementById('topup-amount').value);
+      const note = document.getElementById('topup-note').value.trim() || 'شحن رصيد يدوي مباشر';
+
+      if (!userId) {
+        showToast('يرجى اختيار المشترك', 'error');
+        return;
+      }
+
+      const btn = document.getElementById('btn-topup-submit');
+      btn.disabled = true;
+      try {
+        const res = await apiFetch(`/api/admin/users/${userId}/wallet`, {
+          method: 'POST',
+          body: JSON.stringify({ amount: amount, note: note })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'فشل شحن المحفظة');
+
+        showToast('تم شحن رصيد المشترك بنجاح');
+        document.getElementById('topup-amount').value = '';
+        loadUsers();
+        loadStats();
+      } catch (err) {
+        showToast(err.message, 'error');
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    async function loadZainCashTransactions() {
+      const tbody = document.getElementById('zaincash-table-body');
+      try {
+        const res = await apiFetch('/api/admin/zaincash-transactions');
+        const data = await res.json();
+        if (!res.ok) return;
+
+        if (data.length === 0) {
+          tbody.innerHTML = `<tr><td colspan="8" class="py-12 text-center text-slate-400 font-medium">لا توجد حركات زين كاش مسجلة حتى الآن</td></tr>`;
+          return;
+        }
+
+        tbody.innerHTML = data.map(tx => {
+          let statusBadge = `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-700">قيد المعالجة</span>`;
+          if (tx.status === 'SUCCESS') {
+            statusBadge = `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700">ناجحة</span>`;
+          } else if (tx.status === 'FAILED') {
+            statusBadge = `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-100 text-red-700">فشلت</span>`;
+          }
+
+          return `
+            <tr class="hover:bg-slate-50 transition">
+              <td class="py-3 px-3 font-mono font-bold text-slate-800">${tx.order_id || '—'}</td>
+              <td class="py-3 px-3 font-mono text-slate-500">${tx.transaction_id || '—'}</td>
+              <td class="py-3 px-3">
+                <div class="font-bold text-slate-700">${tx.full_name || tx.email || 'مشترك'}</div>
+                <div class="text-[10px] text-slate-400">${tx.store_name || ''}</div>
+              </td>
+              <td class="py-3 px-3 font-mono font-semibold text-slate-600">${tx.msisdn || '—'}</td>
+              <td class="py-3 px-3 font-black text-slate-800">${formatIQD(tx.amount)}</td>
+              <td class="py-3 px-3">
+                <span class="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-blue-50 text-brand">${tx.purpose === 'SUBSCRIPTION' ? 'اشتراك' : 'شحن محفظة'}</span>
+              </td>
+              <td class="py-3 px-3">${statusBadge}</td>
+              <td class="py-3 px-3 text-slate-400 text-[11px]">${formatDate(tx.created_at)}</td>
+            </tr>
+          `;
+        }).join('');
+      } catch (err) {
+        console.error('loadZainCashTransactions error:', err);
+      }
+    }
+
+    // =========================================================================
+    // TAB 5: DIGITAL CARDS & VOUCHERS
+    // =========================================================================
+    async function loadDigitalCards() {
+      const grid = document.getElementById('cards-grid');
+      try {
+        const res = await apiFetch('/api/admin/cards');
+        const data = await res.json();
+        if (!res.ok) return;
+
+        if (data.length === 0) {
+          grid.innerHTML = `<div class="col-span-full py-12 text-center text-slate-400 font-medium">لم يتم إضافة بطاقات رقمية بعد</div>`;
+          return;
+        }
+
+        grid.innerHTML = data.map(card => `
+          <div class="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm flex flex-col justify-between space-y-3">
+            <div class="flex items-center gap-3">
+              <div class="w-12 h-12 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center overflow-hidden flex-shrink-0">
+                ${card.image_url 
+                  ? `<img src="${card.image_url}" class="w-full h-full object-contain">`
+                  : `<i class="fa-solid fa-credit-card text-brand text-lg"></i>`}
+              </div>
+              <div>
+                <h4 class="font-bold text-xs text-slate-800 leading-tight">${card.title}</h4>
+                <span class="text-[10px] font-semibold text-slate-400">${card.category || 'عام'}</span>
+              </div>
+            </div>
+
+            <div class="p-2.5 bg-slate-50 rounded-xl space-y-1 text-xs">
+              <div class="flex items-center justify-between text-slate-500">
+                <span>سعر الشراء:</span>
+                <span class="font-bold text-slate-700">${formatIQD(card.buy_price)}</span>
+              </div>
+              <div class="flex items-center justify-between text-slate-500">
+                <span>سعر البيع:</span>
+                <span class="font-bold text-brand">${formatIQD(card.sell_price)}</span>
+              </div>
+              <div class="flex items-center justify-between border-t border-slate-200 pt-1 text-emerald-600 font-bold">
+                <span>الربح المقدر:</span>
+                <span>${formatIQD(card.sell_price - card.buy_price)}</span>
+              </div>
+            </div>
+
+            <div class="flex items-center justify-between pt-2 border-t border-slate-100">
+              <span class="text-[10px] font-bold ${card.active ? 'text-emerald-600' : 'text-slate-400'}">
+                ${card.active ? '● معروض بالنقاط' : '○ معطل'}
+              </span>
+              <button onclick="deleteCardPrompt(${card.id}, '${card.title}')" class="text-xs text-red-500 hover:text-red-700 p-1">
+                <i class="fa-solid fa-trash-can"></i>
+              </button>
+            </div>
+          </div>
+        `).join('');
+      } catch (err) {
+        console.error('loadDigitalCards error:', err);
+      }
+    }
+
+    function openAddCardModal() {
+      document.getElementById('card-title').value = '';
+      document.getElementById('card-category').value = '';
+      document.getElementById('card-image').value = '';
+      document.getElementById('card-buy').value = '';
+      document.getElementById('card-sell').value = '';
+      openModal('modal-add-card');
+    }
+
+    async function handleSaveDigitalCard(e) {
+      e.preventDefault();
+      const payload = {
+        title: document.getElementById('card-title').value.trim(),
+        category: document.getElementById('card-category').value.trim(),
+        image_url: document.getElementById('card-image').value.trim(),
+        buy_price: Number(document.getElementById('card-buy').value) || 0,
+        sell_price: Number(document.getElementById('card-sell').value) || 0,
+        active: true
+      };
+
+      const btn = document.getElementById('btn-save-card');
+      btn.disabled = true;
+      try {
+        const res = await apiFetch('/api/admin/cards', {
+          method: 'POST',
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'فشل حفظ البطاقة');
+
+        showToast('تمت إضافة البطاقة بنجاح');
+        closeModal('modal-add-card');
+        loadDigitalCards();
+      } catch (err) {
+        showToast(err.message, 'error');
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    async function deleteCardPrompt(id, title) {
+      if (!confirm(`هل أنت متأكد من حذف بطاقة (${title})؟`)) return;
+      try {
+        const res = await apiFetch(`/api/admin/cards/${id}`, { method: 'DELETE' });
+        if (!res.ok) throw new Error('فشل حذف البطاقة');
+        showToast('تم حذف البطاقة');
+        loadDigitalCards();
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    }
+
+    async function handleUploadVouchers(e) {
+      e.preventDefault();
+      const voucherId = document.getElementById('vault-voucher-id').value.trim();
+      const costPrice = Number(document.getElementById('vault-cost').value) || 0;
+      const sellingPrice = Number(document.getElementById('vault-sell').value) || 0;
+      const rawText = document.getElementById('vault-raw-pins').value.trim();
+
+      const lines = rawText.split('\n');
+      const pins = [];
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed) continue;
+        const parts = trimmed.split(/[\s,]+/);
+        pins.push({ pin: parts[0], serial: parts[1] || '' });
+      }
+
+      if (pins.length === 0) {
+        showToast('قائمة الأكواد فارغة', 'error');
+        return;
+      }
+
+      const btn = document.getElementById('btn-upload-vault');
+      btn.disabled = true;
+      try {
+        const res = await apiFetch('/api/admin/vouchers/upload', {
+          method: 'POST',
+          body: JSON.stringify({
+            voucher_id: voucherId,
+            brand_id: voucherId,
+            cost_price: costPrice,
+            selling_price: sellingPrice,
+            raw_pins: pins
+          })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'فشل حفظ الأكواد');
+
+        showToast(`تم حفظ ${data.count || pins.length} كود في الخزنة بنجاح`);
+        document.getElementById('vault-raw-pins').value = '';
+      } catch (err) {
+        showToast(err.message, 'error');
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    // =========================================================================
+    // TAB 6: AUDIT LOGS LOGIC
+    // =========================================================================
+    async function loadAuditLogs() {
+      const tbody = document.getElementById('audit-table-body');
+      try {
+        const res = await apiFetch('/api/admin/audit-logs?limit=200');
+        const data = await res.json();
+        if (!res.ok) return;
+
+        if (data.length === 0) {
+          tbody.innerHTML = `<tr><td colspan="6" class="py-12 text-center text-slate-400 font-medium">لا توجد سجلات رقابة مسجلة حتى الآن</td></tr>`;
+          return;
+        }
+
+        tbody.innerHTML = data.map(log => {
+          let badgeColor = 'bg-slate-100 text-slate-600';
+          if (log.action.includes('DELETE')) badgeColor = 'bg-red-100 text-red-700';
+          else if (log.action.includes('CREATE')) badgeColor = 'bg-emerald-100 text-emerald-700';
+          else if (log.action.includes('WALLET')) badgeColor = 'bg-indigo-100 text-indigo-700';
+          else if (log.action.includes('UPDATE')) badgeColor = 'bg-amber-100 text-amber-700';
+
+          return `
+            <tr class="hover:bg-slate-50 transition">
+              <td class="py-3 px-3 text-slate-500 font-mono text-[11px]">${formatDate(log.created_at)}</td>
+              <td class="py-3 px-3">
+                <div class="font-bold text-slate-800">${log.user_name || log.user_email || 'نظام'}</div>
+                <div class="text-[10px] text-slate-400">${log.store_name || ''}</div>
+              </td>
+              <td class="py-3 px-3">
+                <span class="px-2 py-0.5 rounded-lg text-[10px] font-bold ${badgeColor}">${log.action}</span>
+              </td>
+              <td class="py-3 px-3 text-slate-700 font-medium">${log.entity} <span class="text-slate-400 text-[10px]">#${log.entity_id}</span></td>
+              <td class="py-3 px-3 font-mono text-[11px] text-slate-600 max-w-xs truncate" title="${log.details || ''}">
+                ${log.details || '—'}
+              </td>
+              <td class="py-3 px-3 font-mono text-slate-400 text-[11px]">${log.ip_address || '—'}</td>
+            </tr>
+          `;
+        }).join('');
+      } catch (err) {
+        console.error('loadAuditLogs error:', err);
+      }
+    }
+  </script>
+</body>
+</html>

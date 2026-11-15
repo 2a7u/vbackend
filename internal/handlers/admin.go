@@ -213,15 +213,19 @@ func (h *AdminHandler) ListLoginHistory(c *fiber.Ctx) error {
 // ---------------------------------------------------------------------------
 
 type adminUpdateUserRequest struct {
-	Email     *string `json:"email"`
-	Password  *string `json:"password"`
-	FullName  *string `json:"full_name"`
-	StoreName *string `json:"store_name"`
-	Phone     *string `json:"phone"`
-	Address   *string `json:"address"`
-	AvatarURL *string `json:"avatar_url"`
-	Role      *string `json:"role"`
-	Approved  *bool   `json:"is_approved"`
+	Email              *string  `json:"email"`
+	Password           *string  `json:"password"`
+	FullName           *string  `json:"full_name"`
+	StoreName          *string  `json:"store_name"`
+	Phone              *string  `json:"phone"`
+	Address            *string  `json:"address"`
+	AvatarURL          *string  `json:"avatar_url"`
+	Role               *string  `json:"role"`
+	Approved           *bool    `json:"is_approved"`
+	Status             *string  `json:"status"`
+	PlanName           *string  `json:"plan_name"`
+	SubscriptionEndsAt *string  `json:"subscription_ends_at"`
+	WalletBalance      *float64 `json:"wallet_balance"`
 }
 
 // AdminUpdateUser (admin) edits any subscriber field.
@@ -308,6 +312,37 @@ func (h *AdminHandler) AdminUpdateUser(c *fiber.Ctx) error {
 	if req.Approved != nil {
 		if _, err := tx.Exec(c.Context(), `UPDATE users SET is_approved = $1, updated_at = now() WHERE id = $2`, *req.Approved, id); err != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "could not update is_approved"})
+		}
+	}
+	if req.Status != nil {
+		s := strings.TrimSpace(*req.Status)
+		if s != "" {
+			if _, err := tx.Exec(c.Context(), `UPDATE users SET status = $1, updated_at = now() WHERE id = $2`, s, id); err != nil {
+				return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "could not update status"})
+			}
+		}
+	}
+	if req.PlanName != nil {
+		p := strings.TrimSpace(*req.PlanName)
+		if p != "" {
+			if _, err := tx.Exec(c.Context(), `UPDATE users SET plan_name = $1, updated_at = now() WHERE id = $2`, p, id); err != nil {
+				return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "could not update plan_name"})
+			}
+		}
+	}
+	if req.SubscriptionEndsAt != nil {
+		sea := strings.TrimSpace(*req.SubscriptionEndsAt)
+		if sea != "" {
+			if parsedT, err := time.Parse(time.RFC3339, sea); err == nil {
+				_, _ = tx.Exec(c.Context(), `UPDATE users SET subscription_ends_at = $1, updated_at = now() WHERE id = $2`, parsedT, id)
+			} else if parsedDate, err := time.Parse("2006-01-02", sea); err == nil {
+				_, _ = tx.Exec(c.Context(), `UPDATE users SET subscription_ends_at = $1, updated_at = now() WHERE id = $2`, parsedDate, id)
+			}
+		}
+	}
+	if req.WalletBalance != nil {
+		if _, err := tx.Exec(c.Context(), `UPDATE users SET wallet_balance = $1, updated_at = now() WHERE id = $2`, *req.WalletBalance, id); err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "could not update wallet_balance"})
 		}
 	}
 
@@ -541,14 +576,16 @@ func (h *AdminHandler) AdminAdjustWallet(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "could not update wallet balance"})
 	}
 
+	absAmount := req.Amount
 	kind := "admin_credit"
-	if req.Amount < 0 {
+	if absAmount < 0 {
+		absAmount = -absAmount
 		kind = "admin_debit"
 	}
 	_, _ = tx.Exec(c.Context(),
 		`INSERT INTO wallet_ledger (user_id, amount, kind, provider, status, note, completed_at)
 		 VALUES ($1, $2, $3, 'admin', 'success', $4, now())`,
-		id, req.Amount, kind, note)
+		id, absAmount, kind, note)
 
 	if err := tx.Commit(c.Context()); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "commit failed"})
@@ -765,6 +802,148 @@ func (h *AdminHandler) ListActivationCodes(c *fiber.Ctx) error {
 				"used_at":       usedAt,
 				"used_by_email": usedByEmail,
 				"created_at":    createdAt,
+			})
+		}
+	}
+	return c.JSON(list)
+}
+
+// GetAdminStats returns live KPIs and system metrics for the Admin Console dashboard.
+// GET /api/admin/stats
+func (h *AdminHandler) GetAdminStats(c *fiber.Ctx) error {
+	ctx := c.Context()
+
+	var (
+		totalSubscribers   int64
+		activeSubscribers  int64
+		totalAdmins        int64
+		totalWalletBalance float64
+	)
+	_ = h.Pool.QueryRow(ctx, `SELECT 
+		COUNT(*) FILTER (WHERE role = 'subscriber'),
+		COUNT(*) FILTER (WHERE role = 'subscriber' AND (status = 'active' OR status IS NULL)),
+		COUNT(*) FILTER (WHERE role = 'admin'),
+		COALESCE(SUM(wallet_balance), 0)
+		FROM users`).Scan(&totalSubscribers, &activeSubscribers, &totalAdmins, &totalWalletBalance)
+
+	var (
+		simSalesCount  int64
+		simSalesProfit float64
+	)
+	_ = h.Pool.QueryRow(ctx, `SELECT COUNT(*), COALESCE(SUM(profit), 0) FROM sim_sales WHERE is_deleted = FALSE`).Scan(&simSalesCount, &simSalesProfit)
+
+	var (
+		creditSalesCount  int64
+		creditSalesProfit float64
+	)
+	_ = h.Pool.QueryRow(ctx, `SELECT COUNT(*), COALESCE(SUM(profit), 0) FROM credit_sales WHERE is_deleted = FALSE`).Scan(&creditSalesCount, &creditSalesProfit)
+
+	var (
+		totalCodes  int64
+		activeCodes int64
+	)
+	_ = h.Pool.QueryRow(ctx, `SELECT COUNT(*), COUNT(*) FILTER (WHERE is_used = FALSE) FROM activation_codes`).Scan(&totalCodes, &activeCodes)
+
+	var (
+		totalZainCash   int64
+		successZainCash int64
+		totalZainAmount float64
+	)
+	_ = h.Pool.QueryRow(ctx, `SELECT COUNT(*), COUNT(*) FILTER (WHERE status = 'SUCCESS'), COALESCE(SUM(amount) FILTER (WHERE status = 'SUCCESS'), 0) FROM zaincash_transactions`).Scan(&totalZainCash, &successZainCash, &totalZainAmount)
+
+	var (
+		activeCardsCount int64
+	)
+	_ = h.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM digital_cards WHERE active = TRUE`).Scan(&activeCardsCount)
+
+	var (
+		totalVouchers     int64
+		availableVouchers int64
+	)
+	_ = h.Pool.QueryRow(ctx, `SELECT COUNT(*), COUNT(*) FILTER (WHERE is_sold = FALSE) FROM vouchers_vault`).Scan(&totalVouchers, &availableVouchers)
+
+	var (
+		totalAuditLogs int64
+	)
+	_ = h.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM audit_logs`).Scan(&totalAuditLogs)
+
+	nowBaghdad := time.Now().In(time.Local).Format("2006-01-02 15:04:05")
+
+	return c.JSON(fiber.Map{
+		"success":              true,
+		"total_subscribers":    totalSubscribers,
+		"active_subscribers":   activeSubscribers,
+		"total_admins":         totalAdmins,
+		"total_wallet_balance": totalWalletBalance,
+		"sim_sales_count":      simSalesCount,
+		"sim_sales_profit":     simSalesProfit,
+		"credit_sales_count":   creditSalesCount,
+		"credit_sales_profit":  creditSalesProfit,
+		"total_sales_profit":   simSalesProfit + creditSalesProfit,
+		"total_sales_count":    simSalesCount + creditSalesCount,
+		"total_codes":          totalCodes,
+		"active_codes":         activeCodes,
+		"total_zaincash":       totalZainCash,
+		"success_zaincash":     successZainCash,
+		"total_zain_amount":    totalZainAmount,
+		"active_cards_count":   activeCardsCount,
+		"total_vouchers":       totalVouchers,
+		"available_vouchers":   availableVouchers,
+		"total_audit_logs":     totalAuditLogs,
+		"baghdad_time":         nowBaghdad,
+		"db_status":            "متصل وقيد التشغيل",
+	})
+}
+
+// ListZainCashTransactions returns all ZainCash transactions for the admin ledger.
+// GET /api/admin/zaincash-transactions
+func (h *AdminHandler) ListZainCashTransactions(c *fiber.Ctx) error {
+	rows, err := h.Pool.Query(c.Context(),
+		`SELECT z.id, z.order_id, z.transaction_id, z.user_id, COALESCE(u.email, ''), COALESCE(u.full_name, ''),
+		        COALESCE(u.store_name, ''), z.amount, z.msisdn, z.purpose, z.plan_key, z.status,
+		        z.created_at, z.completed_at
+		 FROM zaincash_transactions z
+		 LEFT JOIN users u ON u.id = z.user_id
+		 ORDER BY z.created_at DESC LIMIT 200`)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "database error"})
+	}
+	defer rows.Close()
+
+	list := make([]fiber.Map, 0)
+	for rows.Next() {
+		var (
+			id          int64
+			orderID     string
+			txID        string
+			userID      *int64
+			email       string
+			fullName    string
+			storeName   string
+			amount      float64
+			msisdn      string
+			purpose     string
+			planKey     string
+			status      string
+			createdAt   time.Time
+			completedAt *time.Time
+		)
+		if err := rows.Scan(&id, &orderID, &txID, &userID, &email, &fullName, &storeName, &amount, &msisdn, &purpose, &planKey, &status, &createdAt, &completedAt); err == nil {
+			list = append(list, fiber.Map{
+				"id":             id,
+				"order_id":       orderID,
+				"transaction_id": txID,
+				"user_id":        userID,
+				"email":          email,
+				"full_name":      fullName,
+				"store_name":     storeName,
+				"amount":         amount,
+				"msisdn":         msisdn,
+				"purpose":        purpose,
+				"plan_key":       planKey,
+				"status":         status,
+				"created_at":     createdAt,
+				"completed_at":   completedAt,
 			})
 		}
 	}

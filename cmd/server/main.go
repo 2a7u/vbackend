@@ -173,6 +173,8 @@ func main() {
 
 	// Admin-only area.
 	admin := api.Group("/admin", middleware.JWT(jwtSecret), middleware.AdminOnly())
+	admin.Get("/stats", adminH.GetAdminStats)
+	admin.Get("/zaincash-transactions", adminH.ListZainCashTransactions)
 	admin.Get("/users", authH.ListUsers)
 	admin.Post("/users", adminH.AdminCreateUser)
 	admin.Put("/users/:id/approve", authH.ApproveUser)
@@ -192,13 +194,19 @@ func main() {
 	admin.Post("/activation-codes/generate", adminH.GenerateActivationCodes)
 	admin.Get("/activation-codes", adminH.ListActivationCodes)
 
+	// Admin Voucher Vault management
+	admin.Get("/vouchers", vouchersH.GetVouchers)
+	admin.Post("/vouchers/upload", vouchersH.UploadVouchers)
+
 	// R1/R4/R5A: factory reset, audit trail, digital cards management.
 	admin.Post("/factory-reset", adminH.FactoryReset)
 	admin.Get("/audit-logs", adminH.ListAuditLogs)
 	admin.Get("/login-history", adminH.ListLoginHistory)
+	admin.Get("/digital-cards", adminH.ListDigitalCards)
 	admin.Post("/digital-cards", adminH.AdminSaveDigitalCard)
 	admin.Put("/digital-cards/:id", adminH.AdminSaveDigitalCard)
 	admin.Delete("/digital-cards/:id", adminH.AdminDeleteDigitalCard)
+	admin.Get("/cards", adminH.ListDigitalCards)
 	admin.Post("/cards", adminH.AdminSaveDigitalCard)
 	admin.Put("/cards/:id", adminH.AdminSaveDigitalCard)
 	admin.Delete("/cards/:id", adminH.AdminDeleteDigitalCard)

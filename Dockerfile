@@ -16,9 +16,7 @@ RUN apk add --no-cache tzdata ca-certificates \
 ENV TZ=Asia/Baghdad
 WORKDIR /app
 COPY --from=builder /out/venus_server /app/venus_server
-# R5B: bundle the prebuilt Flutter web admin console (built into ./admin_dist).
-COPY admin_dist /app/admin_dist
-ENV ADMIN_DIST_DIR=/app/admin_dist
+COPY public /app/public
 EXPOSE 8080
 ENV PORT=8080
 ENTRYPOINT ["/app/venus_server"]

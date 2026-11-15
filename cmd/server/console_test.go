@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/gofiber/fiber/v2"
@@ -92,5 +93,44 @@ func TestConsoleDomainIsolation(t *testing.T) {
 	body5, _ := io.ReadAll(resp5.Body)
 	if string(body5) != dummyHTML {
 		t.Errorf("console.urukiq.com GET /users expected dummy html, got %s", string(body5))
+	}
+
+	// 6. Embedded Console Fallback: When distDir is non-existent, serve embeddedConsoleHTML
+	appEmbedded := fiber.New()
+	registerConsoleRoutes(appEmbedded, "/nonexistent_dir")
+	req6 := httptest.NewRequest(http.MethodGet, "http://console.urukiq.com/", nil)
+	resp6, err := appEmbedded.Test(req6, 2000)
+	if err != nil {
+		t.Fatalf("appEmbedded.Test error: %v", err)
+	}
+	if resp6.StatusCode != http.StatusOK {
+		t.Fatalf("console.urukiq.com embedded GET / status expected 200, got %d", resp6.StatusCode)
+	}
+	body6, _ := io.ReadAll(resp6.Body)
+	if !strings.Contains(string(body6), "VENUS POS") || !strings.Contains(string(body6), "لوحة الإدارة السحابية") {
+		t.Errorf("expected embedded console html containing VENUS POS, got %s", string(body6)[:100])
+	}
+
+	// 7. Logo Endpoint: GET /assets/appicon.png MUST return 200 image/png
+	req7 := httptest.NewRequest(http.MethodGet, "http://console.urukiq.com/assets/appicon.png", nil)
+	resp7, err := appEmbedded.Test(req7, 2000)
+	if err != nil {
+		t.Fatalf("appEmbedded.Test logo error: %v", err)
+	}
+	if resp7.StatusCode != http.StatusOK {
+		t.Fatalf("GET /assets/appicon.png status expected 200, got %d", resp7.StatusCode)
+	}
+	if ct := resp7.Header.Get("Content-Type"); !strings.Contains(ct, "image/png") {
+		t.Errorf("GET /assets/appicon.png expected Content-Type image/png, got %s", ct)
+	}
+
+	// 8. Localhost fallback: GET http://localhost/console MUST return 200 OK
+	req8 := httptest.NewRequest(http.MethodGet, "http://localhost/console", nil)
+	resp8, err := appEmbedded.Test(req8, 2000)
+	if err != nil {
+		t.Fatalf("localhost /console error: %v", err)
+	}
+	if resp8.StatusCode != http.StatusOK {
+		t.Fatalf("localhost GET /console status expected 200, got %d", resp8.StatusCode)
 	}
 }

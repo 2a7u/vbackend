@@ -404,7 +404,7 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_ends_at TIMESTAMPTZ;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS zaincash_wallet_phone TEXT DEFAULT '';
 
 ALTER TABLE wallet_ledger DROP CONSTRAINT IF EXISTS wallet_ledger_kind_check;
-ALTER TABLE wallet_ledger ADD CONSTRAINT wallet_ledger_kind_check CHECK (kind IN ('topup', 'payment', 'refund', 'subscription'));
+ALTER TABLE wallet_ledger ADD CONSTRAINT wallet_ledger_kind_check CHECK (kind IN ('topup', 'payment', 'refund', 'subscription', 'admin_credit', 'admin_debit'));
 CREATE INDEX IF NOT EXISTS idx_wallet_ledger_provider_ref ON wallet_ledger (provider_ref);
 
 ALTER TABLE zaincash_transactions ADD COLUMN IF NOT EXISTS purpose TEXT NOT NULL DEFAULT 'WALLET_TOPUP';

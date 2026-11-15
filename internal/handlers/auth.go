@@ -443,7 +443,8 @@ func (h *AuthHandler) AdminChangeUserCredentials(c *fiber.Ctx) error {
 // GET /api/admin/users
 func (h *AuthHandler) ListUsers(c *fiber.Ctx) error {
 	rows, err := h.Pool.Query(c.Context(),
-		`SELECT id, email, full_name, store_name, phone, role, is_approved, created_at, avatar_url, address, wallet_balance
+		`SELECT id, email, full_name, store_name, phone, role, is_approved, created_at, avatar_url, address, wallet_balance,
+		        COALESCE(status, 'active'), COALESCE(plan_name, 'مشترك تجريبي'), subscription_ends_at
 		 FROM users ORDER BY created_at DESC`)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "database error"})
@@ -464,14 +465,18 @@ func (h *AuthHandler) ListUsers(c *fiber.Ctx) error {
 			avatarURL string
 			address   string
 			walletBal float64
+			status    string
+			planName  string
+			endsAt    *time.Time
 		)
-		if err := rows.Scan(&id, &email, &fullName, &storeName, &phone, &role, &approved, &createdAt, &avatarURL, &address, &walletBal); err != nil {
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "scan error"})
+		if err := rows.Scan(&id, &email, &fullName, &storeName, &phone, &role, &approved, &createdAt, &avatarURL, &address, &walletBal, &status, &planName, &endsAt); err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "scan error: " + err.Error()})
 		}
 		users = append(users, fiber.Map{
 			"id": id, "email": email, "full_name": fullName, "store_name": storeName,
 			"phone": phone, "role": role, "is_approved": approved, "created_at": createdAt,
 			"avatar_url": avatarURL, "address": address, "wallet_balance": walletBal,
+			"status": status, "plan_name": planName, "subscription_ends_at": endsAt,
 		})
 	}
 	return c.JSON(users)
