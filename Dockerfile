@@ -1,12 +1,9 @@
 # ---- Build stage ----
-FROM golang:1.22-alpine AS builder
+FROM golang:alpine AS builder
 RUN apk add --no-cache tzdata ca-certificates git
 WORKDIR /src
-# Copy full source first: `go mod tidy` needs the packages to resolve imports
-# and generate go.sum for this fresh module.
 COPY . .
-RUN go mod tidy \
-    && CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/venus_server ./cmd/server
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/venus_server ./cmd/server
 
 # ---- Runtime stage ----
 FROM alpine:3.20
