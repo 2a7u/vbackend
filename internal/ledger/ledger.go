@@ -117,6 +117,43 @@ func (s *Service) GetSystemAccountID(ctx context.Context, email string) (int64, 
 	return foundID, nil
 }
 
+// GetCachedSystemAccountID retrieves the account ID from memory if already cached.
+func (s *Service) GetCachedSystemAccountID(email string) (int64, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	id, ok := s.systemAccountID[email]
+	return id, ok && id > 0
+}
+
+// GetSystemAccountIDTx retrieves or provisions a system account within the provided transaction
+// to avoid deadlocking connection pools when all connections are busy.
+func (s *Service) GetSystemAccountIDTx(ctx context.Context, tx pgx.Tx, email string) (int64, error) {
+	if id, ok := s.GetCachedSystemAccountID(email); ok {
+		return id, nil
+	}
+
+	var foundID int64
+	err := tx.QueryRow(ctx, `SELECT id FROM users WHERE email = $1`, email).Scan(&foundID)
+	if err == pgx.ErrNoRows {
+		err = tx.QueryRow(ctx,
+			`INSERT INTO users (email, password_hash, full_name, role, is_approved)
+			 VALUES ($1, 'SYSTEM_ACCOUNT_LOCKED', $2, 'system', true)
+			 ON CONFLICT (email) DO UPDATE SET role = 'system'
+			 RETURNING id`,
+			email, "حساب نظام - "+email,
+		).Scan(&foundID)
+	}
+	if err != nil {
+		return 0, fmt.Errorf("resolve system account %s: %w", email, err)
+	}
+
+	s.mu.Lock()
+	s.systemAccountID[email] = foundID
+	s.mu.Unlock()
+
+	return foundID, nil
+}
+
 // CalculateEntryHash returns the cryptographic SHA-256 hash for a ledger entry.
 func CalculateEntryHash(prevHash string, txID uuid.UUID, accountID, debit, credit, balanceAfter int64, createdAt time.Time) string {
 	payload := fmt.Sprintf("%s|%s|%d|%d|%d|%d|%s",
@@ -168,15 +205,16 @@ func (s *Service) ExecuteDoubleEntry(ctx context.Context, tx pgx.Tx, req DoubleE
 		var currentBalance float64
 		var creditLimit int64
 		var walletStatus string
+		var role string
 
 		// Strict row-level lock on the account
 		err := tx.QueryRow(ctx,
-			`SELECT COALESCE(wallet_balance, 0), COALESCE(credit_limit, 0), COALESCE(wallet_status, 'active')
+			`SELECT COALESCE(wallet_balance, 0), COALESCE(credit_limit, 0), COALESCE(wallet_status, 'active'), COALESCE(role, 'subscriber')
 			 FROM users
 			 WHERE id = $1
 			 FOR UPDATE`,
 			leg.AccountID,
-		).Scan(&currentBalance, &creditLimit, &walletStatus)
+		).Scan(&currentBalance, &creditLimit, &walletStatus, &role)
 		if err == pgx.ErrNoRows {
 			return nil, fmt.Errorf("%w: user #%d", ErrAccountNotFound, leg.AccountID)
 		}
@@ -186,8 +224,8 @@ func (s *Service) ExecuteDoubleEntry(ctx context.Context, tx pgx.Tx, req DoubleE
 
 		currentBalanceIQD := int64(currentBalance)
 
-		// Debit checks: status and overdraft limit
-		if leg.Debit > 0 {
+		// Debit checks: status and overdraft limit (system clearing accounts are exempt from subscriber limits)
+		if leg.Debit > 0 && role != "system" {
 			if walletStatus == "frozen" {
 				return nil, fmt.Errorf("%w (حساب #%d)", ErrWalletFrozen, leg.AccountID)
 			}
@@ -274,7 +312,7 @@ func (s *Service) RecordTopup(ctx context.Context, tx pgx.Tx, userAccountID int6
 	if amountIQD <= 0 {
 		return nil, ErrInvalidAmount
 	}
-	settlementID, err := s.GetSystemAccountID(ctx, SystemEmailSettlement)
+	settlementID, err := s.GetSystemAccountIDTx(ctx, tx, SystemEmailSettlement)
 	if err != nil {
 		return nil, err
 	}
@@ -298,7 +336,7 @@ func (s *Service) RecordPurchase(ctx context.Context, tx pgx.Tx, userAccountID i
 	if amountIQD <= 0 {
 		return nil, ErrInvalidAmount
 	}
-	systemID, err := s.GetSystemAccountID(ctx, systemEmail)
+	systemID, err := s.GetSystemAccountIDTx(ctx, tx, systemEmail)
 	if err != nil {
 		return nil, err
 	}
@@ -322,7 +360,7 @@ func (s *Service) RecordAdminAdjustment(ctx context.Context, tx pgx.Tx, userAcco
 	if amountIQD == 0 {
 		return nil, ErrInvalidAmount
 	}
-	adjustmentsID, err := s.GetSystemAccountID(ctx, SystemEmailAdjustments)
+	adjustmentsID, err := s.GetSystemAccountIDTx(ctx, tx, SystemEmailAdjustments)
 	if err != nil {
 		return nil, err
 	}

@@ -131,6 +131,16 @@ func MigrateLegacyPlaintextPINs(ctx context.Context, pool *pgxpool.Pool, mgr *Va
 	return report, nil
 }
 
+// VerificationReport details the exact verification status of vouchers_vault.
+type VerificationReport struct {
+	TotalRows              int64 `json:"total_rows"`
+	UnencryptedRows        int64 `json:"unencrypted_rows"`
+	MissingHMACRows        int64 `json:"missing_hmac_rows"`
+	RemainingPlaintextRows int64 `json:"remaining_plaintext_rows"`
+	Is100PercentEncrypted  bool  `json:"is_100_percent_encrypted"`
+	ZeroPlaintextConfirmed bool  `json:"zero_plaintext_confirmed"`
+}
+
 // NullifyPlaintextPINs wipes residual legacy plaintext PINs after migration verification.
 // Run ONLY after MigrateLegacyPlaintextPINs has completed and been verified.
 func NullifyPlaintextPINs(ctx context.Context, pool *pgxpool.Pool) (int64, error) {
@@ -141,10 +151,43 @@ func NullifyPlaintextPINs(ctx context.Context, pool *pgxpool.Pool) (int64, error
 	res, err := pool.Exec(ctx,
 		`UPDATE vouchers_vault
 		 SET pin = ''
-		 WHERE pin_encrypted <> '' AND pin <> '' AND pin NOT LIKE '***%'`,
+		 WHERE pin_encrypted <> '' AND pin_hmac <> '';`,
 	)
 	if err != nil {
 		return 0, fmt.Errorf("nullify plaintext pins: %w", err)
 	}
 	return res.RowsAffected(), nil
+}
+
+// VerifyZeroPlaintext runs the exact verification query proving 100% of rows have pin_encrypted
+// and pin_hmac, and fails if any non-empty plaintext PIN remains.
+func VerifyZeroPlaintext(ctx context.Context, pool *pgxpool.Pool) (*VerificationReport, error) {
+	if pool == nil {
+		return nil, fmt.Errorf("database pool is required")
+	}
+
+	var rep VerificationReport
+	err := pool.QueryRow(ctx,
+		`SELECT 
+			COUNT(*),
+			COUNT(*) FILTER (WHERE pin_encrypted = '' OR pin_encrypted IS NULL),
+			COUNT(*) FILTER (WHERE pin_hmac = '' OR pin_hmac IS NULL),
+			COUNT(*) FILTER (WHERE pin <> '' AND pin IS NOT NULL)
+		 FROM vouchers_vault`,
+	).Scan(&rep.TotalRows, &rep.UnencryptedRows, &rep.MissingHMACRows, &rep.RemainingPlaintextRows)
+	if err != nil {
+		return nil, fmt.Errorf("execute plaintext verification query: %w", err)
+	}
+
+	rep.Is100PercentEncrypted = (rep.UnencryptedRows == 0 && rep.MissingHMACRows == 0)
+	rep.ZeroPlaintextConfirmed = (rep.RemainingPlaintextRows == 0)
+
+	if rep.RemainingPlaintextRows > 0 {
+		return &rep, fmt.Errorf("CRITICAL SECURITY VIOLATION: detected %d rows with un-wiped plaintext PINs in vouchers_vault", rep.RemainingPlaintextRows)
+	}
+	if rep.UnencryptedRows > 0 || rep.MissingHMACRows > 0 {
+		return &rep, fmt.Errorf("INCOMPLETE ENCRYPTION: %d unencrypted rows and %d missing HMAC rows remain in vouchers_vault", rep.UnencryptedRows, rep.MissingHMACRows)
+	}
+
+	return &rep, nil
 }

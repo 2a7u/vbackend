@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -53,7 +54,8 @@ func Default() *VaultManager {
 	return defaultManager
 }
 
-// NewVaultManagerFromEnv initializes the vault manager reading VAULT_ENCRYPTION_KEY and VAULT_HMAC_SECRET.
+// NewVaultManagerFromEnv initializes the vault manager reading VAULT_ENCRYPTION_KEY, VAULT_KEYRING,
+// VAULT_ENCRYPTION_KEY_V<N>, and VAULT_HMAC_SECRET.
 func NewVaultManagerFromEnv() *VaultManager {
 	rawKey := os.Getenv("VAULT_ENCRYPTION_KEY")
 	if strings.TrimSpace(rawKey) == "" {
@@ -74,6 +76,30 @@ func NewVaultManagerFromEnv() *VaultManager {
 		hmacSecret: hmacKey,
 	}
 	vm.keys[1] = key32
+
+	// Parse VAULT_KEYRING format (e.g., "1:secret1,2:secret2,3:secret3")
+	if keyring := strings.TrimSpace(os.Getenv("VAULT_KEYRING")); keyring != "" {
+		pairs := strings.Split(keyring, ",")
+		for _, pair := range pairs {
+			parts := strings.SplitN(strings.TrimSpace(pair), ":", 2)
+			if len(parts) == 2 {
+				if ver, err := strconv.Atoi(strings.TrimSpace(parts[0])); err == nil && ver > 0 {
+					vm.SetKey(ver, strings.TrimSpace(parts[1]))
+				}
+			}
+		}
+	}
+
+	// Parse individual version variables: VAULT_ENCRYPTION_KEY_V1, VAULT_ENCRYPTION_KEY_V2, etc.
+	for _, env := range os.Environ() {
+		parts := strings.SplitN(env, "=", 2)
+		if len(parts) == 2 && strings.HasPrefix(parts[0], "VAULT_ENCRYPTION_KEY_V") {
+			verStr := strings.TrimPrefix(parts[0], "VAULT_ENCRYPTION_KEY_V")
+			if ver, err := strconv.Atoi(verStr); err == nil && ver > 0 {
+				vm.SetKey(ver, parts[1])
+			}
+		}
+	}
 
 	return vm
 }
@@ -168,6 +194,45 @@ func (v *VaultManager) VerifyStartup(ctx context.Context, pool *pgxpool.Pool) er
 		return fmt.Errorf("FATAL: VAULT_HMAC_SECRET has changed! Stored canary %s != Computed %s. Refusing to boot to prevent cryptographic duplicate guard corruption", storedCanary, canaryHash)
 	}
 
+	// Verify that all active key versions in database are present in the keyring
+	if err := v.VerifyKeyring(ctx, pool); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// VerifyKeyring checks that every key_version stored in vouchers_vault exists in the active keyring.
+// Fails fast with a critical startup error if a database row cannot be decrypted due to a missing key.
+func (v *VaultManager) VerifyKeyring(ctx context.Context, pool *pgxpool.Pool) error {
+	if pool == nil {
+		return nil
+	}
+
+	rows, err := pool.Query(ctx,
+		`SELECT DISTINCT key_version FROM vouchers_vault WHERE pin_encrypted <> ''`,
+	)
+	if err != nil {
+		return nil // Table might not exist yet during initial boot
+	}
+	defer rows.Close()
+
+	v.mu.RLock()
+	defer v.mu.RUnlock()
+
+	var missingVersions []int
+	for rows.Next() {
+		var ver int
+		if err := rows.Scan(&ver); err == nil {
+			if _, exists := v.keys[ver]; !exists {
+				missingVersions = append(missingVersions, ver)
+			}
+		}
+	}
+
+	if len(missingVersions) > 0 {
+		return fmt.Errorf("FATAL STARTUP FAILURE: database contains vouchers encrypted with key_version(s) %v, but no corresponding key exists in keyring (VAULT_KEYRING / VAULT_ENCRYPTION_KEY_V<N>)", missingVersions)
+	}
 	return nil
 }
 

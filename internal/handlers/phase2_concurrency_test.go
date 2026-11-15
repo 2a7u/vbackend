@@ -7,7 +7,9 @@ import (
 	"venus_backend/internal/vault"
 )
 
-// MockCardLockSimulator models the atomic row-level lock on a voucher record (SELECT ... FOR UPDATE).
+// [UNIT TEST SIMULATOR - NOT PROOF OF DB CONCURRENCY]
+// MockCardLockSimulator models the atomic row-level lock on a voucher record in-memory.
+// For true PostgreSQL concurrency proof under row locks and transactions, see real_pg_concurrency_test.go.
 type MockCardLockSimulator struct {
 	mu     sync.Mutex
 	IsSold bool

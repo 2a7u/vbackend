@@ -7,37 +7,44 @@ import (
 	"math"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"venus_backend/internal/ledger"
 )
 
 var (
-	ErrCyclicHierarchy = errors.New("hierarchy: cyclical parent-agent assignment detected")
-	ErrSelfParenting   = errors.New("hierarchy: an agent cannot be their own parent")
+	ErrCyclicHierarchy  = errors.New("hierarchy: cyclical parent-agent assignment detected")
+	ErrSelfParenting    = errors.New("hierarchy: an agent cannot be their own parent")
 	ErrMaxDepthExceeded = errors.New("hierarchy: agent hierarchy exceeds maximum permitted depth")
 )
 
 const MaxHierarchyDepth = 25
 
 type AgentCommissionRule struct {
-	ID              int64     `json:"id"`
-	AgentID         int64     `json:"agent_id"`
-	ProductID       string    `json:"product_id"`
-	CommissionType  string    `json:"commission_type"` // "fixed" or "percentage"
-	CommissionValue float64   `json:"commission_value"`
-	CreatedAt       time.Time `json:"created_at"`
+	ID                    int64     `json:"id"`
+	AgentID               int64     `json:"agent_id"`
+	ProductID             string    `json:"product_id"`
+	CommissionType        string    `json:"commission_type"` // "fixed" or "percentage"
+	CommissionBasisPoints int       `json:"commission_basis_points"` // 100 = 1.00%, 250 = 2.50%
+	FixedAmount           int64     `json:"fixed_amount"`           // in IQD
+	CapToMargin           bool      `json:"cap_to_margin"`
+	CreatedAt             time.Time `json:"created_at"`
 }
 
 type CommissionResult struct {
-	ParentAgentID    int64   `json:"parent_agent_id"`
-	CommissionAmount int64   `json:"commission_amount"` // IQD
-	CommissionType   string  `json:"commission_type"`
-	CommissionValue  float64 `json:"commission_value"`
-	ProductID        string  `json:"product_id"`
-	SaleAmount       int64   `json:"sale_amount"`
+	ParentAgentID         int64  `json:"parent_agent_id"`
+	CommissionAmount      int64  `json:"commission_amount"` // IQD
+	CommissionType        string `json:"commission_type"`
+	CommissionBasisPoints int    `json:"commission_basis_points,omitempty"`
+	FixedAmount           int64  `json:"fixed_amount,omitempty"`
+	ProductID             string `json:"product_id"`
+	SaleAmount            int64  `json:"sale_amount"`
+	CostPrice             int64  `json:"cost_price,omitempty"`
+	MarginCapped          bool   `json:"margin_capped"`
 }
 
 type Service struct {
@@ -104,23 +111,47 @@ func (s *Service) CheckCyclePreventsInfiniteLoop(ctx context.Context, childID, p
 	return ErrMaxDepthExceeded
 }
 
-// CalculateCommissionAmount calculates the monetary commission in Iraqi Dinar.
-func CalculateCommissionAmount(commType string, commValue float64, saleAmount int64) int64 {
-	if commValue <= 0 || saleAmount <= 0 {
-		return 0
+// CalculateCommissionAmount calculates the monetary commission in Iraqi Dinar using exact integer arithmetic.
+// Rounding rule: half-up rounding (basis points * saleAmount + 5000) / 10000.
+// If capToMargin is true, the commission is strictly capped at max(0, saleAmount - costPrice).
+func CalculateCommissionAmount(commType string, basisPoints int, fixedAmount int64, saleAmount int64, costPrice int64, capToMargin bool) (int64, bool) {
+	if saleAmount <= 0 {
+		return 0, false
 	}
 
+	var rawCommission int64
 	if commType == "percentage" {
-		amt := (float64(saleAmount) * commValue) / 100.0
-		return int64(math.Round(amt))
+		if basisPoints <= 0 {
+			return 0, false
+		}
+		// Basis points (100 = 1.00%, 10,000 = 100.00%).
+		// Half-up rounding without floats: (saleAmount * basisPoints + 5000) / 10000
+		rawCommission = (saleAmount*int64(basisPoints) + 5000) / 10000
+	} else {
+		// "fixed" amount in IQD
+		if fixedAmount <= 0 {
+			return 0, false
+		}
+		rawCommission = fixedAmount
 	}
 
-	// Default: fixed amount in IQD
-	return int64(math.Round(commValue))
+	if !capToMargin {
+		return rawCommission, false
+	}
+
+	margin := saleAmount - costPrice
+	if margin < 0 {
+		margin = 0
+	}
+
+	if rawCommission > margin {
+		return margin, true // Capped to sale margin
+	}
+	return rawCommission, false
 }
 
 // ProcessSaleCommission checks for a parent agent and records the commission in the same DB transaction.
-func (s *Service) ProcessSaleCommission(ctx context.Context, tx pgx.Tx, subPointID int64, productID string, saleAmount int64, refID string) (*CommissionResult, error) {
+func (s *Service) ProcessSaleCommission(ctx context.Context, tx pgx.Tx, subPointID int64, productID string, saleAmount int64, costPrice int64, refID string) (*CommissionResult, error) {
 	if s.Pool == nil || subPointID <= 0 || saleAmount <= 0 {
 		return nil, nil
 	}
@@ -136,29 +167,42 @@ func (s *Service) ProcessSaleCommission(ctx context.Context, tx pgx.Tx, subPoint
 
 	// 2. Fetch specific or wildcard commission rule for this agent
 	var commType string
-	var commValue float64
+	var basisPoints int
+	var fixedAmount int64
+	var capToMargin bool
+	var legacyValue float64
+
 	err = tx.QueryRow(ctx,
-		`SELECT commission_type, commission_value
+		`SELECT commission_type, commission_basis_points, fixed_amount, cap_to_margin, commission_value
 		 FROM agent_commissions
 		 WHERE agent_id = $1 AND (product_id = $2 OR product_id = '*')
 		 ORDER BY CASE WHEN product_id = '*' THEN 2 ELSE 1 END
 		 LIMIT 1`,
 		*parentAgentID, productID,
-	).Scan(&commType, &commValue)
+	).Scan(&commType, &basisPoints, &fixedAmount, &capToMargin, &legacyValue)
 	if err != nil {
-		// Default fallback if no custom rule: 1% commission
+		// Default fallback if no custom rule: 1% (100 basis points), cap_to_margin = true
 		commType = "percentage"
-		commValue = 1.0
+		basisPoints = 100
+		fixedAmount = 0
+		capToMargin = true
+	} else if basisPoints == 0 && fixedAmount == 0 && legacyValue > 0 {
+		// Legacy migration fallback
+		if commType == "percentage" {
+			basisPoints = int(math.Round(legacyValue * 100))
+		} else {
+			fixedAmount = int64(math.Round(legacyValue))
+		}
 	}
 
-	commAmount := CalculateCommissionAmount(commType, commValue, saleAmount)
+	commAmount, wasCapped := CalculateCommissionAmount(commType, basisPoints, fixedAmount, saleAmount, costPrice, capToMargin)
 	if commAmount <= 0 {
 		return nil, nil
 	}
 
 	// 3. Record commission via Double-Entry Ledger (Debit: Settlement, Credit: Parent Agent)
 	if s.LedgerSvc != nil {
-		settlementID, sErr := s.LedgerSvc.GetSystemAccountID(ctx, ledger.SystemEmailSettlement)
+		settlementID, sErr := s.LedgerSvc.GetSystemAccountIDTx(ctx, tx, ledger.SystemEmailSettlement)
 		if sErr == nil {
 			req := ledger.DoubleEntryRequest{
 				Legs: []ledger.Leg{
@@ -187,38 +231,29 @@ func (s *Service) ProcessSaleCommission(ctx context.Context, tx pgx.Tx, subPoint
 	}
 
 	return &CommissionResult{
-		ParentAgentID:    *parentAgentID,
-		CommissionAmount: commAmount,
-		CommissionType:   commType,
-		CommissionValue:  commValue,
-		ProductID:        productID,
-		SaleAmount:       saleAmount,
+		ParentAgentID:         *parentAgentID,
+		CommissionAmount:      commAmount,
+		CommissionType:        commType,
+		CommissionBasisPoints: basisPoints,
+		FixedAmount:           fixedAmount,
+		ProductID:             productID,
+		SaleAmount:            saleAmount,
+		CostPrice:             costPrice,
+		MarginCapped:          wasCapped,
 	}, nil
 }
 
 // ReverseCommission reverses a previously awarded commission on order refund in the same transaction.
-// It is strictly idempotent: attempting to reverse the same refID twice is a safe no-op.
+// It is strictly idempotent: DB-level unique index `idx_ledger_entries_unique_reversal`
+// guarantees that multiple concurrent reversal requests cannot double-debit the parent agent.
 func (s *Service) ReverseCommission(ctx context.Context, tx pgx.Tx, parentAgentID int64, commissionAmount int64, refID string) error {
 	if parentAgentID <= 0 || commissionAmount <= 0 {
 		return nil
 	}
 
-	// Idempotency check: verify if this reversal was already recorded in ledger_entries
-	if tx != nil {
-		var alreadyReversed bool
-		err := tx.QueryRow(ctx,
-			`SELECT EXISTS(
-				SELECT 1 FROM ledger_entries
-				WHERE ref_type = 'agent_commission_reversal' AND ref_id = $1
-			)`, refID).Scan(&alreadyReversed)
-		if err == nil && alreadyReversed {
-			return nil // Idempotent: already reversed, do not debit twice
-		}
-	}
-
 	// 1. Reverse Double-Entry Ledger legs (Debit: Parent Agent, Credit: Settlement)
 	if s.LedgerSvc != nil {
-		settlementID, sErr := s.LedgerSvc.GetSystemAccountID(ctx, ledger.SystemEmailSettlement)
+		settlementID, sErr := s.LedgerSvc.GetSystemAccountIDTx(ctx, tx, ledger.SystemEmailSettlement)
 		if sErr == nil {
 			req := ledger.DoubleEntryRequest{
 				Legs: []ledger.Leg{
@@ -230,6 +265,14 @@ func (s *Service) ReverseCommission(ctx context.Context, tx pgx.Tx, parentAgentI
 			}
 			_, lErr := s.LedgerSvc.ExecuteDoubleEntry(ctx, tx, req)
 			if lErr != nil {
+				// DB-enforced idempotency guarantee: unique violation on idx_ledger_entries_unique_reversal is a safe no-op success
+				var pgErr *pgconn.PgError
+				if errors.As(lErr, &pgErr) && (pgErr.Code == "23505" || strings.Contains(pgErr.ConstraintName, "unique_reversal")) {
+					return nil
+				}
+				if strings.Contains(lErr.Error(), "idx_ledger_entries_unique_reversal") || strings.Contains(lErr.Error(), "duplicate key") {
+					return nil
+				}
 				return fmt.Errorf("record commission reversal ledger legs: %w", lErr)
 			}
 			return nil

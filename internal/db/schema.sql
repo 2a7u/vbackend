@@ -459,6 +459,14 @@ EXCEPTION
     WHEN OTHERS THEN NULL;
 END $$;
 
+DO $$
+BEGIN
+    ALTER TABLE users DROP CONSTRAINT IF EXISTS users_wallet_balance_check;
+    ALTER TABLE users ADD CONSTRAINT users_wallet_balance_check CHECK (role = 'system' OR wallet_balance >= -credit_limit);
+EXCEPTION
+    WHEN OTHERS THEN NULL;
+END $$;
+
 -- System accounts for balanced double-entry accounting
 INSERT INTO users (email, password_hash, full_name, role, is_approved)
 VALUES
@@ -491,6 +499,8 @@ CREATE INDEX IF NOT EXISTS idx_ledger_account_created ON ledger_entries (account
 CREATE INDEX IF NOT EXISTS idx_ledger_tx_id ON ledger_entries (tx_id);
 CREATE INDEX IF NOT EXISTS idx_ledger_ref ON ledger_entries (ref_type, ref_id);
 CREATE INDEX IF NOT EXISTS idx_ledger_idempotency ON ledger_entries (idempotency_key) WHERE idempotency_key IS NOT NULL;
+-- DB-enforced reversal idempotency: guarantees a commission is reversed at most once per account/sale
+CREATE UNIQUE INDEX IF NOT EXISTS idx_ledger_entries_unique_reversal ON ledger_entries (ref_type, ref_id, account_id) WHERE ref_type = 'agent_commission_reversal';
 
 -- DB-level immutability trigger for ledger_entries
 CREATE OR REPLACE FUNCTION prevent_ledger_modification()
@@ -643,10 +653,20 @@ ALTER TABLE vouchers_vault ADD COLUMN IF NOT EXISTS key_version INT NOT NULL DEF
 ALTER TABLE vouchers_vault ADD COLUMN IF NOT EXISTS pin_hmac TEXT NOT NULL DEFAULT '';
 ALTER TABLE vouchers_vault ADD COLUMN IF NOT EXISTS net_profit BIGINT NOT NULL DEFAULT 0;
 
--- Idempotent historical backfill for net_profit on existing sold vouchers
+-- Drop NOT NULL on legacy plaintext pin column to enforce zero plaintext storage
+ALTER TABLE vouchers_vault ALTER COLUMN pin DROP NOT NULL;
+ALTER TABLE vouchers_vault ALTER COLUMN pin SET DEFAULT '';
+
+-- Total duplicate guard: ensure all rows have non-empty pin_hmac, then apply full UNIQUE index
+UPDATE vouchers_vault SET pin_hmac = 'LEGACY_MIGRATED_' || id WHERE pin_hmac = '' OR pin_hmac IS NULL;
+ALTER TABLE vouchers_vault ALTER COLUMN pin_hmac SET NOT NULL;
+DROP INDEX IF EXISTS idx_vouchers_vault_pin_hmac;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_vouchers_vault_pin_hmac_total ON vouchers_vault (pin_hmac);
+
+-- Idempotent historical backfill for net_profit on all sold vouchers (allowing negative profits on below-cost sales)
 UPDATE vouchers_vault 
-SET net_profit = GREATEST(0, (selling_price - cost_price)::BIGINT) 
-WHERE is_sold = TRUE AND net_profit = 0 AND selling_price > cost_price;
+SET net_profit = (selling_price - cost_price)::BIGINT 
+WHERE is_sold = TRUE;
 
 -- System settings table for cryptographic canaries and configuration
 CREATE TABLE IF NOT EXISTS system_settings (
@@ -664,8 +684,6 @@ CREATE TABLE IF NOT EXISTS legacy_migration_duplicates (
     reason             TEXT NOT NULL,
     detected_at        TIMESTAMPTZ NOT NULL DEFAULT now()
 );
-
-CREATE UNIQUE INDEX IF NOT EXISTS idx_vouchers_vault_pin_hmac ON vouchers_vault (pin_hmac) WHERE pin_hmac <> '';
 
 -- 2.2 Multi-Tier Pricing & Custom Subscriber Overrides
 CREATE TABLE IF NOT EXISTS price_tiers (
@@ -713,14 +731,30 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS price_tier_id BIGINT REFERENCES price
 CREATE INDEX IF NOT EXISTS idx_users_parent_agent ON users (parent_agent_id);
 
 CREATE TABLE IF NOT EXISTS agent_commissions (
-    id               BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    agent_id         BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    product_id       TEXT NOT NULL DEFAULT '*',
-    commission_type  TEXT NOT NULL DEFAULT 'fixed' CHECK (commission_type IN ('fixed', 'percentage')),
-    commission_value NUMERIC(10,2) NOT NULL DEFAULT 0 CHECK (commission_value >= 0),
-    created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
+    id                      BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    agent_id                BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    product_id              TEXT NOT NULL DEFAULT '*',
+    commission_type         TEXT NOT NULL DEFAULT 'fixed' CHECK (commission_type IN ('fixed', 'percentage')),
+    commission_value        NUMERIC(10,2) NOT NULL DEFAULT 0 CHECK (commission_value >= 0),
+    commission_basis_points INT NOT NULL DEFAULT 0 CHECK (commission_basis_points >= 0),
+    fixed_amount            BIGINT NOT NULL DEFAULT 0 CHECK (fixed_amount >= 0),
+    cap_to_margin           BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at              TIMESTAMPTZ NOT NULL DEFAULT now(),
     UNIQUE(agent_id, product_id)
 );
+ALTER TABLE agent_commissions ADD COLUMN IF NOT EXISTS commission_basis_points INT NOT NULL DEFAULT 0;
+ALTER TABLE agent_commissions ADD COLUMN IF NOT EXISTS fixed_amount BIGINT NOT NULL DEFAULT 0;
+ALTER TABLE agent_commissions ADD COLUMN IF NOT EXISTS cap_to_margin BOOLEAN NOT NULL DEFAULT TRUE;
+
+-- Safe migration from legacy commission_value to exact integer basis points and fixed amount in IQD
+UPDATE agent_commissions
+SET commission_basis_points = ROUND(commission_value * 100)::INT
+WHERE commission_type = 'percentage' AND commission_basis_points = 0 AND commission_value > 0;
+
+UPDATE agent_commissions
+SET fixed_amount = ROUND(commission_value)::BIGINT
+WHERE commission_type = 'fixed' AND fixed_amount = 0 AND commission_value > 0;
+
 CREATE INDEX IF NOT EXISTS idx_agent_commissions_lookup ON agent_commissions (agent_id, product_id);
 
 -- 2.4 Inventory Radar & Thresholds

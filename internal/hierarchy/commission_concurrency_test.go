@@ -8,7 +8,9 @@ import (
 	"venus_backend/internal/ledger"
 )
 
-// MockWalletSimulator simulates atomic row-level locked wallets for concurrency tests.
+// [UNIT TEST SIMULATOR - NOT PROOF OF DB CONCURRENCY]
+// MockWalletSimulator simulates atomic row-level locked wallets for in-memory accounting validation.
+// For true PostgreSQL concurrency proof under row locks and double-entry triggers, see real_pg_concurrency_test.go.
 type MockWalletSimulator struct {
 	mu      sync.Mutex
 	Balance int64
@@ -36,10 +38,8 @@ func (w *MockWalletSimulator) GetBalance() int64 {
 	return w.Balance
 }
 
-// TestConcurrentSalesCommissionPostingUnder100ParallelRequests simulates 100 concurrent
-// card sales by a child POS point, verifying that parent agent commissions are calculated,
-// double-entry ledger legs are balanced, and wallet balances are strictly preserved without
-// race conditions or lost updates.
+// TestConcurrentSalesCommissionPostingUnder100ParallelRequests is an in-memory unit test simulator
+// verifying double-entry arithmetic invariants and accounting balance.
 func TestConcurrentSalesCommissionPostingUnder100ParallelRequests(t *testing.T) {
 	posWallet := &MockWalletSimulator{Balance: 1_000_000} // 1M IQD initial POS balance
 	agentWallet := &MockWalletSimulator{Balance: 0}       // 0 IQD initial agent balance
@@ -49,7 +49,7 @@ func TestConcurrentSalesCommissionPostingUnder100ParallelRequests(t *testing.T) 
 	const totalSales = 100
 	const salePrice = int64(5000) // 5,000 IQD per card
 	const costPrice = int64(4700) // 4,700 IQD cost
-	const commPercent = 5.0       // 5% = 250 IQD commission
+	const basisPoints = 500       // 500 basis points = 5.00% = 250 IQD commission
 
 	var wg sync.WaitGroup
 	var completedSales atomic.Int64
@@ -63,7 +63,7 @@ func TestConcurrentSalesCommissionPostingUnder100ParallelRequests(t *testing.T) 
 			defer wg.Done()
 
 			// 1. Calculate commission
-			commAmt := hierarchy.CalculateCommissionAmount("percentage", commPercent, salePrice)
+			commAmt, _ := hierarchy.CalculateCommissionAmount("percentage", basisPoints, 0, salePrice, costPrice, true)
 			if commAmt != 250 {
 				t.Errorf("expected 250 IQD commission, got %d", commAmt)
 				return
@@ -137,7 +137,7 @@ func TestConcurrentSalesCommissionPostingUnder100ParallelRequests(t *testing.T) 
 	// Agent commission reversed: 10 * 250 = 2,500 IQD
 	const refundCount = 10
 	for i := 0; i < refundCount; i++ {
-		commAmt := hierarchy.CalculateCommissionAmount("percentage", commPercent, salePrice)
+		commAmt, _ := hierarchy.CalculateCommissionAmount("percentage", basisPoints, 0, salePrice, costPrice, true)
 		if err := agentWallet.Debit(commAmt); err != nil {
 			t.Fatalf("reversal agent debit failed: %v", err)
 		}

@@ -5,8 +5,8 @@ import (
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
+	"math"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -506,11 +506,21 @@ func (h *FintechHandler) ExportReconciliationReportCSV(c *fiber.Ctx) error {
 	}
 	rep.ReportDate = rDate.Format("2006-01-02")
 
-	if format == "excel" || format == "xls" {
-		excelData := reconcile.GenerateExcelHTML(&rep)
-		c.Set("Content-Type", "application/vnd.ms-excel; charset=utf-8")
-		c.Set("Content-Disposition", fmt.Sprintf("attachment; filename=reconciliation_%s.xls", rep.ReportDate))
+	if format == "xlsx" || format == "excel" {
+		excelData, err := reconcile.GenerateExcelXLSX(&rep)
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to generate excel file: " + err.Error()})
+		}
+		c.Set("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+		c.Set("Content-Disposition", fmt.Sprintf("attachment; filename=reconciliation_%s.xlsx", rep.ReportDate))
 		return c.Send(excelData)
+	}
+
+	if format == "pdf" {
+		pdfData := reconcile.GeneratePDF(&rep)
+		c.Set("Content-Type", "application/pdf")
+		c.Set("Content-Disposition", fmt.Sprintf("attachment; filename=reconciliation_%s.pdf", rep.ReportDate))
+		return c.Send(pdfData)
 	}
 
 	csvData := reconcile.GenerateCSV(&rep)
@@ -663,23 +673,28 @@ func (h *FintechHandler) GetAccountStatement(c *fiber.Ctx) error {
 	}
 
 	format := c.Query("format")
-	if format == "csv" || format == "excel" {
-		if format == "excel" {
-			c.Set("Content-Type", "application/vnd.ms-excel; charset=utf-8")
-			c.Set("Content-Disposition", fmt.Sprintf(`attachment; filename="statement_user_%d.xls"`, user.ID))
-			var sb strings.Builder
-			sb.WriteString(`<!DOCTYPE html><html><head><meta charset="utf-8"></head><body>`)
-			sb.WriteString(fmt.Sprintf(`<h3>كشف حساب المشترك: %s (%s)</h3>`, user.StoreName, user.Email))
-			sb.WriteString(fmt.Sprintf(`<p>الرصيد النهائي: %d د.ع | سقف الائتمان: %d د.ع</p>`, int64(user.Balance), user.CreditLimit))
-			sb.WriteString(`<table border="1"><tr><th>رقم الحركة</th><th>التاريخ</th><th>النوع</th><th>مدين</th><th>دائن</th><th>الرصيد بعد الحركة</th><th>الهاش</th></tr>`)
-			for _, e := range entries {
-				sb.WriteString(fmt.Sprintf(`<tr><td>%s</td><td>%s</td><td>%s</td><td>%v</td><td>%v</td><td>%v</td><td>%s</td></tr>`,
-					e["tx_id"], e["created_at"].(time.Time).Format("2006-01-02 15:04:05"), e["ref_type"], e["debit"], e["credit"], e["balance_after"], e["hash"]))
-			}
-			sb.WriteString(`</table></body></html>`)
-			return c.SendString(sb.String())
+	if format == "xlsx" || format == "excel" {
+		entriesMap := make([]map[string]any, len(entries))
+		for i, e := range entries {
+			entriesMap[i] = map[string]any(e)
 		}
+		xlsxData, err := reconcile.GenerateStatementExcelXLSX(user.Email, user.StoreName, int64(user.Balance), user.CreditLimit, entriesMap)
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to generate statement xlsx: " + err.Error()})
+		}
+		c.Set("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+		c.Set("Content-Disposition", fmt.Sprintf(`attachment; filename="statement_user_%d.xlsx"`, user.ID))
+		return c.Send(xlsxData)
+	}
 
+	if format == "pdf" {
+		pdfData := reconcile.GenerateStatementPDF(user.Email, user.StoreName, int64(user.Balance), user.CreditLimit, len(entries))
+		c.Set("Content-Type", "application/pdf")
+		c.Set("Content-Disposition", fmt.Sprintf(`attachment; filename="statement_user_%d.pdf"`, user.ID))
+		return c.Send(pdfData)
+	}
+
+	if format == "csv" {
 		// CSV with UTF-8 BOM
 		c.Set("Content-Type", "text/csv; charset=utf-8")
 		c.Set("Content-Disposition", fmt.Sprintf(`attachment; filename="statement_user_%d.csv"`, user.ID))
@@ -952,9 +967,12 @@ func (h *FintechHandler) SetAgentCommission(c *fiber.Ctx) error {
 	}
 
 	var req struct {
-		ProductID       string  `json:"product_id"`
-		CommissionType  string  `json:"commission_type"`
-		CommissionValue float64 `json:"commission_value"`
+		ProductID             string   `json:"product_id"`
+		CommissionType        string   `json:"commission_type"`
+		CommissionBasisPoints int      `json:"commission_basis_points"`
+		FixedAmount           int64    `json:"fixed_amount"`
+		CapToMargin           *bool    `json:"cap_to_margin"`
+		CommissionValue       float64  `json:"commission_value"`
 	}
 	if err := c.BodyParser(&req); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid request body"})
@@ -966,22 +984,54 @@ func (h *FintechHandler) SetAgentCommission(c *fiber.Ctx) error {
 		req.CommissionType = "percentage"
 	}
 
+	capToMargin := true
+	if req.CapToMargin != nil {
+		capToMargin = *req.CapToMargin
+	}
+
+	basisPoints := req.CommissionBasisPoints
+	fixedAmt := req.FixedAmount
+	cVal := req.CommissionValue
+
+	if req.CommissionType == "percentage" {
+		if basisPoints <= 0 && cVal > 0 {
+			basisPoints = int(math.Round(cVal * 100))
+		}
+		if cVal <= 0 && basisPoints > 0 {
+			cVal = float64(basisPoints) / 100.0
+		}
+	} else {
+		if fixedAmt <= 0 && cVal > 0 {
+			fixedAmt = int64(math.Round(cVal))
+		}
+		if cVal <= 0 && fixedAmt > 0 {
+			cVal = float64(fixedAmt)
+		}
+	}
+
 	_, err = h.Pool.Exec(c.Context(),
-		`INSERT INTO agent_commissions (agent_id, product_id, commission_type, commission_value)
-		 VALUES ($1, $2, $3, $4)
+		`INSERT INTO agent_commissions (agent_id, product_id, commission_type, commission_value, commission_basis_points, fixed_amount, cap_to_margin)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7)
 		 ON CONFLICT (agent_id, product_id)
-		 DO UPDATE SET commission_type = EXCLUDED.commission_type, commission_value = EXCLUDED.commission_value`,
-		agentID, req.ProductID, req.CommissionType, req.CommissionValue,
+		 DO UPDATE SET commission_type = EXCLUDED.commission_type,
+		               commission_value = EXCLUDED.commission_value,
+		               commission_basis_points = EXCLUDED.commission_basis_points,
+		               fixed_amount = EXCLUDED.fixed_amount,
+		               cap_to_margin = EXCLUDED.cap_to_margin`,
+		agentID, req.ProductID, req.CommissionType, cVal, basisPoints, fixedAmt, capToMargin,
 	)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 	}
 
 	h.audit(c, "SET_AGENT_COMMISSION", "agent_commissions", fmt.Sprintf("%d:%s", agentID, req.ProductID), map[string]any{
-		"agent_id":         agentID,
-		"product_id":       req.ProductID,
-		"commission_type":  req.CommissionType,
-		"commission_value": req.CommissionValue,
+		"agent_id":                agentID,
+		"product_id":              req.ProductID,
+		"commission_type":         req.CommissionType,
+		"commission_basis_points": basisPoints,
+		"fixed_amount":            fixedAmt,
+		"cap_to_margin":           capToMargin,
+		"commission_value":        cVal,
 	})
 
 	return c.JSON(fiber.Map{"success": true})
@@ -992,7 +1042,7 @@ func (h *FintechHandler) SetAgentCommission(c *fiber.Ctx) error {
 func (h *FintechHandler) ListAgentCommissions(c *fiber.Ctx) error {
 	rows, err := h.Pool.Query(c.Context(),
 		`SELECT ac.id, ac.agent_id, u.email, COALESCE(u.store_name, u.full_name, ''),
-		        ac.product_id, ac.commission_type, ac.commission_value, ac.created_at
+		        ac.product_id, ac.commission_type, ac.commission_basis_points, ac.fixed_amount, ac.cap_to_margin, ac.commission_value, ac.created_at
 		 FROM agent_commissions ac
 		 JOIN users u ON u.id = ac.agent_id
 		 ORDER BY ac.id DESC`,
@@ -1006,18 +1056,24 @@ func (h *FintechHandler) ListAgentCommissions(c *fiber.Ctx) error {
 	for rows.Next() {
 		var id, aid int64
 		var email, name, pid, cType string
+		var basisPts int
+		var fixedAmt int64
+		var capMargin bool
 		var cVal float64
 		var cAt time.Time
-		if err := rows.Scan(&id, &aid, &email, &name, &pid, &cType, &cVal, &cAt); err == nil {
+		if err := rows.Scan(&id, &aid, &email, &name, &pid, &cType, &basisPts, &fixedAmt, &capMargin, &cVal, &cAt); err == nil {
 			list = append(list, fiber.Map{
-				"id":               id,
-				"agent_id":         aid,
-				"agent_email":      email,
-				"agent_name":       name,
-				"product_id":       pid,
-				"commission_type":  cType,
-				"commission_value": cVal,
-				"created_at":       cAt,
+				"id":                      id,
+				"agent_id":                aid,
+				"agent_email":             email,
+				"agent_name":              name,
+				"product_id":              pid,
+				"commission_type":         cType,
+				"commission_basis_points": basisPts,
+				"fixed_amount":            fixedAmt,
+				"cap_to_margin":           capMargin,
+				"commission_value":        cVal,
+				"created_at":              cAt,
 			})
 		}
 	}

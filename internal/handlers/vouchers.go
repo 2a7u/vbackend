@@ -104,7 +104,7 @@ func (h *VouchersHandler) UploadVouchers(c *fiber.Ctx) error {
 			continue
 		}
 
-		// 2. Encrypt PIN using AES-256-GCM
+		// 2. Encrypt PIN using AES-256-GCM (plaintext pin is NEVER stored in database)
 		encHex, nonceHex, keyVer, encErr := vm.EncryptPIN(pin)
 		if encErr != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
@@ -113,16 +113,10 @@ func (h *VouchersHandler) UploadVouchers(c *fiber.Ctx) error {
 			})
 		}
 
-		// Masked PIN for safe display (never store plaintext)
-		maskedPIN := pin
-		if len(pin) > 4 {
-			maskedPIN = strings.Repeat("*", len(pin)-4) + pin[len(pin)-4:]
-		}
-
 		_, err := tx.Exec(c.Context(),
 			`INSERT INTO vouchers_vault (user_id, brand_id, voucher_id, pin, pin_encrypted, nonce, key_version, pin_hmac, serial_number, cost_price, selling_price, is_sold)
-			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, FALSE)`,
-			uid, req.BrandID, req.VoucherID, maskedPIN, encHex, nonceHex, keyVer, hmacHash, serial, req.CostPrice, req.SellingPrice,
+			 VALUES ($1, $2, $3, '', $4, $5, $6, $7, $8, $9, $10, FALSE)`,
+			uid, req.BrandID, req.VoucherID, encHex, nonceHex, keyVer, hmacHash, serial, req.CostPrice, req.SellingPrice,
 		)
 		if err != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
@@ -446,9 +440,13 @@ func (h *VouchersHandler) DispenseVoucher(c *fiber.Ctx) error {
 		)
 	}
 
-	// 3. Process agent hierarchy commission in the SAME transaction
+	// 3. Process agent hierarchy commission in the SAME transaction (capped to platform margin)
 	if h.HierarchySvc != nil && uid > 0 && totalPrice > 0 {
-		_, _ = h.HierarchySvc.ProcessSaleCommission(c.Context(), tx, uid, req.VoucherID, totalPrice, fmt.Sprintf("%d", ids[0]))
+		var totalCost int64
+		for _, cp := range claimed {
+			totalCost += int64(cp.Cost)
+		}
+		_, _ = h.HierarchySvc.ProcessSaleCommission(c.Context(), tx, uid, req.VoucherID, totalPrice, totalCost, fmt.Sprintf("%d", ids[0]))
 	}
 
 	// 4. Update rows to sold, saving actual sell_price and computed net_profit

@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v2"
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -34,16 +33,24 @@ func Idempotency(pool *pgxpool.Pool) fiber.Handler {
 		ctx := c.Context()
 
 		var storedStatus string
+		var storedHash string
 		var respStatus int
 		var respBody string
 		err := pool.QueryRow(ctx,
-			`SELECT status, response_status, response_body
+			`SELECT status, request_hash, response_status, response_body
 			 FROM idempotency_keys
 			 WHERE key = $1`,
 			key,
-		).Scan(&storedStatus, &respStatus, &respBody)
+		).Scan(&storedStatus, &storedHash, &respStatus, &respBody)
 
 		if err == nil {
+			// Payload mismatch check: if same key is sent with different body, reject with 422
+			if storedHash != "" && storedHash != hashStr {
+				return c.Status(fiber.StatusUnprocessableEntity).JSON(fiber.Map{
+					"error": "Idempotency key was previously used with a different request payload",
+					"code":  "IDEMPOTENCY_PAYLOAD_MISMATCH",
+				})
+			}
 			if storedStatus == "completed" {
 				c.Set("X-Idempotent-Replay", "true")
 				c.Set("Content-Type", "application/json; charset=utf-8")
@@ -51,23 +58,24 @@ func Idempotency(pool *pgxpool.Pool) fiber.Handler {
 			}
 			if storedStatus == "in_flight" {
 				return c.Status(fiber.StatusConflict).JSON(fiber.Map{
-					"error":   "الطلب قيد المعالجة حالياً من قِبل خادم العمليات المالية، يرجى الانتظار",
+					"error":     "الطلب قيد المعالجة حالياً من قِبل خادم العمليات المالية، يرجى الانتظار",
 					"in_flight": true,
 				})
 			}
 		}
 
 		// Insert in-flight marker
-		_, err = pool.Exec(ctx,
+		cmdTag, err := pool.Exec(ctx,
 			`INSERT INTO idempotency_keys (key, user_id, request_path, request_hash, status, created_at)
 			 VALUES ($1, NULLIF($2, 0), $3, $4, 'in_flight', now())
 			 ON CONFLICT (key) DO NOTHING`,
 			key, uid, path, hashStr,
 		)
-		if err != nil && err != pgx.ErrNoRows {
-			// In case another worker won the race
+		if err != nil || cmdTag.RowsAffected() == 0 {
+			// Another concurrent worker won the race to insert the key
 			return c.Status(fiber.StatusConflict).JSON(fiber.Map{
-				"error": "الطلب قيد المعالجة بالتوازي",
+				"error":     "الطلب قيد المعالجة بالتوازي",
+				"in_flight": true,
 			})
 		}
 

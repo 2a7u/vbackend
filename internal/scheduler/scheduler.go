@@ -146,3 +146,32 @@ func (s *Scheduler) tick(ctx context.Context) {
 		}()
 	}
 }
+
+// Advisory lock keys for multi-node cron coordination
+const (
+	AdvisoryLockIntegrityCheck = 900101
+	AdvisoryLockDailyReconcile = 900102
+	AdvisoryLockDailyClose     = 900103
+	AdvisoryLockMonthlyClose   = 900104
+)
+
+// TryAcquireAdvisoryLock attempts to acquire a PostgreSQL session advisory lock.
+// Returns true if the lock was successfully acquired, or false if another node is holding it.
+func TryAcquireAdvisoryLock(ctx context.Context, pool *pgxpool.Pool, lockKey int64) (bool, error) {
+	if pool == nil {
+		return true, nil
+	}
+	var acquired bool
+	err := pool.QueryRow(ctx, `SELECT pg_try_advisory_lock($1)`, lockKey).Scan(&acquired)
+	return acquired, err
+}
+
+// ReleaseAdvisoryLock releases a PostgreSQL session advisory lock.
+func ReleaseAdvisoryLock(ctx context.Context, pool *pgxpool.Pool, lockKey int64) error {
+	if pool == nil {
+		return nil
+	}
+	var released bool
+	return pool.QueryRow(ctx, `SELECT pg_advisory_unlock($1)`, lockKey).Scan(&released)
+}
+

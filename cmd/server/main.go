@@ -90,11 +90,6 @@ func main() {
 
 	fintechH := handlers.NewFintechHandler(pool, hub, ledgerSvc, fraudEngine, reconcileSvc, vaultMgr, pricingSvc, hierarchySvc, radarSvc)
 
-	// Idempotent Opening-Ledger migration from existing balances
-	if err := ledgerSvc.SeedOpeningBalancesFromLegacy(ctx); err != nil {
-		log.Printf("opening ledger migration notice: %v", err)
-	}
-
 	// Financial cron scheduler: daily integrity check, daily reconciliation, daily/monthly close
 	cronSched := scheduler.NewScheduler(pool, hub, ledgerSvc, reconcileSvc)
 	cronSched.Start(ctx)
