@@ -1,0 +1,65 @@
+name: Venus Fintech Enterprise CI
+
+on:
+  push:
+    branches:
+      - main
+      - feat/**
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  test:
+    name: Build, Vet & Real-PG Concurrency Test Suite (-race)
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: venus_test_db
+          POSTGRES_USER: venus_test
+          POSTGRES_PASSWORD: venus_test_pwd
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      CI: "true"
+      REQUIRE_PG: "1"
+      CGO_ENABLED: "1"
+      TEST_DATABASE_URL: "postgres://venus_test:venus_test_pwd@127.0.0.1:5432/venus_test_db?sslmode=disable"
+      DATABASE_URL: "postgres://venus_test:venus_test_pwd@127.0.0.1:5432/venus_test_db?sslmode=disable"
+      VAULT_ENCRYPTION_KEY: "VENUS_VAULT_AES256_ROOT_KEY_2026_PRODUCTION"
+      VAULT_HMAC_SECRET: "VENUS_VAULT_HMAC_SECRET_2026_PRODUCTION"
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: 'stable'
+          cache: true
+
+      - name: Check PostgreSQL Server Version
+        run: |
+          PGPASSWORD=venus_test_pwd psql -h 127.0.0.1 -U venus_test -d venus_test_db -c "SHOW server_version;"
+
+      - name: Compile all packages (go build)
+        run: |
+          go build ./...
+
+      - name: Static code analysis (go vet)
+        run: |
+          go vet ./...
+
+      - name: Run test suite with race detector on PostgreSQL 16
+        run: |
+          go test -race -count=1 -v ./...

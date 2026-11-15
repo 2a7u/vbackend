@@ -107,12 +107,12 @@ func (s *Service) RunDailyReconciliation(ctx context.Context, targetDate time.Ti
 	).Scan(&manualTopups)
 	manualTopupsIQD := int64(manualTopups)
 
-	// 4. Cards sold
+	// 4. Cards sold (excludes quarantined cards)
 	var cardsSold float64
 	_ = s.Pool.QueryRow(ctx,
 		`SELECT COALESCE(SUM(sold_price), 0)
 		 FROM vouchers_vault
-		 WHERE is_sold = true AND sold_at >= $1 AND sold_at < $2`,
+		 WHERE is_sold = true AND status <> 'quarantined' AND sold_at >= $1 AND sold_at < $2`,
 		startOfDay, endOfDay,
 	).Scan(&cardsSold)
 	cardsSoldIQD := int64(cardsSold)

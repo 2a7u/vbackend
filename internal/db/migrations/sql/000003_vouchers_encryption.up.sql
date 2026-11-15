@@ -1,4 +1,5 @@
 -- 000003_vouchers_encryption.up.sql: Vouchers encryption vault columns & duplicate reporting table
+ALTER TABLE vouchers_vault ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'available';
 ALTER TABLE vouchers_vault ADD COLUMN IF NOT EXISTS pin_encrypted TEXT NOT NULL DEFAULT '';
 ALTER TABLE vouchers_vault ADD COLUMN IF NOT EXISTS nonce TEXT NOT NULL DEFAULT '';
 ALTER TABLE vouchers_vault ADD COLUMN IF NOT EXISTS key_version INT NOT NULL DEFAULT 1;

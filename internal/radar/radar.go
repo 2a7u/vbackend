@@ -103,11 +103,11 @@ func (s *Service) GetRadarSummary(ctx context.Context) (*RadarSummary, error) {
 		return summary, nil
 	}
 
-	// 1. Fetch available stock grouped by brand/category
+	// 1. Fetch available stock grouped by brand/category (excludes quarantined cards)
 	stockRows, err := s.Pool.Query(ctx,
 		`SELECT brand_id, COUNT(*) 
 		 FROM vouchers_vault 
-		 WHERE is_sold = FALSE 
+		 WHERE is_sold = FALSE AND status <> 'quarantined'
 		 GROUP BY brand_id`,
 	)
 	if err != nil {

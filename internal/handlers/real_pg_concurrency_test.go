@@ -945,3 +945,174 @@ func TestCIPeriodicPlaintextZeroCheck(t *testing.T) {
 		t.Fatalf("CRITICAL SECURITY VIOLATION: Database contains %d rows with plaintext PINs in vouchers_vault!", rep.RemainingPlaintextRows)
 	}
 }
+
+// TestRealPG_DryRunAndLiveRunDuplicateCountsMatchOnSameDataset tests that MigrateLegacyPlaintextPINs
+// in --dry-run mode reports the exact same number of duplicates as the live execution.
+func TestRealPG_DryRunAndLiveRunDuplicateCountsMatchOnSameDataset(t *testing.T) {
+	pool, cleanup := testhelper.GetTestPool(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	mgr := vault.Default()
+
+	// Pre-migration state: drop total unique index, use partial index during migration
+	_, _ = pool.Exec(ctx, `DROP INDEX IF EXISTS idx_vouchers_vault_pin_hmac_total;
+		CREATE INDEX IF NOT EXISTS idx_vouchers_vault_pin_hmac_partial ON vouchers_vault (pin_hmac) WHERE pin_hmac <> '';`)
+	defer func() {
+		_, _ = pool.Exec(ctx, `DROP INDEX IF EXISTS idx_vouchers_vault_pin_hmac_partial;
+			CREATE UNIQUE INDEX IF NOT EXISTS idx_vouchers_vault_pin_hmac_total ON vouchers_vault (pin_hmac);`)
+	}()
+
+	// Seed test vouchers with 10 rows: 7 unique, 3 duplicates
+	uniqueTag := fmt.Sprintf("dry_test_%d", time.Now().UnixNano())
+	testPINs := []string{
+		"111122223333",
+		"444455556666",
+		"777788889999",
+		"111122223333", // duplicate 1
+		"123456789012",
+		"444455556666", // duplicate 2
+		"987654321098",
+		"555566667777",
+		"111122223333", // duplicate 3
+		"999900001111",
+	}
+
+	for i, pin := range testPINs {
+		_, err := pool.Exec(ctx,
+			`INSERT INTO vouchers_vault (brand_id, voucher_id, pin, serial_number, cost_price, selling_price, is_sold, status)
+			 VALUES ('asiacell', $1, $2, $3, 4500, 5000, FALSE, 'available')`,
+			uniqueTag, pin, fmt.Sprintf("SN-%s-%d", uniqueTag, i),
+		)
+		if err != nil {
+			t.Fatalf("seed voucher %d: %v", i, err)
+		}
+	}
+
+	// 1. Dry run
+	dryReport, err := vault.MigrateLegacyPlaintextPINs(ctx, pool, mgr, true)
+	if err != nil {
+		t.Fatalf("dry-run migration error: %v", err)
+	}
+
+	// Verify dry run wrote nothing to DB
+	var dbEncryptedAfterDry int
+	_ = pool.QueryRow(ctx, "SELECT COUNT(*) FROM vouchers_vault WHERE voucher_id = $1 AND pin_encrypted <> ''", uniqueTag).Scan(&dbEncryptedAfterDry)
+	if dbEncryptedAfterDry != 0 {
+		t.Fatalf("dry run must not write to DB! Found %d encrypted rows", dbEncryptedAfterDry)
+	}
+
+	// 2. Live run
+	liveReport, err := vault.MigrateLegacyPlaintextPINs(ctx, pool, mgr, false)
+	if err != nil {
+		t.Fatalf("live migration error: %v", err)
+	}
+
+	t.Logf("Dry-Run Duplicates: %d | Live Duplicates: %d", dryReport.DuplicatesFound, liveReport.DuplicatesFound)
+
+	if dryReport.DuplicatesFound != 3 {
+		t.Errorf("expected dry-run to report exactly 3 duplicates, got %d", dryReport.DuplicatesFound)
+	}
+	if liveReport.DuplicatesFound != dryReport.DuplicatesFound {
+		t.Fatalf("MISMATCH: dry-run reported %d duplicates, but live run reported %d duplicates!",
+			dryReport.DuplicatesFound, liveReport.DuplicatesFound)
+	}
+}
+
+// TestRealPG_QuarantinedDuplicatesExcludedFromStockRadarSalesReconciliation tests that vouchers
+// with status = 'quarantined' are completely excluded from stock counts, sales, radar, reconciliation, and profit backfill.
+func TestRealPG_QuarantinedDuplicatesExcludedFromStockRadarSalesReconciliation(t *testing.T) {
+	pool, cleanup := testhelper.GetTestPool(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	tag := fmt.Sprintf("quar_test_%d", time.Now().UnixNano())
+
+	_, _ = pool.Exec(ctx, `ALTER TABLE vouchers_vault ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'available';
+		ALTER TABLE vouchers_vault ADD COLUMN IF NOT EXISTS net_profit BIGINT NOT NULL DEFAULT 0;
+		ALTER TABLE vouchers_vault ADD COLUMN IF NOT EXISTS net_profit_recorded_at TIMESTAMPTZ;`)
+
+	// 1. Insert 1 available card, 1 quarantined card, 1 sold card
+	var availID, quarID, soldID int64
+	err := pool.QueryRow(ctx,
+		`INSERT INTO vouchers_vault (brand_id, voucher_id, pin, pin_hmac, serial_number, cost_price, selling_price, is_sold, status)
+		 VALUES ('zain', $1, 'VALID_PIN_1', $2, 'SN-VALID-1', 4500, 5000, FALSE, 'available')
+		 RETURNING id`, tag, "HMAC_"+tag+"_avail").Scan(&availID)
+	if err != nil {
+		t.Fatalf("insert avail: %v", err)
+	}
+
+	err = pool.QueryRow(ctx,
+		`INSERT INTO vouchers_vault (brand_id, voucher_id, pin, pin_encrypted, nonce, pin_hmac, serial_number, cost_price, selling_price, is_sold, status)
+		 VALUES ('zain', $1, '', 'ENC_CIPHER', 'NONCE_123', $2, 'SN-QUAR-1', 4500, 5000, TRUE, 'quarantined')
+		 RETURNING id`, tag, "DUP_"+tag+"_quar").Scan(&quarID)
+	if err != nil {
+		t.Fatalf("insert quarantined: %v", err)
+	}
+
+	err = pool.QueryRow(ctx,
+		`INSERT INTO vouchers_vault (brand_id, voucher_id, pin, pin_hmac, serial_number, cost_price, selling_price, is_sold, status, sold_at)
+		 VALUES ('zain', $1, 'SOLD_PIN_1', $2, 'SN-SOLD-1', 4500, 5000, TRUE, 'sold', now())
+		 RETURNING id`, tag, "HMAC_"+tag+"_sold").Scan(&soldID)
+	if err != nil {
+		t.Fatalf("insert sold: %v", err)
+	}
+
+	// Test 1: Stock counts strictly exclude quarantined rows
+	var availableStock int
+	err = pool.QueryRow(ctx,
+		`SELECT COUNT(*) FROM vouchers_vault WHERE voucher_id = $1 AND is_sold = FALSE AND status <> 'quarantined'`,
+		tag,
+	).Scan(&availableStock)
+	if err != nil || availableStock != 1 {
+		t.Fatalf("expected stock count 1 (excluding quarantined), got %d (err: %v)", availableStock, err)
+	}
+
+	// Test 2: Sales query with FOR UPDATE SKIP LOCKED strictly skips quarantined rows
+	var selectableIDs []int64
+	rows, err := pool.Query(ctx,
+		`SELECT id FROM vouchers_vault WHERE voucher_id = $1 AND is_sold = FALSE AND status <> 'quarantined' FOR UPDATE SKIP LOCKED`,
+		tag,
+	)
+	if err != nil {
+		t.Fatalf("query selectable: %v", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id int64
+		_ = rows.Scan(&id)
+		selectableIDs = append(selectableIDs, id)
+	}
+	rows.Close()
+
+	if len(selectableIDs) != 1 || selectableIDs[0] != availID {
+		t.Fatalf("sales query selected invalid IDs: %v (expected only availID %d)", selectableIDs, availID)
+	}
+
+	// Test 3: Profit backfill query strictly excludes quarantined rows
+	_, err = pool.Exec(ctx,
+		`UPDATE vouchers_vault 
+		 SET net_profit = (selling_price - cost_price)::BIGINT,
+		     net_profit_recorded_at = now()
+		 WHERE voucher_id = $1
+		   AND (is_sold = TRUE OR status = 'sold')
+		   AND status <> 'quarantined'
+		   AND net_profit_recorded_at IS NULL`,
+		tag,
+	)
+	if err != nil {
+		t.Fatalf("profit backfill: %v", err)
+	}
+
+	var quarRecordedAt *time.Time
+	_ = pool.QueryRow(ctx, "SELECT net_profit_recorded_at FROM vouchers_vault WHERE id = $1", quarID).Scan(&quarRecordedAt)
+	if quarRecordedAt != nil {
+		t.Fatalf("quarantined card must NOT have profit recorded! Got: %v", quarRecordedAt)
+	}
+
+	var soldRecordedAt *time.Time
+	_ = pool.QueryRow(ctx, "SELECT net_profit_recorded_at FROM vouchers_vault WHERE id = $1", soldID).Scan(&soldRecordedAt)
+	if soldRecordedAt == nil {
+		t.Fatalf("sold card must have profit recorded!")
+	}
+}

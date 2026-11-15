@@ -63,6 +63,10 @@ func MigrateLegacyPlaintextPINs(ctx context.Context, pool *pgxpool.Pool, mgr *Va
 
 	report.TotalLegacyRows = int64(len(legacyRows))
 
+	// Track HMACs encountered during this run to guarantee identical duplicate
+	// reporting between --dry-run (where nothing is written to DB) and live execution.
+	seenHMACs := make(map[string]int64, len(legacyRows))
+
 	for _, lr := range legacyRows {
 		report.Processed++
 		cleanPIN := strings.TrimSpace(lr.PIN)
@@ -72,15 +76,20 @@ func MigrateLegacyPlaintextPINs(ctx context.Context, pool *pgxpool.Pool, mgr *Va
 
 		hmac := mgr.ComputeHMAC(cleanPIN)
 
-		// Check if this HMAC already exists in vouchers_vault
+		// Check if this HMAC already exists in vouchers_vault or was seen earlier in this run
 		var duplicateCount int
 		_ = pool.QueryRow(ctx,
 			`SELECT COUNT(*) FROM vouchers_vault WHERE pin_hmac = $1 AND id <> $2`,
 			hmac, lr.ID,
 		).Scan(&duplicateCount)
 
+		if firstID, seen := seenHMACs[hmac]; seen && firstID != lr.ID {
+			duplicateCount++
+		}
+
 		if duplicateCount > 0 {
 			report.DuplicatesFound++
+			seenHMACs[hmac] = lr.ID
 			if !dryRun {
 				// Encrypt the duplicate PIN so it is NEVER left unprotected
 				dupCt, dupNonce, dupKeyVer, dupEncErr := mgr.EncryptPIN(cleanPIN)
@@ -90,15 +99,16 @@ func MigrateLegacyPlaintextPINs(ctx context.Context, pool *pgxpool.Pool, mgr *Va
 						 VALUES ($1, $2, $3, $4, $5, $6)`,
 						lr.ID, lr.Serial, hmac, "duplicate_hmac_found_in_vault", dupCt, dupNonce,
 					)
-					// Quarantine duplicate row with AES-256-GCM encrypted PIN, wiped plaintext, and unique tombstone HMAC
+					// Quarantine duplicate row with dedicated status='quarantined', AES-256-GCM encrypted PIN,
+					// wiped plaintext, and unique tombstone HMAC.
 					// This ensures:
 					// 1. PIN is protected by AES-256-GCM (not plaintext)
-					// 2. pin_encrypted is NOT empty (passes migration gate 000004)
-					// 3. pin_hmac is unique (does NOT violate total unique index 000005)
-					// 4. is_sold = TRUE (prevents dispensing duplicate voucher)
+					// 2. status = 'quarantined' completely excludes row from sales, radar, reconciliation, and profit backfill
+					// 3. pin_encrypted is NOT empty (passes migration gate 000004)
+					// 4. pin_hmac is unique (does NOT violate total unique index 000005)
 					_, _ = pool.Exec(ctx,
 						`UPDATE vouchers_vault
-						 SET pin = '', pin_encrypted = $1, nonce = $2, key_version = $3, pin_hmac = 'DUP_' || id || '_' || $4, is_sold = TRUE
+						 SET status = 'quarantined', is_sold = TRUE, pin = '', pin_encrypted = $1, nonce = $2, key_version = $3, pin_hmac = 'DUP_' || id || '_' || $4
 						 WHERE id = $5`,
 						dupCt, dupNonce, dupKeyVer, hmac, lr.ID,
 					)
@@ -106,6 +116,8 @@ func MigrateLegacyPlaintextPINs(ctx context.Context, pool *pgxpool.Pool, mgr *Va
 			}
 			continue
 		}
+
+		seenHMACs[hmac] = lr.ID
 
 		// Encrypt
 		ctHex, nonceHex, keyVer, encErr := mgr.EncryptPIN(cleanPIN)

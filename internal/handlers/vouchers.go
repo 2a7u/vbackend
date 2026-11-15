@@ -175,7 +175,7 @@ func (h *VouchersHandler) GetVouchers(c *fiber.Ctx) error {
 	rows, err := h.Pool.Query(c.Context(),
 		`SELECT voucher_id, COUNT(*) 
 		 FROM vouchers_vault 
-		 WHERE is_sold = FALSE 
+		 WHERE is_sold = FALSE AND status <> 'quarantined'
 		 GROUP BY voucher_id`)
 	if err == nil {
 		defer rows.Close()
@@ -188,10 +188,10 @@ func (h *VouchersHandler) GetVouchers(c *fiber.Ctx) error {
 		}
 	}
 
-	// 2. Inspector items
+	// 2. Inspector items (excludes quarantined vouchers from default inventory list)
 	query := `SELECT id, brand_id, voucher_id, pin, serial_number, cost_price, selling_price, is_sold,
 	                 COALESCE(sold_to_store_name, ''), sold_at, reprint_count, created_at
-	          FROM vouchers_vault WHERE 1=1`
+	          FROM vouchers_vault WHERE status <> 'quarantined'`
 	var args []any
 	argIdx := 1
 
@@ -336,11 +336,11 @@ func (h *VouchersHandler) DispenseVoucher(c *fiber.Ctx) error {
 		}
 	}
 
-	// 2. Select available PINs with SKIP LOCKED
+	// 2. Select available PINs with SKIP LOCKED (strictly excludes quarantined cards)
 	rows, err := tx.Query(c.Context(),
 		`SELECT id, pin, pin_encrypted, nonce, key_version, serial_number, cost_price, selling_price
 		 FROM vouchers_vault
-		 WHERE voucher_id = $1 AND is_sold = FALSE
+		 WHERE voucher_id = $1 AND is_sold = FALSE AND status <> 'quarantined'
 		 ORDER BY id ASC
 		 LIMIT $2
 		 FOR UPDATE SKIP LOCKED`,
@@ -476,7 +476,7 @@ func (h *VouchersHandler) DispenseVoucher(c *fiber.Ctx) error {
 		itemProfit := pricing.ComputeProfit(unitCost, unitSellingPrice)
 		batch.Queue(
 			`UPDATE vouchers_vault
-			 SET is_sold = TRUE, sold_to_user_id = $1, sold_to_store_name = $2, sold_at = now(), sold_price = $3, net_profit = $4, net_profit_recorded_at = now()
+			 SET is_sold = TRUE, status = 'sold', sold_to_user_id = $1, sold_to_store_name = $2, sold_at = now(), sold_price = $3, net_profit = $4, net_profit_recorded_at = now()
 			 WHERE id = $5`,
 			uid, storeName, unitSellingPrice, itemProfit, cp.ID,
 		)

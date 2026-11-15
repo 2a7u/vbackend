@@ -651,7 +651,11 @@ ALTER TABLE vouchers_vault ADD COLUMN IF NOT EXISTS pin_encrypted TEXT NOT NULL 
 ALTER TABLE vouchers_vault ADD COLUMN IF NOT EXISTS nonce TEXT NOT NULL DEFAULT '';
 ALTER TABLE vouchers_vault ADD COLUMN IF NOT EXISTS key_version INT NOT NULL DEFAULT 1;
 ALTER TABLE vouchers_vault ADD COLUMN IF NOT EXISTS pin_hmac TEXT NOT NULL DEFAULT '';
+ALTER TABLE vouchers_vault ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'available';
+ALTER TABLE vouchers_vault ADD COLUMN IF NOT EXISTS sold_to_user_id BIGINT;
+ALTER TABLE vouchers_vault ADD COLUMN IF NOT EXISTS sold_price BIGINT NOT NULL DEFAULT 0;
 ALTER TABLE vouchers_vault ADD COLUMN IF NOT EXISTS net_profit BIGINT NOT NULL DEFAULT 0;
+ALTER TABLE vouchers_vault ADD COLUMN IF NOT EXISTS net_profit_recorded_at TIMESTAMPTZ;
 
 -- Drop NOT NULL on legacy plaintext pin column to enforce zero plaintext storage
 ALTER TABLE vouchers_vault ALTER COLUMN pin DROP NOT NULL;
