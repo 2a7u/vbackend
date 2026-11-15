@@ -210,7 +210,6 @@ func (e *Engine) handleViolation(ctx context.Context, tx pgx.Tx, req CheckReques
 
 	// Record event
 	var eventID int64
-	execer := tx.Exec
 	if tx == nil {
 		err := e.Pool.QueryRow(ctx,
 			`INSERT INTO fraud_events (user_id, rule_code, severity, action_taken, details)
@@ -281,7 +280,6 @@ func (e *Engine) handleViolation(ctx context.Context, tx pgx.Tx, req CheckReques
 		}(e.WebhookURL, alertPayload)
 	}
 
-	_ = execer
 	return &EvaluationResult{
 		Allowed:     rule.Action != "freeze_wallet",
 		ActionTaken: rule.Action,

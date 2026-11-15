@@ -87,6 +87,13 @@ func MigrateLegacyPlaintextPINs(ctx context.Context, pool *pgxpool.Pool, mgr *Va
 					 VALUES ($1, $2, $3, $4)`,
 					lr.ID, lr.Serial, hmac, "duplicate_hmac_found_in_vault",
 				)
+				// Quarantine duplicate row with unique tombstone HMAC so it does not block the total unique index
+				_, _ = pool.Exec(ctx,
+					`UPDATE vouchers_vault
+					 SET pin = '', pin_encrypted = 'DUPLICATE_QUARANTINED', nonce = 'QUARANTINE', pin_hmac = 'DUP_' || id || '_' || $1, is_sold = TRUE
+					 WHERE id = $2`,
+					hmac, lr.ID,
+				)
 			}
 			continue
 		}

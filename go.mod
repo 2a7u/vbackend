@@ -11,6 +11,7 @@ require (
 )
 
 require (
+	github.com/01walid/goarabic v0.0.1 // indirect
 	github.com/andybalholm/brotli v1.1.0 // indirect
 	github.com/fasthttp/websocket v1.5.8 // indirect
 	github.com/fergusstrange/embedded-postgres v1.34.0 // indirect
@@ -19,14 +20,18 @@ require (
 	github.com/jackc/pgservicefile v0.0.0-20221227161230-091c0ba34f0a // indirect
 	github.com/jackc/puddle/v2 v2.2.1 // indirect
 	github.com/klauspost/compress v1.17.7 // indirect
+	github.com/ledongthuc/pdf v0.0.0-20261020125853-5e46805f718e // indirect
 	github.com/lib/pq v1.10.9 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mattn/go-runewidth v0.0.15 // indirect
+	github.com/phpdave11/gofpdi v1.0.14-0.20211212211723-1f10f9844311 // indirect
+	github.com/pkg/errors v0.8.1 // indirect
 	github.com/richardlehane/mscfb v1.0.9 // indirect
 	github.com/richardlehane/msoleps v1.0.6 // indirect
 	github.com/rivo/uniseg v0.2.0 // indirect
 	github.com/savsgio/gotils v0.0.0-20240303185622-093b76447511 // indirect
+	github.com/signintech/gopdf v0.38.4 // indirect
 	github.com/tiendc/go-deepcopy v1.7.2 // indirect
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
 	github.com/valyala/fasthttp v1.52.0 // indirect

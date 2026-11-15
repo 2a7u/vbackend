@@ -11,6 +11,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -425,16 +426,82 @@ func (s *Service) ExecuteReversal(ctx context.Context, tx pgx.Tx, originalTxID u
 		return nil, fmt.Errorf("transaction %s has no reversible legs", originalTxID)
 	}
 
-	refID := fmt.Sprintf("reversal_%s_by_%d", originalTxID.String(), operatorID)
-	if reason != "" {
-		refID += "_" + reason
-	}
+	refID := originalTxID.String()
 
-	return s.ExecuteDoubleEntry(ctx, tx, DoubleEntryRequest{
+	entries, err := s.ExecuteDoubleEntry(ctx, tx, DoubleEntryRequest{
 		TxID:      uuid.New(),
 		RefType:   "reversal",
 		RefID:     refID,
 		Legs:      mirroredLegs,
 		CreatedAt: time.Now().UTC(),
 	})
+	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			// Idempotent duplicate: already reversed. Return existing entries.
+			return s.GetEntriesByRef(ctx, tx, "reversal", refID)
+		}
+		return nil, err
+	}
+	return entries, nil
+}
+
+// RecordRefund issues a refund from system account to user wallet for an original transaction.
+// It enforces strict DB idempotency via idx_ledger_entries_unique_reversal_tx on (ref_type, ref_id, account_id).
+func (s *Service) RecordRefund(ctx context.Context, tx pgx.Tx, userID int64, systemAccountEmail string, amount int64, originalTxID string, reason string) ([]LedgerEntry, error) {
+	if amount <= 0 {
+		return nil, ErrInvalidAmount
+	}
+
+	systemID, err := s.GetSystemAccountIDTx(ctx, tx, systemAccountEmail)
+	if err != nil {
+		return nil, fmt.Errorf("lookup system account: %w", err)
+	}
+
+	req := DoubleEntryRequest{
+		TxID:      uuid.New(),
+		RefType:   "refund",
+		RefID:     originalTxID,
+		CreatedAt: time.Now().UTC(),
+		Legs: []Leg{
+			{AccountID: systemID, Debit: amount, Credit: 0},
+			{AccountID: userID, Debit: 0, Credit: amount},
+		},
+	}
+
+	entries, err := s.ExecuteDoubleEntry(ctx, tx, req)
+	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			// Idempotent duplicate: already refunded. Return existing entries.
+			return s.GetEntriesByRef(ctx, tx, "refund", originalTxID)
+		}
+		return nil, err
+	}
+	return entries, nil
+}
+
+// GetEntriesByRef fetches ledger entries matching a given ref_type and ref_id.
+func (s *Service) GetEntriesByRef(ctx context.Context, tx pgx.Tx, refType, refID string) ([]LedgerEntry, error) {
+	rows, err := tx.Query(ctx,
+		`SELECT id, tx_id::text, account_id, debit, credit, balance_after, ref_type, ref_id, prev_hash, entry_hash, created_at
+		 FROM ledger_entries
+		 WHERE ref_type = $1 AND ref_id = $2
+		 ORDER BY id ASC`,
+		refType, refID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("query entries by ref: %w", err)
+	}
+	defer rows.Close()
+
+	var entries []LedgerEntry
+	for rows.Next() {
+		var e LedgerEntry
+		if err := rows.Scan(&e.ID, &e.TxID, &e.AccountID, &e.Debit, &e.Credit, &e.BalanceAfter, &e.RefType, &e.RefID, &e.PrevHash, &e.Hash, &e.CreatedAt); err != nil {
+			return nil, err
+		}
+		entries = append(entries, e)
+	}
+	return entries, nil
 }

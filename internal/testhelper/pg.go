@@ -51,7 +51,7 @@ func GetTestPool(t *testing.T) (*pgxpool.Pool, func()) {
 
 			if embeddedErr != nil {
 				errStr := strings.ToLower(embeddedErr.Error())
-				if !strings.Contains(errStr, "already") && !strings.Contains(errStr, "in use") && !strings.Contains(errStr, "listening") {
+				if !strings.Contains(errStr, "already") && !strings.Contains(errStr, "in use") && !strings.Contains(errStr, "listening") && !strings.Contains(errStr, "not empty") {
 					poolErr = embeddedErr
 					return
 				}
@@ -126,5 +126,9 @@ func applySchema(pool *pgxpool.Pool) {
 
 	_, _ = pool.Exec(ctx, string(schemaBytes))
 	_, _ = pool.Exec(ctx, `ALTER TABLE users DROP CONSTRAINT IF EXISTS users_wallet_balance_check;
-		ALTER TABLE users ADD CONSTRAINT users_wallet_balance_check CHECK (role = 'system' OR wallet_balance >= -credit_limit);`)
+		ALTER TABLE users ADD CONSTRAINT users_wallet_balance_check CHECK (role = 'system' OR wallet_balance >= -credit_limit);
+		DROP INDEX IF EXISTS idx_ledger_entries_unique_reversal;
+		CREATE UNIQUE INDEX IF NOT EXISTS idx_ledger_entries_unique_reversal ON ledger_entries (ref_type, ref_id, account_id) WHERE ref_type IN ('reversal', 'refund', 'agent_commission_reversal');
+		CREATE TABLE IF NOT EXISTS schema_migrations (version BIGINT PRIMARY KEY, name TEXT NOT NULL, applied_at TIMESTAMPTZ NOT NULL DEFAULT now());
+		INSERT INTO schema_migrations (version, name, applied_at) VALUES (7, 'reversal_idempotency', now()) ON CONFLICT (version) DO NOTHING;`)
 }

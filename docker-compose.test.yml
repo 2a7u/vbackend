@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   postgres:
-    image: postgres:16-alpine
+    image: postgres:${POSTGRES_VERSION:-16}-alpine
     container_name: venus_test_postgres
     environment:
       POSTGRES_DB: venus_test_db

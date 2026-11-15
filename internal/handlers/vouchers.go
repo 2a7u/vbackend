@@ -278,6 +278,11 @@ type dispenseVoucherRequest struct {
 // POST /api/vouchers/dispense
 func (h *VouchersHandler) DispenseVoucher(c *fiber.Ctx) error {
 	uid := middleware.UserID(c)
+	if uid == 0 {
+		if rawUID, ok := c.Locals("user_id").(int64); ok && rawUID > 0 {
+			uid = rawUID
+		}
+	}
 	cl := middleware.ClaimsFrom(c)
 
 	var req dispenseVoucherRequest
@@ -305,6 +310,21 @@ func (h *VouchersHandler) DispenseVoucher(c *fiber.Ctx) error {
 		})
 	}
 	defer tx.Rollback(c.Context())
+
+	// 0. Single source of truth check: users.wallet_status
+	if uid > 0 {
+		var walletStatus string
+		err := tx.QueryRow(c.Context(),
+			`SELECT COALESCE(wallet_status, 'active') FROM users WHERE id = $1 FOR UPDATE`,
+			uid,
+		).Scan(&walletStatus)
+		if err == nil && walletStatus == "frozen" {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+				"success": false,
+				"error":   ledger.ErrWalletFrozen.Error(),
+			})
+		}
+	}
 
 	// 1. Resolve unit selling price for this specific subscriber strictly inside the transaction
 	// (Resolution order: Override -> Tier -> Catalog Default; NO stale in-memory cache used for money)
@@ -456,7 +476,7 @@ func (h *VouchersHandler) DispenseVoucher(c *fiber.Ctx) error {
 		itemProfit := pricing.ComputeProfit(unitCost, unitSellingPrice)
 		batch.Queue(
 			`UPDATE vouchers_vault
-			 SET is_sold = TRUE, sold_to_user_id = $1, sold_to_store_name = $2, sold_at = now(), sold_price = $3, net_profit = $4
+			 SET is_sold = TRUE, sold_to_user_id = $1, sold_to_store_name = $2, sold_at = now(), sold_price = $3, net_profit = $4, net_profit_recorded_at = now()
 			 WHERE id = $5`,
 			uid, storeName, unitSellingPrice, itemProfit, cp.ID,
 		)

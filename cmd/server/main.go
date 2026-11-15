@@ -18,6 +18,7 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/recover"
 
 	"venus_backend/internal/db"
+	"venus_backend/internal/db/migrations"
 	"venus_backend/internal/fraud"
 	"venus_backend/internal/handlers"
 	"venus_backend/internal/hierarchy"
@@ -95,14 +96,12 @@ func main() {
 	cronSched.Start(ctx)
 	defer cronSched.Stop()
 
-	adminH := &handlers.AdminHandler{Pool: pool, Hub: hub, LedgerSvc: ledgerSvc, FraudEngine: fraudEngine}
-	// R1: one-time clean reset (reset_v2_clean) — runs exactly ONCE per deploy,
-	// guarded by the system_meta marker so restarts never wipe data again.
-	if err := adminH.RunOneTimeResets(ctx); err != nil {
-		log.Printf("one-time reset check skipped: %v", err)
-	} else {
-		log.Println("one-time migrations verified (reset_v2_clean)")
+	// Verify versioned migrations schema level (Server boot only verifies schema version and fails fast if behind)
+	if err := migrations.VerifySchemaVersion(ctx, pool, migrations.TargetVersion); err != nil {
+		log.Fatalf("SCHEMA INTEGRITY FAILURE: %v", err)
 	}
+
+	adminH := &handlers.AdminHandler{Pool: pool, Hub: hub, LedgerSvc: ledgerSvc, FraudEngine: fraudEngine}
 
 	authH := &handlers.AuthHandler{Pool: pool, JWTSecret: jwtSecret, TokenTTL: tokenTTL, SuperAdminEmail: superAdminEmail}
 	simH := &handlers.SimHandler{Pool: pool, Hub: hub}

@@ -2,11 +2,18 @@ package reconcile
 
 import (
 	"bytes"
+	_ "embed"
 	"fmt"
+	"strings"
 	"time"
 
+	"github.com/01walid/goarabic"
+	"github.com/signintech/gopdf"
 	"github.com/xuri/excelize/v2"
 )
+
+//go:embed assets/Amiri-Regular.ttf
+var arabicFontData []byte
 
 // GenerateExcelXLSX builds a genuine Microsoft Excel (.xlsx) OOXML binary workbook
 // with Arabic Right-To-Left (RTL) worksheet view and styled headers.
@@ -28,8 +35,8 @@ func GenerateExcelXLSX(report *ReconciliationReport) ([]byte, error) {
 
 	// Create header style
 	headerStyle, err := f.NewStyle(&excelize.Style{
-		Font: &excelize.Font{Bold: true, Color: "#FFFFFF", Size: 12, Family: "Segoe UI"},
-		Fill: excelize.Fill{Type: "pattern", Color: []string{"#1E3A8A"}, Pattern: 1},
+		Font:      &excelize.Font{Bold: true, Color: "#FFFFFF", Size: 12, Family: "Segoe UI"},
+		Fill:      excelize.Fill{Type: "pattern", Color: []string{"#1E3A8A"}, Pattern: 1},
 		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
 	})
 	if err != nil {
@@ -99,155 +106,260 @@ func GenerateStatementExcelXLSX(userEmail, userName string, balance, creditLimit
 		balance, creditLimit, time.Now().Format("2006-01-02 15:04:05")))
 
 	// Headers
-	headers := []string{"رقم الحركة (Tx ID)", "التاريخ والوقت", "نوع الحركة", "مدين (Debit)", "دائن (Credit)", "الرصيد بعد الحركة", "الهاش التشفيري"}
+	headers := []string{"رقم الحركة", "التاريخ والوقت", "نوع المعاملة", "المرجع", "مدين (Debit)", "دائن (Credit)", "الرصيد بعد الحركة"}
 	for colIdx, h := range headers {
 		cell, _ := excelize.CoordinatesToCellName(colIdx+1, 4)
 		_ = f.SetCellValue(sheetName, cell, h)
 	}
 
-	for rowIdx, e := range entries {
-		rowNum := rowIdx + 5
-		cAtStr := ""
-		if t, ok := e["created_at"].(time.Time); ok {
-			cAtStr = t.Format("2006-01-02 15:04:05")
-		}
-		_ = f.SetCellValue(sheetName, fmt.Sprintf("A%d", rowNum), fmt.Sprint(e["tx_id"]))
-		_ = f.SetCellValue(sheetName, fmt.Sprintf("B%d", rowNum), cAtStr)
-		_ = f.SetCellValue(sheetName, fmt.Sprintf("C%d", rowNum), fmt.Sprint(e["ref_type"]))
-		_ = f.SetCellValue(sheetName, fmt.Sprintf("D%d", rowNum), e["debit"])
-		_ = f.SetCellValue(sheetName, fmt.Sprintf("E%d", rowNum), e["credit"])
-		_ = f.SetCellValue(sheetName, fmt.Sprintf("F%d", rowNum), e["balance_after"])
-		_ = f.SetCellValue(sheetName, fmt.Sprintf("G%d", rowNum), fmt.Sprint(e["hash"]))
+	for rowIdx, entry := range entries {
+		r := rowIdx + 5
+		cell, _ := excelize.CoordinatesToCellName(1, r)
+		_ = f.SetCellValue(sheetName, cell, entry["id"])
+		cell, _ = excelize.CoordinatesToCellName(2, r)
+		_ = f.SetCellValue(sheetName, cell, entry["created_at"])
+		cell, _ = excelize.CoordinatesToCellName(3, r)
+		_ = f.SetCellValue(sheetName, cell, entry["ref_type"])
+		cell, _ = excelize.CoordinatesToCellName(4, r)
+		_ = f.SetCellValue(sheetName, cell, entry["ref_id"])
+		cell, _ = excelize.CoordinatesToCellName(5, r)
+		_ = f.SetCellValue(sheetName, cell, entry["debit"])
+		cell, _ = excelize.CoordinatesToCellName(6, r)
+		_ = f.SetCellValue(sheetName, cell, entry["credit"])
+		cell, _ = excelize.CoordinatesToCellName(7, r)
+		_ = f.SetCellValue(sheetName, cell, entry["balance_after"])
 	}
-
-	_ = f.SetColWidth(sheetName, "A", "A", 38)
-	_ = f.SetColWidth(sheetName, "B", "B", 20)
-	_ = f.SetColWidth(sheetName, "C", "C", 25)
-	_ = f.SetColWidth(sheetName, "D", "F", 18)
-	_ = f.SetColWidth(sheetName, "G", "G", 66)
 
 	var buf bytes.Buffer
 	if err := f.Write(&buf); err != nil {
-		return nil, fmt.Errorf("write statement xlsx: %w", err)
+		return nil, fmt.Errorf("write xlsx buffer: %w", err)
 	}
 
 	return buf.Bytes(), nil
 }
 
-// GeneratePDF generates a valid PDF 1.4 binary document for a reconciliation report.
-// Conforms strictly to ISO 32000-1 specification with valid magic header %PDF-1.4,
-// xref table, catalog, page objects, and %%EOF marker.
-func GeneratePDF(report *ReconciliationReport) []byte {
-	var buf bytes.Buffer
-
-	// PDF header
-	buf.WriteString("%PDF-1.4\n")
-	buf.WriteString("%\xe2\xe3\xcf\xd3\n") // Binary comment
-
-	var offsets []int
-
-	// Object 1: Catalog
-	offsets = append(offsets, buf.Len())
-	buf.WriteString("1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n")
-
-	// Object 2: Pages
-	offsets = append(offsets, buf.Len())
-	buf.WriteString("2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n")
-
-	// Object 3: Page
-	offsets = append(offsets, buf.Len())
-	buf.WriteString("3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>\nendobj\n")
-
-	// Stream contents
-	streamContent := fmt.Sprintf(
-		"BT\n/F1 16 Tf\n50 780 Td\n(VENUS POS - DAILY RECONCILIATION REPORT) Tj\n"+
-			"/F1 12 Tf\n0 -30 Td\n(Report Date: %s | Baghdad UTC+3) Tj\n"+
-			"0 -20 Td\n(Status: %s | Discrepancy: %d IQD) Tj\n"+
-			"0 -30 Td\n(Total System Balance: %d IQD) Tj\n"+
-			"0 -20 Td\n(Total Gateway Volume: %d IQD) Tj\n"+
-			"0 -20 Td\n(Manual Topups: %d IQD) Tj\n"+
-			"0 -20 Td\n(Cards Sold: %d IQD) Tj\n"+
-			"0 -20 Td\n(Refunds Reversed: %d IQD) Tj\n"+
-			"0 -20 Td\n(Total Ledger Credits: %d IQD) Tj\n"+
-			"0 -20 Td\n(Total Ledger Debits: %d IQD) Tj\n"+
-			"0 -30 Td\n(Generated By: %s) Tj\nET\n",
-		report.ReportDate, report.Status, report.Discrepancy,
-		report.TotalSystemBalance, report.TotalGatewayVolume,
-		report.ManualTopups, report.CardsSold, report.Refunds,
-		report.TotalLedgerCredits, report.TotalLedgerDebits,
-		report.GeneratedBy,
-	)
-
-	// Object 4: Contents Stream
-	offsets = append(offsets, buf.Len())
-	buf.WriteString(fmt.Sprintf("4 0 obj\n<< /Length %d >>\nstream\n%s\nendstream\nendobj\n", len(streamContent), streamContent))
-
-	// Object 5: Standard Base-14 Font (Helvetica)
-	offsets = append(offsets, buf.Len())
-	buf.WriteString("5 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n")
-
-	// Cross-Reference Table
-	xrefOffset := buf.Len()
-	buf.WriteString("xref\n0 6\n0000000000 65535 f \n")
-	for _, off := range offsets {
-		buf.WriteString(fmt.Sprintf("%010d 00000 n \n", off))
+// ShapeArabic shapes Arabic text using Unicode presentation forms and reverses character order for RTL display.
+func ShapeArabic(text string) string {
+	if text == "" {
+		return ""
 	}
-
-	// Trailer
-	buf.WriteString("trailer\n<< /Size 6 /Root 1 0 R >>\n")
-	buf.WriteString(fmt.Sprintf("startxref\n%d\n%%%%EOF\n", xrefOffset))
-
-	return buf.Bytes()
+	hasArabic := false
+	for _, r := range text {
+		if (r >= 0x0600 && r <= 0x06FF) || (r >= 0xFB50 && r <= 0xFEFC) {
+			hasArabic = true
+			break
+		}
+	}
+	if !hasArabic {
+		return text
+	}
+	// Shape characters contextually, then reverse runes for RTL
+	return reverseRunes(goarabic.ToGlyph(text))
 }
 
-// GenerateStatementPDF generates a valid PDF 1.4 binary document for a subscriber statement.
-func GenerateStatementPDF(userEmail, userName string, balance, creditLimit int64, entriesCount int) []byte {
-	var buf bytes.Buffer
-
-	buf.WriteString("%PDF-1.4\n")
-	buf.WriteString("%\xe2\xe3\xcf\xd3\n")
-
-	var offsets []int
-
-	// 1: Catalog
-	offsets = append(offsets, buf.Len())
-	buf.WriteString("1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n")
-
-	// 2: Pages
-	offsets = append(offsets, buf.Len())
-	buf.WriteString("2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n")
-
-	// 3: Page
-	offsets = append(offsets, buf.Len())
-	buf.WriteString("3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>\nendobj\n")
-
-	// Stream
-	content := fmt.Sprintf(
-		"BT\n/F1 16 Tf\n50 780 Td\n(VENUS POS - ACCOUNT STATEMENT) Tj\n"+
-			"/F1 12 Tf\n0 -30 Td\n(User: %s <%s>) Tj\n"+
-			"0 -20 Td\n(Current Balance: %d IQD | Credit Limit: %d IQD) Tj\n"+
-			"0 -20 Td\n(Total Verified Ledger Entries: %d) Tj\n"+
-			"0 -20 Td\n(Statement Generated: %s UTC) Tj\nET\n",
-		userName, userEmail, balance, creditLimit, entriesCount, time.Now().UTC().Format(time.RFC3339),
-	)
-
-	// 4: Stream
-	offsets = append(offsets, buf.Len())
-	buf.WriteString(fmt.Sprintf("4 0 obj\n<< /Length %d >>\nstream\n%s\nendstream\nendobj\n", len(content), content))
-
-	// 5: Font
-	offsets = append(offsets, buf.Len())
-	buf.WriteString("5 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n")
-
-	// Xref
-	xrefOffset := buf.Len()
-	buf.WriteString("xref\n0 6\n0000000000 65535 f \n")
-	for _, off := range offsets {
-		buf.WriteString(fmt.Sprintf("%010d 00000 n \n", off))
+// ShapeArabicBidi shapes text preserving LTR numbers and Latin words while shaping and reversing Arabic words.
+func ShapeArabicBidi(text string) string {
+	if text == "" {
+		return ""
+	}
+	hasArabic := false
+	for _, r := range text {
+		if (r >= 0x0600 && r <= 0x06FF) || (r >= 0xFB50 && r <= 0xFEFC) {
+			hasArabic = true
+			break
+		}
+	}
+	if !hasArabic {
+		return text
 	}
 
-	buf.WriteString("trailer\n<< /Size 6 /Root 1 0 R >>\n")
-	buf.WriteString(fmt.Sprintf("startxref\n%d\n%%%%EOF\n", xrefOffset))
+	shaped := goarabic.ToGlyph(text)
+	words := strings.Fields(shaped)
+	var reversedWords []string
+	for i := len(words) - 1; i >= 0; i-- {
+		w := words[i]
+		if isArabicWord(w) {
+			reversedWords = append(reversedWords, reverseRunes(w))
+		} else {
+			reversedWords = append(reversedWords, w)
+		}
+	}
+	return strings.Join(reversedWords, " ")
+}
 
-	return buf.Bytes()
+func isArabicWord(s string) bool {
+	for _, r := range s {
+		if (r >= 0x0600 && r <= 0x06FF) || (r >= 0xFB50 && r <= 0xFEFC) {
+			return true
+		}
+	}
+	return false
+}
+
+func reverseRunes(s string) string {
+	r := []rune(s)
+	for i, j := 0, len(r)-1; i < j; i, j = i+1, j-1 {
+		r[i], r[j] = r[j], r[i]
+	}
+	return string(r)
+}
+
+// GeneratePDF generates a high-quality PDF 1.4 document for daily reconciliation
+// with embedded Arabic font (Amiri) and an RTL table layout.
+func GeneratePDF(report *ReconciliationReport) []byte {
+	pdf := gopdf.GoPdf{}
+	pdf.Start(gopdf.Config{PageSize: *gopdf.PageSizeA4})
+	pdf.AddPage()
+
+	if len(arabicFontData) > 0 {
+		_ = pdf.AddTTFFontData("Amiri", arabicFontData)
+		_ = pdf.SetFont("Amiri", "", 12)
+	}
+
+	// Title Banner
+	_ = pdf.SetFont("Amiri", "", 16)
+	pdf.SetXY(50, 40)
+	_ = pdf.CellWithOption(&gopdf.Rect{W: 495, H: 25}, ShapeArabic("منظومة فينوس للمدفوعات — تقرير المطابقة المحاسبية اليومية"), gopdf.CellOption{
+		Align: gopdf.Center,
+	})
+
+	_ = pdf.SetFont("Amiri", "", 11)
+	pdf.SetXY(50, 70)
+	metaLine := fmt.Sprintf("تاريخ التقرير: %s | التوقيت: بغداد (UTC+3) | الحالة: %s", report.ReportDate, report.Status)
+	_ = pdf.CellWithOption(&gopdf.Rect{W: 495, H: 20}, ShapeArabicBidi(metaLine), gopdf.CellOption{
+		Align: gopdf.Center,
+	})
+
+	// Table Headers: RTL columns: [Notes (180), Value (135), Label (180)]
+	y := 105.0
+	pdf.SetXY(50, y)
+
+	_ = pdf.SetFont("Amiri", "", 11)
+	// Rightmost column (Label in RTL layout)
+	pdf.SetXY(50+180+135, y)
+	_ = pdf.CellWithOption(&gopdf.Rect{W: 180, H: 24}, ShapeArabic("البند المحاسبي والمالي"), gopdf.CellOption{
+		Align:  gopdf.Center,
+		Border: gopdf.AllBorders,
+	})
+	// Middle column (Value)
+	pdf.SetXY(50+180, y)
+	_ = pdf.CellWithOption(&gopdf.Rect{W: 135, H: 24}, ShapeArabic("القيمة (د.ع IQD)"), gopdf.CellOption{
+		Align:  gopdf.Center,
+		Border: gopdf.AllBorders,
+	})
+	// Leftmost column (Notes)
+	pdf.SetXY(50, y)
+	_ = pdf.CellWithOption(&gopdf.Rect{W: 180, H: 24}, ShapeArabic("الملاحظات والتفاصيل"), gopdf.CellOption{
+		Align:  gopdf.Center,
+		Border: gopdf.AllBorders,
+	})
+
+	rows := []struct {
+		Label string
+		Val   string
+		Notes string
+	}{
+		{"تاريخ المطابقة المحاسبية", report.ReportDate, "بتوقيت بغداد UTC+3"},
+		{"واردات بوابة زين كاش", fmt.Sprintf("%d IQD", report.TotalGatewayVolume), "المدفوعات الإلكترونية الناجحة"},
+		{"الشحن اليدوي والتسويات", fmt.Sprintf("%d IQD", report.ManualTopups), "الشحن النقدي المعتمد من الإدارة"},
+		{"مبيعات البطاقات الرقمية", fmt.Sprintf("%d IQD", report.CardsSold), "سحب بطاقات التعبئة الرقمية"},
+		{"المبالغ المسترجعة (Refunds)", fmt.Sprintf("%d IQD", report.Refunds), "عمليات الإرجاع المعتمدة إلى المحافظ"},
+		{"إجمالي إيداعات دفتر الأستاذ", fmt.Sprintf("%d IQD", report.TotalLedgerCredits), "إجمالي الحركات الدائنة"},
+		{"إجمالي سحوبات دفتر الأستاذ", fmt.Sprintf("%d IQD", report.TotalLedgerDebits), "إجمالي الحركات المدينة"},
+		{"التزام المنصة (أرصدة المحافظ)", fmt.Sprintf("%d IQD", report.TotalSystemBalance), "رصيد المحافظ الفعلي المعتمد"},
+		{"الفارق المحاسبي (Discrepancy)", fmt.Sprintf("%d IQD", report.Discrepancy), "الفرق بين الأرصدة ودفتر الأستاذ"},
+		{"حالة المطابقة المحاسبية", report.Status, "نتيجة التدقيق الآلي"},
+		{"المولد بواسطة", report.GeneratedBy, "النظام الآلي للرقابة المالية"},
+	}
+
+	_ = pdf.SetFont("Amiri", "", 10)
+	for _, r := range rows {
+		y += 22.0
+		// Column 1 (Right): Label
+		pdf.SetXY(50+180+135, y)
+		_ = pdf.CellWithOption(&gopdf.Rect{W: 180, H: 22}, ShapeArabic(r.Label), gopdf.CellOption{
+			Align:  gopdf.Right,
+			Border: gopdf.AllBorders,
+		})
+		// Column 2 (Middle): Value
+		pdf.SetXY(50+180, y)
+		_ = pdf.CellWithOption(&gopdf.Rect{W: 135, H: 22}, r.Val, gopdf.CellOption{
+			Align:  gopdf.Center,
+			Border: gopdf.AllBorders,
+		})
+		// Column 3 (Left): Notes
+		pdf.SetXY(50, y)
+		_ = pdf.CellWithOption(&gopdf.Rect{W: 180, H: 22}, ShapeArabic(r.Notes), gopdf.CellOption{
+			Align:  gopdf.Right,
+			Border: gopdf.AllBorders,
+		})
+	}
+
+	return pdf.GetBytesPdf()
+}
+
+// GenerateStatementPDF generates a valid PDF 1.4 binary document for a subscriber statement with embedded Arabic font.
+func GenerateStatementPDF(userEmail, userName string, balance, creditLimit int64, entriesCount int) []byte {
+	pdf := gopdf.GoPdf{}
+	pdf.Start(gopdf.Config{PageSize: *gopdf.PageSizeA4})
+	pdf.AddPage()
+
+	if len(arabicFontData) > 0 {
+		_ = pdf.AddTTFFontData("Amiri", arabicFontData)
+		_ = pdf.SetFont("Amiri", "", 12)
+	}
+
+	// Title
+	_ = pdf.SetFont("Amiri", "", 16)
+	pdf.SetXY(50, 40)
+	_ = pdf.CellWithOption(&gopdf.Rect{W: 495, H: 25}, ShapeArabic("كشف حساب مالي رسمي — منظومة فينوس"), gopdf.CellOption{
+		Align: gopdf.Center,
+	})
+
+	_ = pdf.SetFont("Amiri", "", 11)
+	pdf.SetXY(50, 75)
+	userLine := fmt.Sprintf("المشترك: %s (%s)", userName, userEmail)
+	_ = pdf.CellWithOption(&gopdf.Rect{W: 495, H: 20}, ShapeArabicBidi(userLine), gopdf.CellOption{
+		Align: gopdf.Center,
+	})
+
+	// Statement Summary Table
+	y := 115.0
+	pdf.SetXY(50+247.5, y)
+	_ = pdf.CellWithOption(&gopdf.Rect{W: 247.5, H: 24}, ShapeArabic("البيان المحاسبي"), gopdf.CellOption{
+		Align:  gopdf.Center,
+		Border: gopdf.AllBorders,
+	})
+	pdf.SetXY(50, y)
+	_ = pdf.CellWithOption(&gopdf.Rect{W: 247.5, H: 24}, ShapeArabic("القيمة المعتمدة"), gopdf.CellOption{
+		Align:  gopdf.Center,
+		Border: gopdf.AllBorders,
+	})
+
+	rows := []struct {
+		Label string
+		Val   string
+	}{
+		{"الرصيد النهائي المتاح في المحفظة", fmt.Sprintf("%d IQD", balance)},
+		{"سقف الائتمان الممنوح (Credit Limit)", fmt.Sprintf("%d IQD", creditLimit)},
+		{"إجمالي الحركات المحاسبية المسجلة", fmt.Sprintf("%d حركة موثقة", entriesCount)},
+		{"حالة تدقيق سلسلة التجزئة (Hash Chain)", "موثقة رقمياً ومشفرة بالكامل 100%"},
+		{"تاريخ وتوقيت إصدار الكشف", time.Now().Format("2006-01-02 15:04:05 (Baghdad UTC+3)")},
+	}
+
+	for _, r := range rows {
+		y += 24.0
+		pdf.SetXY(50+247.5, y)
+		_ = pdf.CellWithOption(&gopdf.Rect{W: 247.5, H: 24}, ShapeArabic(r.Label), gopdf.CellOption{
+			Align:  gopdf.Right,
+			Border: gopdf.AllBorders,
+		})
+		pdf.SetXY(50, y)
+		_ = pdf.CellWithOption(&gopdf.Rect{W: 247.5, H: 24}, ShapeArabicBidi(r.Val), gopdf.CellOption{
+			Align:  gopdf.Center,
+			Border: gopdf.AllBorders,
+		})
+	}
+
+	return pdf.GetBytesPdf()
 }

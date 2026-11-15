@@ -210,8 +210,8 @@ ALTER TABLE announcements ADD COLUMN IF NOT EXISTS target_audience TEXT NOT NULL
 ALTER TABLE announcements ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE;
 ALTER TABLE announcements ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ;
 
--- Keep first_due_date in sync with the legacy due_date column for pre-existing rows.
-UPDATE debt_contracts SET first_due_date = due_date WHERE first_due_date IS NULL AND due_date IS NOT NULL;
+-- Keep first_due_date column in sync with legacy schema
+-- (Historical row sync is handled via versioned migrations)
 
 -- Idempotency keys: one sale per client_request_id per account (partial unique
 -- indexes ignore the NULL rows created before this migration).
@@ -499,8 +499,8 @@ CREATE INDEX IF NOT EXISTS idx_ledger_account_created ON ledger_entries (account
 CREATE INDEX IF NOT EXISTS idx_ledger_tx_id ON ledger_entries (tx_id);
 CREATE INDEX IF NOT EXISTS idx_ledger_ref ON ledger_entries (ref_type, ref_id);
 CREATE INDEX IF NOT EXISTS idx_ledger_idempotency ON ledger_entries (idempotency_key) WHERE idempotency_key IS NOT NULL;
--- DB-enforced reversal idempotency: guarantees a commission is reversed at most once per account/sale
-CREATE UNIQUE INDEX IF NOT EXISTS idx_ledger_entries_unique_reversal ON ledger_entries (ref_type, ref_id, account_id) WHERE ref_type = 'agent_commission_reversal';
+-- DB-enforced reversal idempotency: guarantees reversals and refunds are recorded at most once per account/tx
+CREATE UNIQUE INDEX IF NOT EXISTS idx_ledger_entries_unique_reversal ON ledger_entries (ref_type, ref_id, account_id) WHERE ref_type IN ('reversal', 'refund', 'agent_commission_reversal');
 
 -- DB-level immutability trigger for ledger_entries
 CREATE OR REPLACE FUNCTION prevent_ledger_modification()
@@ -657,16 +657,9 @@ ALTER TABLE vouchers_vault ADD COLUMN IF NOT EXISTS net_profit BIGINT NOT NULL D
 ALTER TABLE vouchers_vault ALTER COLUMN pin DROP NOT NULL;
 ALTER TABLE vouchers_vault ALTER COLUMN pin SET DEFAULT '';
 
--- Total duplicate guard: ensure all rows have non-empty pin_hmac, then apply full UNIQUE index
-UPDATE vouchers_vault SET pin_hmac = 'LEGACY_MIGRATED_' || id WHERE pin_hmac = '' OR pin_hmac IS NULL;
-ALTER TABLE vouchers_vault ALTER COLUMN pin_hmac SET NOT NULL;
+-- Total unique index for duplicate prevention
 DROP INDEX IF EXISTS idx_vouchers_vault_pin_hmac;
 CREATE UNIQUE INDEX IF NOT EXISTS idx_vouchers_vault_pin_hmac_total ON vouchers_vault (pin_hmac);
-
--- Idempotent historical backfill for net_profit on all sold vouchers (allowing negative profits on below-cost sales)
-UPDATE vouchers_vault 
-SET net_profit = (selling_price - cost_price)::BIGINT 
-WHERE is_sold = TRUE;
 
 -- System settings table for cryptographic canaries and configuration
 CREATE TABLE IF NOT EXISTS system_settings (
@@ -746,14 +739,7 @@ ALTER TABLE agent_commissions ADD COLUMN IF NOT EXISTS commission_basis_points I
 ALTER TABLE agent_commissions ADD COLUMN IF NOT EXISTS fixed_amount BIGINT NOT NULL DEFAULT 0;
 ALTER TABLE agent_commissions ADD COLUMN IF NOT EXISTS cap_to_margin BOOLEAN NOT NULL DEFAULT TRUE;
 
--- Safe migration from legacy commission_value to exact integer basis points and fixed amount in IQD
-UPDATE agent_commissions
-SET commission_basis_points = ROUND(commission_value * 100)::INT
-WHERE commission_type = 'percentage' AND commission_basis_points = 0 AND commission_value > 0;
-
-UPDATE agent_commissions
-SET fixed_amount = ROUND(commission_value)::BIGINT
-WHERE commission_type = 'fixed' AND fixed_amount = 0 AND commission_value > 0;
+-- Agent commissions schema (data migration handled via versioned migrations)
 
 CREATE INDEX IF NOT EXISTS idx_agent_commissions_lookup ON agent_commissions (agent_id, product_id);
 
