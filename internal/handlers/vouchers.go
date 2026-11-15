@@ -37,8 +37,8 @@ type uploadVouchersRequest struct {
 	BrandID      string       `json:"brand_id"`
 	VoucherID    string       `json:"voucher_id"`
 	RawPins      []rawPinItem `json:"raw_pins"`
-	CostPrice    float64      `json:"cost_price"`
-	SellingPrice float64      `json:"selling_price"`
+	CostPrice    int64        `json:"cost_price"`
+	SellingPrice int64        `json:"selling_price"`
 }
 
 // UploadVouchers handles bulk uploading of voucher codes to the encrypted vault with duplicate prevention.
@@ -264,14 +264,14 @@ func (h *VouchersHandler) GetVouchers(c *fiber.Ctx) error {
 }
 
 type dispenseVoucherRequest struct {
-	VoucherID     string  `json:"voucher_id"`
-	BrandID       string  `json:"brand_id"`
-	Quantity      int     `json:"quantity"`
-	SellingPrice  float64 `json:"selling_price"`
-	CostPrice     float64 `json:"cost_price"`
-	VoucherName   string  `json:"voucher_name"`
-	CustomerName  string  `json:"customer_name"`
-	CustomerPhone string  `json:"customer_phone"`
+	VoucherID     string `json:"voucher_id"`
+	BrandID       string `json:"brand_id"`
+	Quantity      int    `json:"quantity"`
+	SellingPrice  int64  `json:"selling_price"`
+	CostPrice     int64  `json:"cost_price"`
+	VoucherName   string `json:"voucher_name"`
+	CustomerName  string `json:"customer_name"`
+	CustomerPhone string `json:"customer_phone"`
 }
 
 // DispenseVoucher atomically claims and sells voucher PINs with dynamic pricing and commission processing.
@@ -328,7 +328,7 @@ func (h *VouchersHandler) DispenseVoucher(c *fiber.Ctx) error {
 
 	// 1. Resolve unit selling price for this specific subscriber strictly inside the transaction
 	// (Resolution order: Override -> Tier -> Catalog Default; NO stale in-memory cache used for money)
-	unitSellingPrice := int64(req.SellingPrice)
+	unitSellingPrice := req.SellingPrice
 	if h.PricingSvc != nil && uid > 0 {
 		resolved, pErr := h.PricingSvc.ResolvePriceTx(c.Context(), tx, uid, req.VoucherID, unitSellingPrice)
 		if pErr == nil && resolved.Price > 0 {

@@ -2,6 +2,5 @@
 UPDATE vouchers_vault 
 SET net_profit = (selling_price - cost_price)::BIGINT,
     net_profit_recorded_at = COALESCE(sold_at, now())
-WHERE (is_sold = TRUE OR status = 'sold')
-  AND status <> 'quarantined'
+WHERE status = 'sold'
   AND net_profit_recorded_at IS NULL;

@@ -50,6 +50,7 @@ jobs:
 
       - name: Check PostgreSQL Server Version
         run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client
           PGPASSWORD=venus_test_pwd psql -h 127.0.0.1 -U venus_test -d venus_test_db -c "SHOW server_version;"
 
       - name: Compile all packages (go build)

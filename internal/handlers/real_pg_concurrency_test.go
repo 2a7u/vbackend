@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -1044,7 +1045,7 @@ func TestRealPG_QuarantinedDuplicatesExcludedFromStockRadarSalesReconciliation(t
 
 	err = pool.QueryRow(ctx,
 		`INSERT INTO vouchers_vault (brand_id, voucher_id, pin, pin_encrypted, nonce, pin_hmac, serial_number, cost_price, selling_price, is_sold, status)
-		 VALUES ('zain', $1, '', 'ENC_CIPHER', 'NONCE_123', $2, 'SN-QUAR-1', 4500, 5000, TRUE, 'quarantined')
+		 VALUES ('zain', $1, '', 'ENC_CIPHER', 'NONCE_123', $2, 'SN-QUAR-1', 4500, 5000, FALSE, 'quarantined')
 		 RETURNING id`, tag, "DUP_"+tag+"_quar").Scan(&quarID)
 	if err != nil {
 		t.Fatalf("insert quarantined: %v", err)
@@ -1095,7 +1096,7 @@ func TestRealPG_QuarantinedDuplicatesExcludedFromStockRadarSalesReconciliation(t
 		 SET net_profit = (selling_price - cost_price)::BIGINT,
 		     net_profit_recorded_at = now()
 		 WHERE voucher_id = $1
-		   AND (is_sold = TRUE OR status = 'sold')
+		   AND status = 'sold'
 		   AND status <> 'quarantined'
 		   AND net_profit_recorded_at IS NULL`,
 		tag,
@@ -1114,5 +1115,181 @@ func TestRealPG_QuarantinedDuplicatesExcludedFromStockRadarSalesReconciliation(t
 	_ = pool.QueryRow(ctx, "SELECT net_profit_recorded_at FROM vouchers_vault WHERE id = $1", soldID).Scan(&soldRecordedAt)
 	if soldRecordedAt == nil {
 		t.Fatalf("sold card must have profit recorded!")
+	}
+}
+
+// TestRealPG_DuplicateCanonicalSelection_LaterRowSold verifies that when two legacy rows share a PIN,
+// the canonical row selected is the one already sold (even if its ID is higher/later), while the earlier
+// unsold row is quarantined with status='quarantined' and is_sold=FALSE.
+func TestRealPG_DuplicateCanonicalSelection_LaterRowSold(t *testing.T) {
+	pool, cleanup := testhelper.GetTestPool(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	tag := fmt.Sprintf("canon_test_%d", time.Now().UnixNano())
+	sharedPIN := fmt.Sprintf("PIN_SHARED_%d", time.Now().UnixNano())
+
+	// Drop total unique index temporarily for legacy seed
+	_, _ = pool.Exec(ctx, `DROP INDEX IF EXISTS idx_vouchers_vault_pin_hmac_total;
+		CREATE UNIQUE INDEX IF NOT EXISTS idx_vouchers_vault_pin_hmac_partial ON vouchers_vault (pin_hmac) WHERE pin_hmac <> '';
+		ALTER TABLE legacy_migration_duplicates ADD COLUMN IF NOT EXISTS pin_encrypted TEXT NOT NULL DEFAULT '';
+		ALTER TABLE legacy_migration_duplicates ADD COLUMN IF NOT EXISTS nonce TEXT NOT NULL DEFAULT '';`)
+
+	// 1. Insert earlier row (Row 1): UNSOLD
+	var earlierUnsoldID int64
+	err := pool.QueryRow(ctx,
+		`INSERT INTO vouchers_vault (brand_id, voucher_id, pin, pin_encrypted, nonce, pin_hmac, serial_number, cost_price, selling_price, is_sold, status)
+		 VALUES ('zain', $1, $2, '', '', '', $3, 4500, 5000, FALSE, 'available')
+		 RETURNING id`, tag, sharedPIN, "SN-EARLIER-UNSOLD-"+tag).Scan(&earlierUnsoldID)
+	if err != nil {
+		t.Fatalf("insert earlier unsold: %v", err)
+	}
+
+	// 2. Insert later row (Row 2): SOLD
+	var laterSoldID int64
+	err = pool.QueryRow(ctx,
+		`INSERT INTO vouchers_vault (brand_id, voucher_id, pin, pin_encrypted, nonce, pin_hmac, serial_number, cost_price, selling_price, is_sold, status, sold_at)
+		 VALUES ('zain', $1, $2, '', '', '', $3, 4500, 5000, TRUE, 'sold', now())
+		 RETURNING id`, tag, sharedPIN, "SN-LATER-SOLD-"+tag).Scan(&laterSoldID)
+	if err != nil {
+		t.Fatalf("insert later sold: %v", err)
+	}
+
+	if laterSoldID <= earlierUnsoldID {
+		t.Fatalf("expected laterSoldID (%d) > earlierUnsoldID (%d)", laterSoldID, earlierUnsoldID)
+	}
+
+	// 3. Execute legacy vault migration
+	vaultMgr := vault.Default()
+	report, err := vault.MigrateLegacyPlaintextPINs(ctx, pool, vaultMgr, false)
+	if err != nil {
+		t.Fatalf("MigrateLegacyPlaintextPINs failed: %v", err)
+	}
+	if len(report.Errors) > 0 {
+		t.Fatalf("migration errors: %v", report.Errors)
+	}
+	if report.DuplicatesFound == 0 {
+		t.Fatalf("expected duplicate detected, got %d", report.DuplicatesFound)
+	}
+
+	// Restore total unique index
+	_, _ = pool.Exec(ctx, `CREATE UNIQUE INDEX IF NOT EXISTS idx_vouchers_vault_pin_hmac_total ON vouchers_vault (pin_hmac);`)
+
+	// 4. Verify CANONICAL row is Row 2 (the SOLD one, even though later ID)
+	var laterStatus, laterHMAC string
+	var laterIsSold bool
+	err = pool.QueryRow(ctx, `SELECT status, is_sold, pin_hmac FROM vouchers_vault WHERE id = $1`, laterSoldID).Scan(&laterStatus, &laterIsSold, &laterHMAC)
+	if err != nil {
+		t.Fatalf("query later sold row: %v", err)
+	}
+	expectedHMAC := vaultMgr.ComputeHMAC(sharedPIN)
+	if laterHMAC != expectedHMAC {
+		t.Fatalf("expected later sold card to hold real canonical HMAC %s, got %s", expectedHMAC, laterHMAC)
+	}
+	if laterStatus != "sold" || !laterIsSold {
+		t.Fatalf("expected later sold card to retain sold status, got status=%s, is_sold=%v", laterStatus, laterIsSold)
+	}
+
+	// 5. Verify QUARANTINED row is Row 1 (the unsold one)
+	var earlierStatus, earlierHMAC, earlierPIN string
+	var earlierIsSold bool
+	err = pool.QueryRow(ctx, `SELECT status, is_sold, pin, pin_hmac FROM vouchers_vault WHERE id = $1`, earlierUnsoldID).Scan(&earlierStatus, &earlierIsSold, &earlierPIN, &earlierHMAC)
+	if err != nil {
+		t.Fatalf("query earlier unsold row: %v", err)
+	}
+	if earlierStatus != "quarantined" {
+		t.Fatalf("expected earlier unsold card to be status='quarantined', got %s", earlierStatus)
+	}
+	if earlierIsSold {
+		t.Fatalf("quarantined card must have is_sold = FALSE, got TRUE")
+	}
+	if earlierPIN != "" {
+		t.Fatalf("quarantined card must have plaintext PIN wiped, got %s", earlierPIN)
+	}
+	if !strings.HasPrefix(earlierHMAC, "DUP_") {
+		t.Fatalf("quarantined card must have tombstone HMAC starting with DUP_, got %s", earlierHMAC)
+	}
+
+	// 6. Verify duplicate recorded in audit table
+	var dupCount int
+	_ = pool.QueryRow(ctx, `SELECT COUNT(*) FROM legacy_migration_duplicates WHERE legacy_voucher_id = $1`, earlierUnsoldID).Scan(&dupCount)
+	if dupCount != 1 {
+		t.Fatalf("expected duplicate record in legacy_migration_duplicates for row %d, found %d", earlierUnsoldID, dupCount)
+	}
+}
+
+// TestRealPG_DryRunCrossBatchDuplicateDetection tests that dry-run duplicate detection is 100% identical
+// to live execution when processed in small batches across arbitrary batch boundaries.
+func TestRealPG_DryRunCrossBatchDuplicateDetection(t *testing.T) {
+	pool, cleanup := testhelper.GetTestPool(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	tag := fmt.Sprintf("batch_test_%d", time.Now().UnixNano())
+	pinA := fmt.Sprintf("PIN_A_%d", time.Now().UnixNano())
+	pinB := fmt.Sprintf("PIN_B_%d", time.Now().UnixNano())
+
+	// Drop total index during seed
+	_, _ = pool.Exec(ctx, `DROP INDEX IF EXISTS idx_vouchers_vault_pin_hmac_total;
+		CREATE UNIQUE INDEX IF NOT EXISTS idx_vouchers_vault_pin_hmac_partial ON vouchers_vault (pin_hmac) WHERE pin_hmac <> '';`)
+
+	// Insert 6 rows:
+	// Batch 1 (rows 1-2): Card 1 (PIN A), Card 2 (PIN unique 1)
+	// Batch 2 (rows 3-4): Card 3 (PIN A copy -> dup of Card 1), Card 4 (PIN B)
+	// Batch 3 (rows 5-6): Card 5 (PIN B copy -> dup of Card 4), Card 6 (PIN unique 2)
+	pins := []string{
+		pinA,
+		fmt.Sprintf("PIN_UNIQ1_%s", tag),
+		pinA, // duplicate of pinA across batch boundary
+		pinB,
+		pinB, // duplicate of pinB across batch boundary
+		fmt.Sprintf("PIN_UNIQ2_%s", tag),
+	}
+
+	for i, p := range pins {
+		_, err := pool.Exec(ctx,
+			`INSERT INTO vouchers_vault (brand_id, voucher_id, pin, pin_encrypted, nonce, pin_hmac, serial_number, cost_price, selling_price, is_sold, status)
+			 VALUES ('zain', $1, $2, '', '', '', $3, 4500, 5000, FALSE, 'available')`,
+			tag, p, fmt.Sprintf("SN-BATCH-%s-%d", tag, i),
+		)
+		if err != nil {
+			t.Fatalf("seed batch row %d: %v", i, err)
+		}
+	}
+
+	vaultMgr := vault.Default()
+
+	// 1. Dry run with batchSize = 2
+	dryReport, err := vault.MigrateLegacyPlaintextPINsBatched(ctx, pool, vaultMgr, true, 2)
+	if err != nil {
+		t.Fatalf("dry run batched failed: %v", err)
+	}
+
+	// 2. Live run with batchSize = 2
+	liveReport, err := vault.MigrateLegacyPlaintextPINsBatched(ctx, pool, vaultMgr, false, 2)
+	if err != nil {
+		t.Fatalf("live run batched failed: %v", err)
+	}
+
+	// Restore total unique index
+	_, _ = pool.Exec(ctx, `CREATE UNIQUE INDEX IF NOT EXISTS idx_vouchers_vault_pin_hmac_total ON vouchers_vault (pin_hmac);`)
+
+	t.Logf("Dry Run Report: Total=%d, Dups=%d, Encrypted=%d", dryReport.TotalLegacyRows, dryReport.DuplicatesFound, dryReport.EncryptedAndVerified)
+	t.Logf("Live Run Report: Total=%d, Dups=%d, Encrypted=%d", liveReport.TotalLegacyRows, liveReport.DuplicatesFound, liveReport.EncryptedAndVerified)
+
+	if dryReport.DuplicatesFound != 2 {
+		t.Fatalf("expected dry run to detect 2 duplicates across batches, got %d", dryReport.DuplicatesFound)
+	}
+	if liveReport.DuplicatesFound != 2 {
+		t.Fatalf("expected live run to detect 2 duplicates across batches, got %d", liveReport.DuplicatesFound)
+	}
+	if dryReport.DuplicatesFound != liveReport.DuplicatesFound {
+		t.Fatalf("duplicate count mismatch: dry=%d, live=%d", dryReport.DuplicatesFound, liveReport.DuplicatesFound)
+	}
+	if dryReport.EncryptedAndVerified != liveReport.EncryptedAndVerified {
+		t.Fatalf("encrypted count mismatch: dry=%d, live=%d", dryReport.EncryptedAndVerified, liveReport.EncryptedAndVerified)
+	}
+	if dryReport.TotalLegacyRows != liveReport.TotalLegacyRows {
+		t.Fatalf("total rows mismatch: dry=%d, live=%d", dryReport.TotalLegacyRows, liveReport.TotalLegacyRows)
 	}
 }

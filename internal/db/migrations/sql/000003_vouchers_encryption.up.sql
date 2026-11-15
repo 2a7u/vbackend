@@ -18,6 +18,8 @@ CREATE TABLE IF NOT EXISTS legacy_migration_duplicates (
     nonce             TEXT NOT NULL DEFAULT '',
     detected_at       TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+ALTER TABLE legacy_migration_duplicates ADD COLUMN IF NOT EXISTS pin_encrypted TEXT NOT NULL DEFAULT '';
+ALTER TABLE legacy_migration_duplicates ADD COLUMN IF NOT EXISTS nonce TEXT NOT NULL DEFAULT '';
 
 -- Partial index for fast duplicate checks during encryption phase
 CREATE INDEX IF NOT EXISTS idx_vouchers_vault_pin_hmac_partial ON vouchers_vault (pin_hmac) WHERE pin_hmac <> '';

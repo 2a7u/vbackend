@@ -18,7 +18,7 @@ var SQLFiles embed.FS
 
 const (
 	AdvisoryLockID = 789123456
-	TargetVersion  = 7
+	TargetVersion  = 8
 )
 
 type Migration struct {

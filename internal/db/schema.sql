@@ -364,13 +364,13 @@ CREATE TABLE IF NOT EXISTS vouchers_vault (
     voucher_id         TEXT NOT NULL DEFAULT '',
     pin                TEXT NOT NULL,
     serial_number      TEXT NOT NULL DEFAULT '',
-    cost_price         NUMERIC(12,2) NOT NULL DEFAULT 0 CHECK (cost_price >= 0),
-    selling_price      NUMERIC(12,2) NOT NULL DEFAULT 0 CHECK (selling_price >= 0),
+    cost_price         BIGINT NOT NULL DEFAULT 0 CHECK (cost_price >= 0),
+    selling_price      BIGINT NOT NULL DEFAULT 0 CHECK (selling_price >= 0),
     is_sold            BOOLEAN NOT NULL DEFAULT FALSE,
     sold_to_user_id    BIGINT REFERENCES users(id) ON DELETE SET NULL,
     sold_to_store_name TEXT NOT NULL DEFAULT '',
     sold_at            TIMESTAMPTZ,
-    sold_price         NUMERIC(12,2),
+    sold_price         BIGINT,
     reprint_count      INTEGER NOT NULL DEFAULT 0,
     created_at         TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -679,8 +679,12 @@ CREATE TABLE IF NOT EXISTS legacy_migration_duplicates (
     serial_number      TEXT NOT NULL,
     pin_hmac           TEXT NOT NULL,
     reason             TEXT NOT NULL,
+    pin_encrypted      TEXT NOT NULL DEFAULT '',
+    nonce              TEXT NOT NULL DEFAULT '',
     detected_at        TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+ALTER TABLE legacy_migration_duplicates ADD COLUMN IF NOT EXISTS pin_encrypted TEXT NOT NULL DEFAULT '';
+ALTER TABLE legacy_migration_duplicates ADD COLUMN IF NOT EXISTS nonce TEXT NOT NULL DEFAULT '';
 
 -- 2.2 Multi-Tier Pricing & Custom Subscriber Overrides
 CREATE TABLE IF NOT EXISTS price_tiers (
