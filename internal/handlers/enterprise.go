@@ -13,6 +13,9 @@ import (
 	"venus_backend/internal/appconfig"
 	"venus_backend/internal/bi"
 	"venus_backend/internal/deviceradar"
+	"venus_backend/internal/guard"
+	"venus_backend/internal/idem"
+	"venus_backend/internal/limits"
 	"venus_backend/internal/middleware"
 	"venus_backend/internal/promotions"
 	"venus_backend/internal/security"
@@ -28,6 +31,9 @@ type EnterpriseHandler struct {
 	RadarSvc      *deviceradar.Service
 	SecuritySvc   *security.Service
 	BISvc         *bi.Service
+	GuardSvc      *guard.Service
+	IdemSvc       *idem.Service
+	LimitsSvc     *limits.Service
 }
 
 func NewEnterpriseHandler(
@@ -39,6 +45,9 @@ func NewEnterpriseHandler(
 	radarSvc *deviceradar.Service,
 	secSvc *security.Service,
 	biSvc *bi.Service,
+	guardSvc *guard.Service,
+	idemSvc *idem.Service,
+	limitsSvc *limits.Service,
 ) *EnterpriseHandler {
 	return &EnterpriseHandler{
 		Pool:          pool,
@@ -49,6 +58,9 @@ func NewEnterpriseHandler(
 		RadarSvc:      radarSvc,
 		SecuritySvc:   secSvc,
 		BISvc:         biSvc,
+		GuardSvc:      guardSvc,
+		IdemSvc:       idemSvc,
+		LimitsSvc:     limitsSvc,
 	}
 }
 
@@ -535,3 +547,164 @@ func (h *EnterpriseHandler) ExportSubscribersCSV(c *fiber.Ctx) error {
 	writer.Flush()
 	return nil
 }
+
+// -----------------------------------------------------------------------------
+// Stage 1: Financial Security Admin APIs (Guard, Idem, Limits)
+// -----------------------------------------------------------------------------
+
+func (h *EnterpriseHandler) ListGuardSettings(c *fiber.Ctx) error {
+	merchantID := int64(1) // Default system merchant / admin
+	if mParam := c.Query("merchant_id"); mParam != "" {
+		if m, err := strconv.ParseInt(mParam, 10, 64); err == nil && m > 0 {
+			merchantID = m
+		}
+	}
+
+	if h.GuardSvc == nil {
+		return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{"error": "Guard service uninitialized"})
+	}
+
+	settings, err := h.GuardSvc.ListSettings(c.Context(), merchantID)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+	}
+	return c.JSON(fiber.Map{"status": "ok", "settings": settings})
+}
+
+func (h *EnterpriseHandler) SaveGuardSetting(c *fiber.Ctx) error {
+	var g guard.GuardSetting
+	if err := c.BodyParser(&g); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "بيانات غير صالحة"})
+	}
+
+	if g.MerchantID <= 0 {
+		g.MerchantID = 1
+	}
+	if g.ItemID == "" {
+		g.ItemID = "*"
+	}
+
+	if h.GuardSvc == nil {
+		return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{"error": "Guard service uninitialized"})
+	}
+
+	if err := h.GuardSvc.SaveSetting(c.Context(), &g); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	uid := middleware.UserID(c)
+	cl := middleware.ClaimsFrom(c)
+	writeAudit(c.Context(), h.Pool, uid, cl.Email, "GUARD_SETTING_SAVE", "guard_settings", g.ItemID, map[string]any{
+		"min_margin_iqd":     g.MinMarginIQD,
+		"min_margin_percent": g.MinMarginPercent,
+		"is_active":          g.IsActive,
+	}, c.IP())
+
+	return c.JSON(fiber.Map{"status": "ok", "setting": g})
+}
+
+func (h *EnterpriseHandler) DeleteGuardSetting(c *fiber.Ctx) error {
+	merchantID := int64(1)
+	if mParam := c.Query("merchant_id"); mParam != "" {
+		if m, err := strconv.ParseInt(mParam, 10, 64); err == nil && m > 0 {
+			merchantID = m
+		}
+	}
+	itemID := c.Params("item_id")
+
+	if h.GuardSvc == nil {
+		return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{"error": "Guard service uninitialized"})
+	}
+
+	if err := h.GuardSvc.DeleteSetting(c.Context(), merchantID, itemID); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+	}
+	return c.JSON(fiber.Map{"status": "ok", "message": "تم حذف هامش الأمان بنجاح"})
+}
+
+func (h *EnterpriseHandler) ListLimitsBlocks(c *fiber.Ctx) error {
+	if h.LimitsSvc == nil {
+		return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{"error": "Limits service uninitialized"})
+	}
+
+	blocks, err := h.LimitsSvc.ListBlocks(c.Context())
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+	}
+	return c.JSON(fiber.Map{"status": "ok", "blocks": blocks})
+}
+
+func (h *EnterpriseHandler) UnblockLimit(c *fiber.Ctx) error {
+	id, err := strconv.ParseInt(c.Params("id"), 10, 64)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "معرف حظر غير صالح"})
+	}
+
+	if h.LimitsSvc == nil {
+		return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{"error": "Limits service uninitialized"})
+	}
+
+	if err := h.LimitsSvc.Unblock(c.Context(), id); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	uid := middleware.UserID(c)
+	cl := middleware.ClaimsFrom(c)
+	writeAudit(c.Context(), h.Pool, uid, cl.Email, "LIMITS_UNBLOCK", "limits_blocks", strconv.FormatInt(id, 10), map[string]any{
+		"block_id": id,
+	}, c.IP())
+
+	return c.JSON(fiber.Map{"status": "ok", "message": "تم فك الحظر بنجاح"})
+}
+
+func (h *EnterpriseHandler) BlockLimitManual(c *fiber.Ctx) error {
+	var req struct {
+		MerchantID int64  `json:"merchant_id"`
+		IP         string `json:"ip"`
+		Identifier string `json:"identifier"`
+		ActionType string `json:"action_type"`
+		DurationM  int    `json:"duration_minutes"`
+		Reason     string `json:"reason"`
+	}
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "بيانات غير صالحة"})
+	}
+	if req.DurationM <= 0 {
+		req.DurationM = 60
+	}
+	if req.ActionType == "" {
+		req.ActionType = "manual_admin"
+	}
+	if req.Reason == "" {
+		req.Reason = "حظر يدوي من الإدارة"
+	}
+
+	if h.LimitsSvc == nil {
+		return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{"error": "Limits service uninitialized"})
+	}
+
+	_, blockedUntil, err := h.LimitsSvc.RecordFailedAttempt(
+		c.Context(),
+		req.MerchantID,
+		req.IP,
+		req.Identifier,
+		req.ActionType,
+		1, // Immediate block
+		time.Duration(req.DurationM)*time.Minute,
+	)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	uid := middleware.UserID(c)
+	cl := middleware.ClaimsFrom(c)
+	writeAudit(c.Context(), h.Pool, uid, cl.Email, "LIMITS_MANUAL_BLOCK", "limits_blocks", req.Identifier, map[string]any{
+		"ip":            req.IP,
+		"merchant_id":   req.MerchantID,
+		"blocked_until": blockedUntil,
+		"reason":        req.Reason,
+	}, c.IP())
+
+	return c.JSON(fiber.Map{"status": "ok", "blocked_until": blockedUntil})
+}
+

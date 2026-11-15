@@ -943,6 +943,243 @@ CREATE TABLE IF NOT EXISTS materialized_daily_bi (
     updated_at           TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- 9. Enterprise Stage 1: Financial Security (guard, idem, limits)
+CREATE TABLE IF NOT EXISTS guard_settings (
+    id                 BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    merchant_id        BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    item_id            TEXT NOT NULL DEFAULT '',
+    min_margin_iqd     BIGINT NOT NULL DEFAULT 0 CHECK (min_margin_iqd >= 0),
+    min_margin_percent INT NOT NULL DEFAULT 0 CHECK (min_margin_percent >= 0 AND min_margin_percent <= 100),
+    is_active          BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (merchant_id, item_id)
+);
+CREATE INDEX IF NOT EXISTS idx_guard_settings_merchant ON guard_settings (merchant_id, item_id);
+
+CREATE TABLE IF NOT EXISTS idem_keys (
+    id                 BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    key                TEXT NOT NULL,
+    merchant_id        BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    resource           TEXT NOT NULL DEFAULT '',
+    status             TEXT NOT NULL CHECK (status IN ('pending', 'completed', 'failed')),
+    status_code        INT NOT NULL DEFAULT 200,
+    response           JSONB NOT NULL DEFAULT '{}'::jsonb,
+    expires_at         TIMESTAMPTZ NOT NULL,
+    created_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (merchant_id, key)
+);
+CREATE INDEX IF NOT EXISTS idx_idem_keys_lookup ON idem_keys (merchant_id, key, status);
+CREATE INDEX IF NOT EXISTS idx_idem_keys_expires ON idem_keys (expires_at);
+
+CREATE TABLE IF NOT EXISTS limits_blocks (
+    id                 BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    merchant_id        BIGINT NOT NULL DEFAULT 0,
+    ip                 TEXT NOT NULL DEFAULT '',
+    identifier         TEXT NOT NULL DEFAULT '',
+    action_type        TEXT NOT NULL DEFAULT 'activation',
+    failed_attempts    INT NOT NULL DEFAULT 1,
+    blocked_until      TIMESTAMPTZ NOT NULL,
+    reason             TEXT NOT NULL DEFAULT '',
+    created_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at         TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_limits_blocks_active ON limits_blocks (ip, merchant_id, blocked_until);
+
+-- -----------------------------------------------------------------------------
+-- Stage 2: Reliability (jobs, refund, sync)
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS jobs (
+    id            BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    merchant_id   BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    kind          TEXT NOT NULL,
+    payload       JSONB NOT NULL DEFAULT '{}'::jsonb,
+    status        TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'processing', 'completed', 'failed', 'dead')),
+    attempts      INT NOT NULL DEFAULT 0,
+    max_attempts  INT NOT NULL DEFAULT 10,
+    next_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
+    last_error    TEXT NOT NULL DEFAULT '',
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_jobs_pending ON jobs (status, next_at) WHERE status = 'pending';
+CREATE INDEX IF NOT EXISTS idx_jobs_dead ON jobs (status, created_at) WHERE status = 'dead';
+CREATE INDEX IF NOT EXISTS idx_jobs_merchant ON jobs (merchant_id, status);
+
+CREATE TABLE IF NOT EXISTS sync_tombstones (
+    id            BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    merchant_id   BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    table_name    TEXT NOT NULL,
+    record_id     TEXT NOT NULL,
+    deleted_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_sync_tombstones_cursor ON sync_tombstones (merchant_id, deleted_at);
+
+-- -----------------------------------------------------------------------------
+-- Stage 3: Receipts, Notifications, Reports (seal, notify, reports)
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS seal_tokens (
+    id            BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    merchant_id   BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    token         TEXT NOT NULL UNIQUE,
+    receipt_type  TEXT NOT NULL DEFAULT 'voucher',
+    receipt_id    TEXT NOT NULL,
+    amount        BIGINT NOT NULL CHECK (amount >= 0),
+    signature     TEXT NOT NULL,
+    issued_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+    expires_at    TIMESTAMPTZ,
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_seal_tokens_token ON seal_tokens (token);
+CREATE INDEX IF NOT EXISTS idx_seal_tokens_merchant ON seal_tokens (merchant_id, receipt_type, receipt_id);
+
+CREATE TABLE IF NOT EXISTS notify_channels (
+    id            BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    merchant_id   BIGINT NOT NULL DEFAULT 0,
+    channel_type  TEXT NOT NULL CHECK (channel_type IN ('telegram', 'whatsapp', 'sms', 'push')),
+    config        JSONB NOT NULL DEFAULT '{}'::jsonb,
+    priority      INT NOT NULL DEFAULT 1,
+    is_active     BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_notify_channels_lookup ON notify_channels (merchant_id, is_active, priority ASC);
+
+CREATE TABLE IF NOT EXISTS notify_logs (
+    id            BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    merchant_id   BIGINT NOT NULL DEFAULT 0,
+    event_type    TEXT NOT NULL,
+    channel_used  TEXT NOT NULL,
+    recipient     TEXT NOT NULL DEFAULT '',
+    status        TEXT NOT NULL CHECK (status IN ('sent', 'failed', 'fallback')),
+    error         TEXT NOT NULL DEFAULT '',
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_notify_logs_event ON notify_logs (event_type, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS daily_reports (
+    id            BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    merchant_id   BIGINT NOT NULL DEFAULT 0,
+    report_date   DATE NOT NULL,
+    total_sales   BIGINT NOT NULL DEFAULT 0,
+    total_profit  BIGINT NOT NULL DEFAULT 0,
+    total_debts   BIGINT NOT NULL DEFAULT 0,
+    active_sims   INT NOT NULL DEFAULT 0,
+    pdf_path      TEXT NOT NULL DEFAULT '',
+    sent_at       TIMESTAMPTZ,
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (merchant_id, report_date)
+);
+CREATE INDEX IF NOT EXISTS idx_daily_reports_date ON daily_reports (merchant_id, report_date DESC);
+
+-- -----------------------------------------------------------------------------
+-- Stage 4: Growth & Governance (rewards, restock, risk, forecast, tills, api, surge)
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS rewards_rules (
+    id                BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    merchant_id       BIGINT NOT NULL DEFAULT 0,
+    title             TEXT NOT NULL,
+    target_sales_iqd  BIGINT NOT NULL CHECK (target_sales_iqd > 0),
+    reward_amount_iqd BIGINT NOT NULL CHECK (reward_amount_iqd > 0),
+    period_type       TEXT NOT NULL DEFAULT 'weekly' CHECK (period_type IN ('daily', 'weekly', 'monthly')),
+    is_active         BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at        TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS rewards_ledger (
+    id                 BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    merchant_id        BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    rule_id            BIGINT NOT NULL REFERENCES rewards_rules(id) ON DELETE CASCADE,
+    period_key         TEXT NOT NULL,
+    achieved_sales_iqd BIGINT NOT NULL,
+    reward_amount_iqd  BIGINT NOT NULL,
+    ledger_tx_id       TEXT NOT NULL,
+    created_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (merchant_id, rule_id, period_key)
+);
+CREATE INDEX IF NOT EXISTS idx_rewards_ledger_merchant ON rewards_ledger (merchant_id, period_key);
+
+CREATE TABLE IF NOT EXISTS restock_providers (
+    id            BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    merchant_id   BIGINT NOT NULL DEFAULT 0,
+    name          TEXT NOT NULL,
+    provider_type TEXT NOT NULL DEFAULT 'mock' CHECK (provider_type IN ('mock', 'asiacell_b2b', 'zain_direct', 'external_http')),
+    config        JSONB NOT NULL DEFAULT '{}'::jsonb,
+    is_active     BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS restock_orders (
+    id                BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    merchant_id       BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    provider_id       BIGINT NOT NULL REFERENCES restock_providers(id) ON DELETE CASCADE,
+    item_id           TEXT NOT NULL,
+    quantity          INT NOT NULL CHECK (quantity > 0),
+    status            TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'ordered', 'completed', 'failed')),
+    external_order_id TEXT NOT NULL DEFAULT '',
+    created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at        TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_restock_orders_merchant ON restock_orders (merchant_id, status);
+
+CREATE TABLE IF NOT EXISTS risk_profiles (
+    id                 BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    merchant_id        BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE UNIQUE,
+    risk_score         INT NOT NULL DEFAULT 0 CHECK (risk_score >= 0 AND risk_score <= 100),
+    velocity_count     INT NOT NULL DEFAULT 0,
+    failed_auth_count  INT NOT NULL DEFAULT 0,
+    suspicious_flags   JSONB NOT NULL DEFAULT '[]'::jsonb,
+    is_auto_frozen     BOOLEAN NOT NULL DEFAULT FALSE,
+    last_evaluated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_risk_profiles_score ON risk_profiles (risk_score DESC);
+
+CREATE TABLE IF NOT EXISTS tills_shifts (
+    id             BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    merchant_id    BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    cashier_id     BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    device_id      TEXT NOT NULL DEFAULT '',
+    opened_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    closed_at      TIMESTAMPTZ,
+    starting_cash  BIGINT NOT NULL DEFAULT 0,
+    expected_cash  BIGINT NOT NULL DEFAULT 0,
+    actual_cash    BIGINT NOT NULL DEFAULT 0,
+    discrepancy    BIGINT NOT NULL DEFAULT 0,
+    status         TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'closed')),
+    note           TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS idx_tills_shifts_active ON tills_shifts (merchant_id, cashier_id, status);
+
+CREATE TABLE IF NOT EXISTS api_keys_v2 (
+    id                    BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    merchant_id           BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    label                 TEXT NOT NULL,
+    key_hash              TEXT NOT NULL UNIQUE,
+    prefix                TEXT NOT NULL,
+    scopes                TEXT[] NOT NULL DEFAULT '{"read"}',
+    rate_limit_per_minute INT NOT NULL DEFAULT 60,
+    usage_count           BIGINT NOT NULL DEFAULT 0,
+    last_used_at          TIMESTAMPTZ,
+    is_active             BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at            TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_api_keys_v2_lookup ON api_keys_v2 (key_hash, is_active);
+
+CREATE TABLE IF NOT EXISTS surge_config (
+    id                 BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    merchant_id        BIGINT NOT NULL DEFAULT 0,
+    is_enabled         BOOLEAN NOT NULL DEFAULT FALSE,
+    multiplier_percent INT NOT NULL DEFAULT 0 CHECK (multiplier_percent >= 0),
+    max_cap_percent    INT NOT NULL DEFAULT 15 CHECK (max_cap_percent >= 0 AND max_cap_percent <= 50),
+    reason             TEXT NOT NULL DEFAULT '',
+    updated_at         TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+
+
+
 
 
 

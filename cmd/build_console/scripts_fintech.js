@@ -470,6 +470,86 @@
       } catch (err) {
         tbody.innerHTML = '<tr><td colspan="5" class="py-8 text-center text-rose-500 font-bold">خطأ في تحميل التخصيصات</td></tr>';
       }
+
+      // Guard Settings (Stage 1)
+      await loadGuardSettings();
+      // Surge & Rewards & Restock (Stage 4)
+      await loadSurgeConfig();
+      await loadRewardRules();
+      await loadRestockOrders();
+    }
+
+    async function loadGuardSettings() {
+      const tbody = document.getElementById('guard-settings-table-body');
+      if (!tbody) return;
+      try {
+        const res = await apiFetch('/api/admin/guard/settings');
+        const data = await res.json();
+        if (res.ok && Array.isArray(data)) {
+          if (data.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" class="py-8 text-center text-slate-400 font-bold">لا توجد قواعد هوامش مسجلة (الافتراضي: منع البيع بأقل من التكلفة فقط)</td></tr>';
+            return;
+          }
+          tbody.innerHTML = data.map(g => `
+            <tr class="hover:bg-slate-50 transition">
+              <td class="py-3 px-3 font-mono font-bold ${g.item_id === '*' ? 'text-brand' : 'text-slate-800'}">${escapeHtml(g.item_id === '*' ? '* (الهامش العام لجميع المنتجات)' : g.item_id)}</td>
+              <td class="py-3 px-3 font-black text-slate-800">${formatIQD(g.min_margin_iqd || 0)}</td>
+              <td class="py-3 px-3 font-bold text-slate-700">${g.min_margin_pct || 0}%</td>
+              <td class="py-3 px-3">${g.is_active ? '<span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-50 text-emerald-600">نشط</span>' : '<span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-slate-100 text-slate-500">معطل</span>'}</td>
+              <td class="py-3 px-3 text-slate-400 text-[11px]">${formatBaghdad(g.updated_at)}</td>
+              <td class="py-3 px-3 text-center">
+                <button onclick="deleteGuardSetting('${escapeHtml(g.item_id)}')" class="px-2 py-1 bg-rose-50 text-rose-600 hover:bg-rose-100 rounded-lg text-xs font-bold transition">حذف</button>
+              </td>
+            </tr>
+          `).join('');
+        }
+      } catch (err) {
+        tbody.innerHTML = '<tr><td colspan="6" class="py-8 text-center text-rose-500 font-bold">خطأ في تحميل إعدادات الحماية</td></tr>';
+      }
+    }
+
+    function openAddGuardModal() {
+      document.getElementById('guard-item-id').value = '';
+      document.getElementById('guard-margin-iqd').value = '0';
+      document.getElementById('guard-margin-pct').value = '0';
+      document.getElementById('guard-is-active').checked = true;
+      openModal('modal-add-guard');
+    }
+
+    async function submitAddGuardSetting(e) {
+      e.preventDefault();
+      const payload = {
+        item_id: document.getElementById('guard-item-id').value.trim(),
+        min_margin_iqd: parseInt(document.getElementById('guard-margin-iqd').value, 10) || 0,
+        min_margin_pct: parseFloat(document.getElementById('guard-margin-pct').value) || 0,
+        is_active: document.getElementById('guard-is-active').checked
+      };
+      try {
+        const res = await apiFetch('/api/admin/guard/settings', {
+          method: 'POST',
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'فشل حفظ إعدادات الهامش');
+        closeModal('modal-add-guard');
+        showToast('تم حفظ قاعدة الهامش الأدنى بنجاح');
+        loadGuardSettings();
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    }
+
+    async function deleteGuardSetting(itemId) {
+      if (!confirm('هل أنت متأكد من حذف قاعدة الهامش الأدنى للصنف: ' + itemId + '؟')) return;
+      try {
+        const res = await apiFetch('/api/admin/guard/settings/' + encodeURIComponent(itemId), { method: 'DELETE' });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'فشل حذف قاعدة الهامش');
+        showToast('تم حذف قاعدة الهامش بنجاح');
+        loadGuardSettings();
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
     }
 
     function openSetTierPriceModal(tierId) {
@@ -665,5 +745,157 @@
         checkRadarAlerts();
       } catch (err) {
         showToast(err.message, 'error');
+      }
+    }
+
+    // =========================================================================
+    // STAGE 4: SURGE PRICING, REWARDS RULES & AUTO-RESTOCK
+    // =========================================================================
+    async function loadSurgeConfig() {
+      try {
+        const res = await apiFetch('/api/admin/surge/config');
+        const cfg = await res.json();
+        if (res.ok) {
+          const isEnabled = document.getElementById('surge-is-enabled');
+          const pct = document.getElementById('surge-percentage');
+          const maxCap = document.getElementById('surge-max-cap');
+          const reason = document.getElementById('surge-reason');
+          if (isEnabled) isEnabled.checked = cfg.is_enabled || false;
+          if (pct) pct.value = cfg.surge_percentage || 0;
+          if (maxCap) maxCap.value = cfg.max_surge_cap || 20;
+          if (reason) reason.value = cfg.reason || '';
+        }
+      } catch (err) {
+        console.error('loadSurgeConfig err:', err);
+      }
+    }
+
+    async function saveSurgeConfig() {
+      const payload = {
+        is_enabled: document.getElementById('surge-is-enabled').checked,
+        surge_percentage: parseFloat(document.getElementById('surge-percentage').value) || 0,
+        max_surge_cap: parseFloat(document.getElementById('surge-max-cap').value) || 20,
+        reason: document.getElementById('surge-reason').value.trim()
+      };
+
+      try {
+        const res = await apiFetch('/api/admin/surge/config', {
+          method: 'POST',
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'فشل حفظ إعدادات تسعير الذروة');
+        showToast('تم حفظ إعدادات تسعير الذروة بنجاح');
+        loadSurgeConfig();
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    }
+
+    async function loadRewardRules() {
+      const tbody = document.getElementById('reward-rules-table-body');
+      if (!tbody) return;
+      try {
+        const res = await apiFetch('/api/admin/rewards/rules');
+        const list = await res.json();
+        if (res.ok && Array.isArray(list)) {
+          if (list.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" class="py-6 text-center text-slate-400 font-bold">لا توجد قواعد مكافآت مسجلة</td></tr>';
+            return;
+          }
+          tbody.innerHTML = list.map(r => `
+            <tr class="hover:bg-slate-50 transition">
+              <td class="py-3 px-3 font-bold text-slate-800">${escapeHtml(r.name)}</td>
+              <td class="py-3 px-3 font-black text-slate-700">${r.metric === 'sales_amount' ? formatIQD(r.target_value) : r.target_value + ' عملية'}</td>
+              <td class="py-3 px-3 font-black text-purple-600">${formatIQD(r.reward_amount)}</td>
+              <td class="py-3 px-3"><span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-slate-100 text-slate-600">${r.period === 'monthly' ? 'شهري' : 'أسبوعي'}</span></td>
+              <td class="py-3 px-3">${r.is_active ? '<span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-50 text-emerald-600">نشط</span>' : '<span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-slate-100 text-slate-500">معطل</span>'}</td>
+              <td class="py-3 px-3 text-center">
+                <button onclick="evaluateRewardForMerchant(${r.id})" class="px-2.5 py-1 bg-purple-50 text-purple-700 hover:bg-purple-100 rounded-lg text-xs font-bold transition flex items-center gap-1 mx-auto">
+                  <i class="fa-solid fa-bolt text-[10px]"></i><span>صرف وتقييم</span>
+                </button>
+              </td>
+            </tr>
+          `).join('');
+        }
+      } catch (err) {
+        tbody.innerHTML = '<tr><td colspan="6" class="py-6 text-center text-rose-500 font-bold">خطأ في تحميل قواعد المكافآت</td></tr>';
+      }
+    }
+
+    function openAddRewardRuleModal() {
+      document.getElementById('reward-rule-name').value = '';
+      document.getElementById('reward-rule-target').value = '';
+      document.getElementById('reward-rule-reward').value = '';
+      document.getElementById('reward-rule-is-active').checked = true;
+      openModal('modal-add-reward-rule');
+    }
+
+    async function submitAddRewardRule(e) {
+      e.preventDefault();
+      const payload = {
+        name: document.getElementById('reward-rule-name').value.trim(),
+        metric: document.getElementById('reward-rule-metric').value,
+        period: document.getElementById('reward-rule-period').value,
+        target_value: parseInt(document.getElementById('reward-rule-target').value, 10),
+        reward_amount: parseInt(document.getElementById('reward-rule-reward').value, 10),
+        is_active: document.getElementById('reward-rule-is-active').checked
+      };
+
+      try {
+        const res = await apiFetch('/api/admin/rewards/rules', {
+          method: 'POST',
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'فشل حفظ قاعدة المكافأة');
+        closeModal('modal-add-reward-rule');
+        showToast('تمت إضافة قاعدة المكافأة بنجاح 🎁');
+        loadRewardRules();
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    }
+
+    async function evaluateRewardForMerchant(ruleId) {
+      const merchantIdStr = prompt('ادخل رقم المشترك / التاجر (Merchant ID) للتقييم والصرف:');
+      if (!merchantIdStr) return;
+      const merchantId = parseInt(merchantIdStr.trim(), 10);
+      if (!merchantId) return;
+
+      try {
+        const res = await apiFetch('/api/admin/rewards/evaluate/' + merchantId + '/' + ruleId, { method: 'POST' });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'لم يتم استيفاء شروط المكافأة أو تم صرفها مسبقاً');
+        showToast('تم تقييم وصرف المكافأة بنجاح في محفظة التاجر! 🎉');
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    }
+
+    async function loadRestockOrders() {
+      const tbody = document.getElementById('restock-orders-table-body');
+      if (!tbody) return;
+      try {
+        const res = await apiFetch('/api/admin/restock/orders');
+        const list = await res.json();
+        if (res.ok && Array.isArray(list)) {
+          if (list.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" class="py-6 text-center text-slate-400 font-bold">لا توجد طلبات توريد سابقة</td></tr>';
+            return;
+          }
+          tbody.innerHTML = list.map(o => `
+            <tr class="hover:bg-slate-50 transition">
+              <td class="py-3 px-3 font-mono font-bold text-slate-800">#${o.id}</td>
+              <td class="py-3 px-3 font-bold text-blue-600 uppercase">${escapeHtml(o.provider)}</td>
+              <td class="py-3 px-3 font-mono font-bold text-slate-700">${escapeHtml(o.item_id)}</td>
+              <td class="py-3 px-3 font-black text-slate-800">${o.quantity}</td>
+              <td class="py-3 px-3"><span class="px-2 py-0.5 rounded-full text-[10px] font-black ${o.status === 'completed' ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-700'}">${escapeHtml(o.status)}</span></td>
+              <td class="py-3 px-3 text-slate-400 text-[11px]">${formatBaghdad(o.created_at)}</td>
+            </tr>
+          `).join('');
+        }
+      } catch (err) {
+        tbody.innerHTML = '<tr><td colspan="6" class="py-6 text-center text-rose-500 font-bold">خطأ في تحميل طلبات التوريد</td></tr>';
       }
     }

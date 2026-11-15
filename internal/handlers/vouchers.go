@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -10,7 +11,9 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"venus_backend/internal/fraud"
+	"venus_backend/internal/guard"
 	"venus_backend/internal/hierarchy"
+	"venus_backend/internal/idem"
 	"venus_backend/internal/ledger"
 	"venus_backend/internal/middleware"
 	"venus_backend/internal/pricing"
@@ -26,6 +29,8 @@ type VouchersHandler struct {
 	VaultMgr     *vault.VaultManager
 	PricingSvc   *pricing.Service
 	HierarchySvc *hierarchy.Service
+	GuardSvc     *guard.Service
+	IdemSvc      *idem.Service
 }
 
 type rawPinItem struct {
@@ -326,6 +331,29 @@ func (h *VouchersHandler) DispenseVoucher(c *fiber.Ctx) error {
 		}
 	}
 
+	// 0a. Idempotency Check & Advisory Lock
+	idemKey := idem.CleanKey(c.Get("Idempotency-Key"))
+	if h.IdemSvc != nil && uid > 0 && idemKey != "" {
+		cached, stored, iErr := h.IdemSvc.CheckOrStart(c.Context(), tx, uid, "voucher_dispense", idemKey, 24*time.Hour)
+		if iErr != nil {
+			if errors.Is(iErr, idem.ErrKeyInProgress) {
+				return c.Status(fiber.StatusConflict).JSON(fiber.Map{
+					"success": false,
+					"error":   "OPERATION_IN_PROGRESS",
+					"message": "العملية قيد المعالجة حالياً، يرجى الانتظار",
+				})
+			}
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"success": false,
+				"error":   iErr.Error(),
+			})
+		}
+		if cached && stored != nil {
+			c.Set(fiber.HeaderContentType, "application/json; charset=utf-8")
+			return c.Status(stored.StatusCode).Send(stored.Response)
+		}
+	}
+
 	// 1. Resolve unit selling price for this specific subscriber strictly inside the transaction
 	// (Resolution order: Override -> Tier -> Catalog Default; NO stale in-memory cache used for money)
 	unitSellingPrice := req.SellingPrice
@@ -422,6 +450,19 @@ func (h *VouchersHandler) DispenseVoucher(c *fiber.Ctx) error {
 		storeName = cl.Email
 	}
 
+	// 2a. Financial Guard check: reject sale if selling price < cost price + min_margin
+	if h.GuardSvc != nil && len(claimed) > 0 && uid > 0 {
+		unitCost := int64(claimed[0].Cost)
+		if gErr := h.GuardSvc.CheckSalePriceTx(c.Context(), tx, uid, req.VoucherID, unitCost, unitSellingPrice); gErr != nil {
+			return c.Status(fiber.StatusUnprocessableEntity).JSON(fiber.Map{
+				"success": false,
+				"error":   "PRICE_BELOW_COST",
+				"code":    "PRICE_BELOW_COST",
+				"message": "لا يمكن إتمام عملية البيع: سعر البيع أقل من التكلفة المحددة للمنتج",
+			})
+		}
+	}
+
 	totalPrice := unitSellingPrice * int64(len(claimed))
 	if totalPrice > 0 {
 		// Risk & Fraud Check
@@ -493,6 +534,16 @@ func (h *VouchersHandler) DispenseVoucher(c *fiber.Ctx) error {
 	}
 	br.Close()
 
+	resMap := fiber.Map{
+		"success": true,
+		"pins":    resultPins,
+		"count":   len(resultPins),
+	}
+
+	if h.IdemSvc != nil && uid > 0 && idemKey != "" {
+		_ = h.IdemSvc.CompleteTx(c.Context(), tx, uid, idemKey, fiber.StatusOK, resMap)
+	}
+
 	if err := tx.Commit(c.Context()); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"success": false,
@@ -522,9 +573,5 @@ func (h *VouchersHandler) DispenseVoucher(c *fiber.Ctx) error {
 		})
 	}
 
-	return c.JSON(fiber.Map{
-		"success": true,
-		"pins":    resultPins,
-		"count":   len(resultPins),
-	})
+	return c.JSON(resMap)
 }

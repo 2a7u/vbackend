@@ -9,12 +9,14 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"venus_backend/internal/middleware"
+	syncPkg "venus_backend/internal/sync"
 )
 
-// SyncHandler serves the unified state endpoint GET /api/sync/state
+// SyncHandler serves the unified state endpoint GET /api/sync/state and delta sync GET /api/sync
 type SyncHandler struct {
-	Pool *pgxpool.Pool
-	Hub  *WSHub
+	Pool    *pgxpool.Pool
+	Hub     *WSHub
+	SyncSvc *syncPkg.Service
 }
 
 func (h *SyncHandler) GetSyncState(c *fiber.Ctx) error {
@@ -382,4 +384,38 @@ func extractUserIDFromHeaders(c *fiber.Ctx) int64 {
 		}
 	}
 	return 0
+}
+
+// GetDelta handles GET /api/sync?since=<cursor> (Stage 2)
+func (h *SyncHandler) GetDelta(c *fiber.Ctx) error {
+	uid := middleware.UserID(c)
+	if uid <= 0 {
+		uid = extractUserIDFromHeaders(c)
+	}
+	if uid <= 0 {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"error": "المستخدم غير مسجل",
+		})
+	}
+
+	sinceCursor := c.Query("since", "")
+	if h.SyncSvc == nil {
+		return c.JSON(fiber.Map{
+			"cursor":     sinceCursor,
+			"sims":       []any{},
+			"sales":      []any{},
+			"debts":      []any{},
+			"expenses":   []any{},
+			"tombstones": []any{},
+		})
+	}
+
+	delta, err := h.SyncSvc.GetDelta(c.Context(), uid, sinceCursor)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "فشل جلب التحديثات التراكمية: " + err.Error(),
+		})
+	}
+
+	return c.JSON(delta)
 }

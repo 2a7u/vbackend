@@ -871,6 +871,144 @@
               </table>
             </div>
           </div>
+
+          <!-- Guard Minimum Margin Settings (Stage 1) -->
+          <div class="bg-white rounded-3xl border border-slate-200/80 shadow-sm overflow-hidden p-5 space-y-3">
+            <div class="flex items-center justify-between">
+              <div>
+                <h3 class="text-sm font-black text-slate-800 flex items-center gap-2">
+                  <i class="fa-solid fa-shield-halved text-brand"></i>
+                  <span>حماية الأسعار وهامش الربح الأدنى (Guard)</span>
+                </h3>
+                <p class="text-[11px] text-slate-400">منع البيع بأقل من التكلفة وإلزام هامش ربح أدنى لكل صنف أو للكل (*)</p>
+              </div>
+              <button onclick="openAddGuardModal()" class="px-3.5 py-2 bg-brand hover:bg-brand-dark text-white rounded-xl font-bold text-xs shadow-sm flex items-center gap-1.5 transition">
+                <i class="fa-solid fa-plus"></i><span>إضافة هامش أدنى</span>
+              </button>
+            </div>
+            <div class="overflow-x-auto">
+              <table class="w-full text-right border-collapse text-xs">
+                <thead>
+                  <tr class="bg-slate-50/80 border-b border-slate-200 text-slate-500 font-bold">
+                    <th class="py-3 px-3">رمز الصنف / المنتج</th>
+                    <th class="py-3 px-3">الهامش الأدنى (د.ع)</th>
+                    <th class="py-3 px-3">الهامش الأدنى (%)</th>
+                    <th class="py-3 px-3">الحالة</th>
+                    <th class="py-3 px-3">آخر تحديث</th>
+                    <th class="py-3 px-3 text-center">إجراء</th>
+                  </tr>
+                </thead>
+                <tbody id="guard-settings-table-body" class="divide-y divide-slate-100 font-medium">
+                  <tr><td colspan="6" class="py-6 text-center text-slate-400">جاري تحميل إعدادات الحماية...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Surge Dynamic Pricing (Stage 4) -->
+          <div class="bg-white rounded-3xl border border-slate-200/80 shadow-sm overflow-hidden p-5 space-y-4">
+            <div class="flex items-center justify-between">
+              <div>
+                <h3 class="text-sm font-black text-slate-800 flex items-center gap-2">
+                  <i class="fa-solid fa-arrow-trend-up text-amber-500"></i>
+                  <span>تسعير الذروة الديناميكي (Surge Pricing)</span>
+                </h3>
+                <p class="text-[11px] text-slate-400">معطل افتراضياً، مع تحديد سقف أقصى للزيادة وعرض النسبة والسبب للمشتري قبل الدفع</p>
+              </div>
+              <button onclick="saveSurgeConfig()" class="px-4 py-2 bg-brand hover:bg-brand-dark text-white rounded-xl font-bold text-xs shadow-sm transition">
+                <i class="fa-solid fa-check ml-1"></i>حفظ إعدادات الذروة
+              </button>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-4 gap-4 text-xs font-bold text-slate-700 bg-slate-50 p-4 rounded-2xl border border-slate-200/80">
+              <label class="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" id="surge-is-enabled" class="accent-brand w-4 h-4">
+                <span>تفعيل تسعير الذروة</span>
+              </label>
+              <div>
+                <label class="block text-[11px] text-slate-500 mb-1">نسبة الزيادة الحالية (%)</label>
+                <input type="number" id="surge-percentage" min="0" max="100" class="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-bold">
+              </div>
+              <div>
+                <label class="block text-[11px] text-slate-500 mb-1">السقف الأقصى المسموح (%)</label>
+                <input type="number" id="surge-max-cap" min="0" max="100" class="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-bold">
+              </div>
+              <div>
+                <label class="block text-[11px] text-slate-500 mb-1">سبب الذروة للمشتري</label>
+                <input type="text" id="surge-reason" placeholder="مثال: ذروة الطلب بداية الشهر" class="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-bold">
+              </div>
+            </div>
+          </div>
+
+          <!-- Sales Rewards Rules (Stage 4) -->
+          <div class="bg-white rounded-3xl border border-slate-200/80 shadow-sm overflow-hidden p-5 space-y-3">
+            <div class="flex items-center justify-between">
+              <div>
+                <h3 class="text-sm font-black text-slate-800 flex items-center gap-2">
+                  <i class="fa-solid fa-gift text-purple-600"></i>
+                  <span>برنامج مكافآت وحوافز المبيعات (Sales Rewards)</span>
+                </h3>
+                <p class="text-[11px] text-slate-400">صرف مكافآت آلية لمحفظة التاجر عند تجاوز مستهدف المبيعات شهرياً أو أسبوعياً</p>
+              </div>
+              <div class="flex items-center gap-2">
+                <button onclick="openAddRewardRuleModal()" class="px-3.5 py-2 bg-brand hover:bg-brand-dark text-white rounded-xl font-bold text-xs shadow-sm flex items-center gap-1.5 transition">
+                  <i class="fa-solid fa-plus"></i><span>إضافة قاعدة مكافأة</span>
+                </button>
+                <button onclick="loadRewardRules()" class="px-3 py-2 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl font-bold text-xs transition">
+                  <i class="fa-solid fa-rotate-right"></i>
+                </button>
+              </div>
+            </div>
+            <div class="overflow-x-auto">
+              <table class="w-full text-right border-collapse text-xs">
+                <thead>
+                  <tr class="bg-slate-50/80 border-b border-slate-200 text-slate-500 font-bold">
+                    <th class="py-3 px-3">اسم القاعدة</th>
+                    <th class="py-3 px-3">المستهدف (Target)</th>
+                    <th class="py-3 px-3">المكافأة (د.ع)</th>
+                    <th class="py-3 px-3">الفترة</th>
+                    <th class="py-3 px-3">الحالة</th>
+                    <th class="py-3 px-3 text-center">إجراء</th>
+                  </tr>
+                </thead>
+                <tbody id="reward-rules-table-body" class="divide-y divide-slate-100 font-medium">
+                  <tr><td colspan="6" class="py-6 text-center text-slate-400">جاري تحميل قواعد المكافآت...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Restock Orders (Stage 4) -->
+          <div class="bg-white rounded-3xl border border-slate-200/80 shadow-sm overflow-hidden p-5 space-y-3">
+            <div class="flex items-center justify-between">
+              <div>
+                <h3 class="text-sm font-black text-slate-800 flex items-center gap-2">
+                  <i class="fa-solid fa-boxes-packing text-blue-600"></i>
+                  <span>طلبات إعادة التعبئة والتوريد الآلي (Auto-Restock)</span>
+                </h3>
+                <p class="text-[11px] text-slate-400">سجل طلبات التوريد التلقائية من المزودين الخارجيين عند اقتراب نفاد المخزون</p>
+              </div>
+              <button onclick="loadRestockOrders()" class="px-3 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl font-bold text-xs transition">
+                <i class="fa-solid fa-rotate-right"></i><span>تحديث</span>
+              </button>
+            </div>
+            <div class="overflow-x-auto">
+              <table class="w-full text-right border-collapse text-xs">
+                <thead>
+                  <tr class="bg-slate-50/80 border-b border-slate-200 text-slate-500 font-bold">
+                    <th class="py-3 px-3">رقم الطلب</th>
+                    <th class="py-3 px-3">المزود</th>
+                    <th class="py-3 px-3">رمز الصنف</th>
+                    <th class="py-3 px-3">الكمية</th>
+                    <th class="py-3 px-3">الحالة</th>
+                    <th class="py-3 px-3">التاريخ</th>
+                  </tr>
+                </thead>
+                <tbody id="restock-orders-table-body" class="divide-y divide-slate-100 font-medium">
+                  <tr><td colspan="6" class="py-6 text-center text-slate-400">جاري تحميل طلبات التوريد...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
         </section>
 
         <!-- ========================================================================= -->
@@ -1120,6 +1258,201 @@
                 </table>
               </div>
             </div>
+
+            <!-- Limits Blocks Table (Stage 1) -->
+            <div class="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-sm space-y-3 lg:col-span-2">
+              <div class="flex items-center justify-between">
+                <div>
+                  <h3 class="text-sm font-black text-slate-800 flex items-center gap-2">
+                    <i class="fa-solid fa-user-slash text-rose-600"></i>
+                    <span>قائمة الحظر والحدود (Limits & Anti-Brute-Force)</span>
+                  </h3>
+                  <p class="text-[11px] text-slate-400">المشتركون وعناوين IP المحظورة مؤقتاً لتجاوز محاولات التفعيل أو معدل الطلبات</p>
+                </div>
+                <button onclick="loadLimitsBlocks()" class="px-3 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl font-bold text-xs transition flex items-center gap-1.5">
+                  <i class="fa-solid fa-rotate-right"></i><span>تحديث</span>
+                </button>
+              </div>
+              <div class="overflow-x-auto">
+                <table class="w-full text-right border-collapse text-xs">
+                  <thead>
+                    <tr class="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold">
+                      <th class="py-2.5 px-3">النوع</th>
+                      <th class="py-2.5 px-3">المعرف / المفتاح</th>
+                      <th class="py-2.5 px-3">السبب</th>
+                      <th class="py-2.5 px-3">المحاولات</th>
+                      <th class="py-2.5 px-3">ينتهي الحظر في</th>
+                      <th class="py-2.5 px-3 text-center">إجراء</th>
+                    </tr>
+                  </thead>
+                  <tbody id="limits-blocks-table-body" class="divide-y divide-slate-100 font-medium">
+                    <tr><td colspan="6" class="py-6 text-center text-slate-400">جاري تحميل المحظورين...</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- Dead Jobs Queue (Stage 2) -->
+            <div class="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-sm space-y-3 lg:col-span-2">
+              <div class="flex items-center justify-between">
+                <div>
+                  <h3 class="text-sm font-black text-slate-800 flex items-center gap-2">
+                    <i class="fa-solid fa-triangle-exclamation text-amber-500"></i>
+                    <span>المهام الخلفية المتعثرة (Dead Jobs Queue)</span>
+                  </h3>
+                  <p class="text-[11px] text-slate-400">المهام التي استنفدت 10 محاولات تنفيذ متتالية (مثل فحص زين كاش أو إشعارات الشبكة) وتحتاج تدخلاً أو إعادة محاولة</p>
+                </div>
+                <button onclick="loadDeadJobs()" class="px-3 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl font-bold text-xs transition flex items-center gap-1.5">
+                  <i class="fa-solid fa-rotate-right"></i><span>تحديث</span>
+                </button>
+              </div>
+              <div class="overflow-x-auto">
+                <table class="w-full text-right border-collapse text-xs">
+                  <thead>
+                    <tr class="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold">
+                      <th class="py-2.5 px-3">رقم المهمة</th>
+                      <th class="py-2.5 px-3">المشترك</th>
+                      <th class="py-2.5 px-3">نوع المهمة</th>
+                      <th class="py-2.5 px-3">المحاولات</th>
+                      <th class="py-2.5 px-3">الخطأ الأخير</th>
+                      <th class="py-2.5 px-3">تاريخ الإنشاء</th>
+                      <th class="py-2.5 px-3 text-center">إجراء</th>
+                    </tr>
+                  </thead>
+                  <tbody id="dead-jobs-table-body" class="divide-y divide-slate-100 font-medium">
+                    <tr><td colspan="7" class="py-6 text-center text-slate-400">جاري تحميل المهام المتعثرة...</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- Notify Channels & Fallback Configuration (Stage 3) -->
+            <div class="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-sm space-y-3 lg:col-span-2">
+              <div class="flex items-center justify-between">
+                <div>
+                  <h3 class="text-sm font-black text-slate-800 flex items-center gap-2">
+                    <i class="fa-solid fa-bullhorn text-brand"></i>
+                    <span>قنوات الإشعارات والـ Fallback الموحد (Notify Channels)</span>
+                  </h3>
+                  <p class="text-[11px] text-slate-400">إدارة قنوات الإشعار (Telegram, WhatsApp, SMS, Push) وترتيب الأولوية التلقائي عند تعطل إحداها</p>
+                </div>
+                <div class="flex items-center gap-2">
+                  <button onclick="openAddNotifyChannelModal()" class="px-3.5 py-1.5 bg-brand hover:bg-brand-dark text-white rounded-xl font-bold text-xs shadow-sm flex items-center gap-1.5 transition">
+                    <i class="fa-solid fa-plus"></i><span>إضافة قناة</span>
+                  </button>
+                  <button onclick="loadNotifyChannels()" class="px-3 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl font-bold text-xs transition flex items-center gap-1.5">
+                    <i class="fa-solid fa-rotate-right"></i><span>تحديث</span>
+                  </button>
+                </div>
+              </div>
+              <div class="overflow-x-auto">
+                <table class="w-full text-right border-collapse text-xs">
+                  <thead>
+                    <tr class="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold">
+                      <th class="py-2.5 px-3">الأولوية (Fallback Order)</th>
+                      <th class="py-2.5 px-3">نوع القناة</th>
+                      <th class="py-2.5 px-3">الحالة</th>
+                      <th class="py-2.5 px-3">الإعدادات</th>
+                      <th class="py-2.5 px-3 text-center">إجراء</th>
+                    </tr>
+                  </thead>
+                  <tbody id="notify-channels-table-body" class="divide-y divide-slate-100 font-medium">
+                    <tr><td colspan="5" class="py-6 text-center text-slate-400">جاري تحميل قنوات الإشعار...</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- Seal Receipt Verifier Tool (Stage 3) -->
+            <div class="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-sm space-y-3 lg:col-span-2">
+              <h3 class="text-sm font-black text-slate-800 flex items-center gap-2">
+                <i class="fa-solid fa-stamp text-emerald-600"></i>
+                <span>فاحص الأختام الرقمية وصحة الفواتير (Seal Verifier)</span>
+              </h3>
+              <p class="text-[11px] text-slate-400">تحقق فوري من أي توقيع أو رمز فاتورة HMAC-SHA256 لمعرفة المتجر والمبلغ وتوقيت بغداد المعتمد</p>
+              <div class="flex gap-2">
+                <input type="text" id="seal-verify-token-input" placeholder="ادخل رمز الختم (مثال: v-ab12cd34ef)" class="flex-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono font-bold text-slate-800 outline-none focus:border-brand">
+                <button onclick="verifySealTokenManually()" class="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-sm transition flex items-center gap-1.5">
+                  <i class="fa-solid fa-check-double"></i><span>تحقق الآن</span>
+                </button>
+              </div>
+              <div id="seal-verify-result-box" class="p-4 bg-slate-50 rounded-2xl border border-slate-200 hidden text-xs space-y-1"></div>
+            </div>
+
+            <!-- Risk Engine & Profiles (Stage 4) -->
+            <div class="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-sm space-y-3 lg:col-span-2">
+              <div class="flex items-center justify-between">
+                <div>
+                  <h3 class="text-sm font-black text-slate-800 flex items-center gap-2">
+                    <i class="fa-solid fa-triangle-exclamation text-rose-600"></i>
+                    <span>محرك تقييم المخاطر والاحتيال (Risk Profiles)</span>
+                  </h3>
+                  <p class="text-[11px] text-slate-400">تقييم نقاط الخطر تلقائياً بناءً على العمليات الليلية، تسارع الطلبات، ومحاولات تسجيل الدخول الفاشلة</p>
+                </div>
+                <button onclick="loadRiskProfiles()" class="px-3 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl font-bold text-xs transition flex items-center gap-1.5">
+                  <i class="fa-solid fa-rotate-right"></i><span>تحديث</span>
+                </button>
+              </div>
+              <div class="overflow-x-auto">
+                <table class="w-full text-right border-collapse text-xs">
+                  <thead>
+                    <tr class="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold">
+                      <th class="py-2.5 px-3">رقم التاجر / المشترك</th>
+                      <th class="py-2.5 px-3">مؤشر الخطر (0-100)</th>
+                      <th class="py-2.5 px-3">المؤشرات المرصودة (Flags)</th>
+                      <th class="py-2.5 px-3">حالة الحساب</th>
+                      <th class="py-2.5 px-3">آخر تقييم</th>
+                      <th class="py-2.5 px-3 text-center">إجراءات</th>
+                    </tr>
+                  </thead>
+                  <tbody id="risk-profiles-table-body" class="divide-y divide-slate-100 font-medium">
+                    <tr><td colspan="6" class="py-6 text-center text-slate-400">جاري تحميل تقييمات المخاطر...</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- B2B API Keys v2 (Stage 4) -->
+            <div class="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-sm space-y-3 lg:col-span-2">
+              <div class="flex items-center justify-between">
+                <div>
+                  <h3 class="text-sm font-black text-slate-800 flex items-center gap-2">
+                    <i class="fa-solid fa-network-wired text-brand"></i>
+                    <span>مفاتيح الربط البرمجي B2B (API Keys v2)</span>
+                  </h3>
+                  <p class="text-[11px] text-slate-400">مفاتيح API مشفرة بـ SHA-256 للشركاء مع تحديد الصلاحيات وسقوف الاستهلاك ووثائق OpenAPI</p>
+                </div>
+                <div class="flex items-center gap-2">
+                  <a href="/api/docs/openapi.json" target="_blank" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-xs transition flex items-center gap-1">
+                    <i class="fa-solid fa-book-open"></i><span>وثائق OpenAPI</span>
+                  </a>
+                  <button onclick="openAddApiKeyV2Modal()" class="px-3.5 py-1.5 bg-brand hover:bg-brand-dark text-white rounded-xl font-bold text-xs shadow-sm flex items-center gap-1.5 transition">
+                    <i class="fa-solid fa-plus"></i><span>توليد مفتاح جديد</span>
+                  </button>
+                  <button onclick="loadApiKeysV2()" class="px-3 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl font-bold text-xs transition">
+                    <i class="fa-solid fa-rotate-right"></i>
+                  </button>
+                </div>
+              </div>
+              <div class="overflow-x-auto">
+                <table class="w-full text-right border-collapse text-xs">
+                  <thead>
+                    <tr class="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold">
+                      <th class="py-2.5 px-3">التسمية</th>
+                      <th class="py-2.5 px-3">البادئة (Prefix)</th>
+                      <th class="py-2.5 px-3">الصلاحيات (Scopes)</th>
+                      <th class="py-2.5 px-3">الحد / دقيقة</th>
+                      <th class="py-2.5 px-3">مرات الاستخدام</th>
+                      <th class="py-2.5 px-3">الحالة</th>
+                      <th class="py-2.5 px-3 text-center">إجراء</th>
+                    </tr>
+                  </thead>
+                  <tbody id="api-keys-v2-table-body" class="divide-y divide-slate-100 font-medium">
+                    <tr><td colspan="7" class="py-6 text-center text-slate-400">جاري تحميل مفاتيح API v2...</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
           </div>
         </section>
 
@@ -1130,12 +1463,18 @@
           <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
               <h2 class="text-xl font-black text-slate-800">التقارير</h2>
-              <p class="text-xs text-slate-500 mt-0.5">تحليلات الأرباح الصافية، معدلات الاحتفاظ والانسحاب، والنسخ السريع للبيانات</p>
+              <p class="text-xs text-slate-500 mt-0.5">تحليلات الأرباح الصافية، التقرير اليومي التلقائي (00:00 بغداد)، والنسخ السريع للبيانات</p>
             </div>
-            <button onclick="downloadSecureBackup()" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs shadow-md shadow-emerald-600/20 flex items-center gap-2 transition">
-              <i class="fa-solid fa-download"></i>
-              <span>تنزيل نسخة احتياطية كاملة (JSON مشفر)</span>
-            </button>
+            <div class="flex items-center gap-2">
+              <button onclick="sendReportsNow()" class="px-4 py-2 bg-brand hover:bg-brand-dark text-white rounded-xl font-bold text-xs shadow-md shadow-brand/20 flex items-center gap-2 transition active:scale-[0.99]">
+                <i class="fa-solid fa-paper-plane"></i>
+                <span>أرسل التقرير الآن</span>
+              </button>
+              <button onclick="downloadSecureBackup()" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs shadow-md shadow-emerald-600/20 flex items-center gap-2 transition">
+                <i class="fa-solid fa-download"></i>
+                <span>نسخة احتياطية (JSON)</span>
+              </button>
+            </div>
           </div>
 
           <!-- BI KPI Cards -->
@@ -1180,6 +1519,50 @@
               <div class="p-3 bg-slate-50 rounded-xl border border-slate-200/80">
                 <span class="text-slate-400 block text-[10px]">توقيت السيرفر الرسمي</span>
                 <span id="bi-server-time" class="text-xs font-bold text-slate-600">—</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 7-Day Liquidity Forecast (Stage 4) -->
+          <div class="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-sm space-y-4">
+            <div class="flex items-center justify-between">
+              <div>
+                <h3 class="text-sm font-black text-slate-800 flex items-center gap-2">
+                  <i class="fa-solid fa-chart-line text-brand"></i>
+                  <span>توقعات السيولة المالية للـ 7 أيام القادمة (Liquidity Forecast)</span>
+                </h3>
+                <p class="text-[11px] text-slate-400">حساب المتوسط المتحرك لوتيرة المبيعات والتنبؤ بالسيولة وأيام الأمان المالي</p>
+              </div>
+              <button onclick="loadForecastData()" class="px-3 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl font-bold text-xs transition flex items-center gap-1.5">
+                <i class="fa-solid fa-rotate-right"></i><span>تحديث التوقعات</span>
+              </button>
+            </div>
+
+            <!-- Forecast KPI Summary Cards -->
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs font-bold text-slate-700">
+              <div class="p-4 bg-emerald-50/60 rounded-2xl border border-emerald-200/60">
+                <span class="text-emerald-700 block text-[11px] font-bold">الرصيد الفعلي الحالي</span>
+                <span id="forecast-current-balance" class="text-base font-black text-emerald-800 block mt-1">0 د.ع</span>
+              </div>
+              <div class="p-4 bg-blue-50/60 rounded-2xl border border-blue-200/60">
+                <span class="text-blue-700 block text-[11px] font-bold">التدفق المتوقع للأسبوع</span>
+                <span id="forecast-projected-weekly" class="text-base font-black text-brand block mt-1">0 د.ع</span>
+              </div>
+              <div class="p-4 bg-purple-50/60 rounded-2xl border border-purple-200/60">
+                <span class="text-purple-700 block text-[11px] font-bold">أيام الأمان المالي (Runway)</span>
+                <span id="forecast-runway-days" class="text-base font-black text-purple-800 block mt-1">0 يوم</span>
+              </div>
+              <div class="p-4 bg-amber-50/60 rounded-2xl border border-amber-200/60">
+                <span class="text-amber-700 block text-[11px] font-bold">معدل الاستنزاف اليومي</span>
+                <span id="forecast-burn-rate" class="text-base font-black text-amber-800 block mt-1">0 د.ع / يوم</span>
+              </div>
+            </div>
+
+            <!-- 7-Day Projected Cards Grid -->
+            <div>
+              <span class="text-xs font-black text-slate-700 block mb-2">التوزيع التقديري للمبيعات والسيولة لكل يوم:</span>
+              <div class="grid grid-cols-1 sm:grid-cols-7 gap-3" id="forecast-daily-grid">
+                <div class="col-span-full py-4 text-center text-slate-400 font-bold text-xs">جاري حساب التوقعات الرياضية...</div>
               </div>
             </div>
           </div>
@@ -1519,6 +1902,44 @@
       </div>
     </div>
   </div>
+
+  <!-- MODAL: ADD / EDIT GUARD MINIMUM MARGIN (Stage 1) -->
+  <div id="modal-add-guard" class="fixed inset-0 z-50 flex items-center justify-center p-4 modal-backdrop hidden">
+    <div class="bg-white rounded-3xl p-6 w-full max-w-md shadow-2xl space-y-4">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+        <h3 class="font-black text-sm text-slate-800 flex items-center gap-2">
+          <i class="fa-solid fa-shield-halved text-brand"></i>
+          <span>ضبط الهامش الأدنى (حماية الأسعار)</span>
+        </h3>
+        <button onclick="closeModal('modal-add-guard')" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
+      </div>
+      <form id="form-add-guard" onsubmit="submitAddGuardSetting(event)" class="space-y-3">
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">معرف الصنف أو المنتج</label>
+          <input type="text" id="guard-item-id" required placeholder="اكتب * لتعيين هامش عام، أو اكتب رمز الصنف" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-brand">
+          <span class="text-[10px] text-slate-400 block mt-1">استخدم * لتطبيقه كقاعدة افتراضية عامة لجميع المنتجات غير المخصصة</span>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">الهامش الأدنى (د.ع)</label>
+            <input type="number" id="guard-margin-iqd" min="0" value="0" step="250" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-brand">
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">الهامش الأدنى (%)</label>
+            <input type="number" id="guard-margin-pct" min="0" max="100" value="0" step="0.5" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-brand">
+          </div>
+        </div>
+        <div class="flex items-center gap-2 pt-1">
+          <input type="checkbox" id="guard-is-active" checked class="w-4 h-4 accent-brand cursor-pointer">
+          <label for="guard-is-active" class="text-xs font-bold text-slate-700 cursor-pointer">تفعيل فحص الهامش</label>
+        </div>
+        <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+          <button type="button" onclick="closeModal('modal-add-guard')" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-xs font-bold">إلغاء</button>
+          <button type="submit" class="px-5 py-2 bg-brand hover:bg-brand-dark text-white rounded-xl text-xs font-bold shadow-sm transition">حفظ قاعدة الهامش</button>
+        </div>
+      </form>
+    </div>
+  </div>
   <!-- 11. SUBSCRIBER 360 MODAL -->
   <div id="modal-subscriber-360" class="fixed inset-0 z-50 flex items-center justify-center p-4 modal-backdrop hidden">
     <div class="w-full max-w-4xl bg-white rounded-3xl shadow-2xl border border-slate-100 max-h-[90vh] flex flex-col overflow-hidden">
@@ -1852,6 +2273,188 @@
         <span class="text-xs font-black text-emerald-800 block">انسخ المفتاح الآن! لن يتم عرضه مرة أخرى:</span>
         <div class="p-2.5 bg-white rounded-xl border border-emerald-200 font-mono text-xs font-bold text-slate-800 select-all break-all" id="apikey-secret-value">vsk_live_...</div>
         <button type="button" onclick="copyAPIKeyToClipboard()" class="w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-sm transition flex items-center justify-center gap-2">
+          <i class="fa-solid fa-copy"></i><span>نسخ المفتاح للحافظة</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: ADD NOTIFY CHANNEL (Stage 3) -->
+  <div id="modal-add-notify-channel" class="fixed inset-0 z-50 flex items-center justify-center p-4 modal-backdrop hidden">
+    <div class="bg-white rounded-3xl p-6 w-full max-w-md shadow-2xl space-y-4">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+        <h3 class="font-black text-sm text-slate-800 flex items-center gap-2">
+          <i class="fa-solid fa-bullhorn text-brand"></i>
+          <span>إضافة قناة إشعارات جديدة</span>
+        </h3>
+        <button onclick="closeModal('modal-add-notify-channel')" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
+      </div>
+      <form id="form-add-notify-channel" onsubmit="submitAddNotifyChannel(event)" class="space-y-3">
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">نوع القناة</label>
+          <select id="notify-channel-type" onchange="toggleNotifyFields()" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-brand">
+            <option value="telegram">Telegram Bot</option>
+            <option value="whatsapp">WhatsApp Gateway</option>
+            <option value="sms">SMS Gateway</option>
+            <option value="push">Push Notification</option>
+          </select>
+        </div>
+        <div id="notify-field-token">
+          <label class="block text-xs font-bold text-slate-700 mb-1">رمز البوت (Bot Token / API Key)</label>
+          <input type="text" id="notify-token" placeholder="bot123456:ABC-DEF..." class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono font-bold text-slate-800 outline-none focus:border-brand">
+        </div>
+        <div id="notify-field-target">
+          <label class="block text-xs font-bold text-slate-700 mb-1">المعرف أو الرابط (Chat ID / Endpoint URL)</label>
+          <input type="text" id="notify-target" placeholder="-100123456789 أو https://api.gateway.com/send" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono font-bold text-slate-800 outline-none focus:border-brand">
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">الأولوية (Priority)</label>
+            <input type="number" id="notify-priority" min="1" max="10" value="1" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-brand">
+            <span class="text-[10px] text-slate-400 block mt-0.5">1 يُنفَّذ أولاً ثم 2 كبديل</span>
+          </div>
+          <div class="flex items-center gap-2 pt-6">
+            <input type="checkbox" id="notify-is-active" checked class="w-4 h-4 accent-brand cursor-pointer">
+            <label for="notify-is-active" class="text-xs font-bold text-slate-700 cursor-pointer">القناة نشطة</label>
+          </div>
+        </div>
+        <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+          <button type="button" onclick="closeModal('modal-add-notify-channel')" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-xs font-bold">إلغاء</button>
+          <button type="submit" class="px-5 py-2 bg-brand hover:bg-brand-dark text-white rounded-xl text-xs font-bold shadow-sm transition">حفظ القناة</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: ADD REWARD RULE (Stage 4) -->
+  <div id="modal-add-reward-rule" class="fixed inset-0 z-50 flex items-center justify-center p-4 modal-backdrop hidden">
+    <div class="bg-white rounded-3xl p-6 w-full max-w-md shadow-2xl space-y-4">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+        <h3 class="font-black text-sm text-slate-800 flex items-center gap-2">
+          <i class="fa-solid fa-gift text-purple-600"></i>
+          <span>إضافة قاعدة مكافأة جديدة</span>
+        </h3>
+        <button onclick="closeModal('modal-add-reward-rule')" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
+      </div>
+      <form id="form-add-reward-rule" onsubmit="submitAddRewardRule(event)" class="space-y-3">
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">اسم القاعدة / الحملة</label>
+          <input type="text" id="reward-rule-name" required placeholder="مثال: حافز بطل المبيعات الشهري" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-brand">
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">المعيار (Metric)</label>
+            <select id="reward-rule-metric" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-brand">
+              <option value="sales_amount">إجمالي المبيعات (د.ع)</option>
+              <option value="sales_count">عدد عمليات البيع</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">الفترة الزمنية</label>
+            <select id="reward-rule-period" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-brand">
+              <option value="monthly">شهري</option>
+              <option value="weekly">أسبوعي</option>
+            </select>
+          </div>
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">المستهدف المطلوب (Target)</label>
+          <input type="number" id="reward-rule-target" required min="1" step="1000" placeholder="مثال: 5000000" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-brand">
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">مبلغ المكافأة عند الإنجاز (د.ع)</label>
+          <input type="number" id="reward-rule-reward" required min="1" step="1000" placeholder="مثال: 50000" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-brand">
+        </div>
+        <div class="flex items-center gap-2 pt-2">
+          <input type="checkbox" id="reward-rule-is-active" checked class="w-4 h-4 accent-brand cursor-pointer">
+          <label for="reward-rule-is-active" class="text-xs font-bold text-slate-700 cursor-pointer">القاعدة مفعلة</label>
+        </div>
+        <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+          <button type="button" onclick="closeModal('modal-add-reward-rule')" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-xs font-bold">إلغاء</button>
+          <button type="submit" class="px-5 py-2 bg-brand hover:bg-brand-dark text-white rounded-xl text-xs font-bold shadow-sm transition">حفظ وتفعيل</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: OVERRIDE RISK (Stage 4) -->
+  <div id="modal-override-risk" class="fixed inset-0 z-50 flex items-center justify-center p-4 modal-backdrop hidden">
+    <div class="bg-white rounded-3xl p-6 w-full max-w-md shadow-2xl space-y-4">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+        <h3 class="font-black text-sm text-slate-800 flex items-center gap-2">
+          <i class="fa-solid fa-user-shield text-brand"></i>
+          <span>تعديل تقييم المخاطر وفك التجميد</span>
+        </h3>
+        <button onclick="closeModal('modal-override-risk')" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
+      </div>
+      <form id="form-override-risk" onsubmit="submitOverrideRisk(event)" class="space-y-3">
+        <input type="hidden" id="override-risk-merchant-id">
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">المشترك / التاجر</label>
+          <div id="override-risk-merchant-info" class="p-2.5 bg-slate-50 rounded-xl font-bold text-xs text-slate-800 border border-slate-200">#</div>
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">درجة المخاطرة اليدوية الجديدة (0-100)</label>
+          <input type="number" id="override-risk-score" min="0" max="100" required class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-brand">
+          <span class="text-[10px] text-slate-400 block mt-0.5">0-40 آمن، 41-79 تحذير، 80-100 تجميد فوري</span>
+        </div>
+        <div class="flex items-center gap-2 pt-2">
+          <input type="checkbox" id="override-risk-unfreeze" checked class="w-4 h-4 accent-brand cursor-pointer">
+          <label for="override-risk-unfreeze" class="text-xs font-bold text-slate-700 cursor-pointer">إلغاء التجميد فورياً والسماح بالعمليات</label>
+        </div>
+        <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+          <button type="button" onclick="closeModal('modal-override-risk')" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-xs font-bold">إلغاء</button>
+          <button type="submit" class="px-5 py-2 bg-brand hover:bg-brand-dark text-white rounded-xl text-xs font-bold shadow-sm transition">حفظ التعديل</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: ADD API KEY V2 (Stage 4) -->
+  <div id="modal-add-api-key-v2" class="fixed inset-0 z-50 flex items-center justify-center p-4 modal-backdrop hidden">
+    <div class="bg-white rounded-3xl p-6 w-full max-w-md shadow-2xl space-y-4">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+        <h3 class="font-black text-sm text-slate-800 flex items-center gap-2">
+          <i class="fa-solid fa-network-wired text-brand"></i>
+          <span>توليد مفتاح برمجي B2B (API Key v2)</span>
+        </h3>
+        <button onclick="closeModal('modal-add-api-key-v2')" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
+      </div>
+      <form id="form-add-api-key-v2" onsubmit="submitAddApiKeyV2(event)" class="space-y-3">
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">اسم المفتاح / الشريك</label>
+          <input type="text" id="apikey-v2-label" required placeholder="مثال: تطبيق نقاط بيع بغداد كاش" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-brand">
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">صلاحيات الوصول (Scopes)</label>
+          <div class="grid grid-cols-2 gap-2 text-xs font-bold text-slate-700 p-2.5 bg-slate-50 rounded-xl border border-slate-200">
+            <label class="flex items-center gap-1.5 cursor-pointer">
+              <input type="checkbox" name="apikey-scope" value="read" checked class="accent-brand"><span>قراءة (read)</span>
+            </label>
+            <label class="flex items-center gap-1.5 cursor-pointer">
+              <input type="checkbox" name="apikey-scope" value="sales" checked class="accent-brand"><span>المبيعات (sales)</span>
+            </label>
+            <label class="flex items-center gap-1.5 cursor-pointer">
+              <input type="checkbox" name="apikey-scope" value="vouchers" class="accent-brand"><span>البطاقات (vouchers)</span>
+            </label>
+            <label class="flex items-center gap-1.5 cursor-pointer">
+              <input type="checkbox" name="apikey-scope" value="sync" class="accent-brand"><span>المزامنة (sync)</span>
+            </label>
+          </div>
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">سقف الطلبات في الدقيقة (Rate Limit)</label>
+          <input type="number" id="apikey-v2-rate-limit" min="10" max="600" value="60" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-brand">
+        </div>
+        <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+          <button type="button" onclick="closeModal('modal-add-api-key-v2')" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-xs font-bold">إلغاء</button>
+          <button type="submit" class="px-5 py-2 bg-brand hover:bg-brand-dark text-white rounded-xl text-xs font-bold shadow-sm transition">توليد المفتاح المشفر</button>
+        </div>
+      </form>
+      <div id="apikey-v2-result-box" class="p-4 bg-emerald-50 rounded-2xl border border-emerald-200 space-y-2 hidden">
+        <span class="text-xs font-black text-emerald-800 block">احفظ هذا المفتاح فوراً! لن يظهر لك مرة ثانية:</span>
+        <div class="p-2.5 bg-white rounded-xl border border-emerald-200 font-mono text-xs font-bold text-slate-800 select-all break-all" id="apikey-v2-secret-value">upos_...</div>
+        <button type="button" onclick="copyApiKeyV2ToClipboard()" class="w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-sm transition flex items-center justify-center gap-2">
           <i class="fa-solid fa-copy"></i><span>نسخ المفتاح للحافظة</span>
         </button>
       </div>
@@ -2970,6 +3573,86 @@
       } catch (err) {
         tbody.innerHTML = '<tr><td colspan="5" class="py-8 text-center text-rose-500 font-bold">خطأ في تحميل التخصيصات</td></tr>';
       }
+
+      // Guard Settings (Stage 1)
+      await loadGuardSettings();
+      // Surge & Rewards & Restock (Stage 4)
+      await loadSurgeConfig();
+      await loadRewardRules();
+      await loadRestockOrders();
+    }
+
+    async function loadGuardSettings() {
+      const tbody = document.getElementById('guard-settings-table-body');
+      if (!tbody) return;
+      try {
+        const res = await apiFetch('/api/admin/guard/settings');
+        const data = await res.json();
+        if (res.ok && Array.isArray(data)) {
+          if (data.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" class="py-8 text-center text-slate-400 font-bold">لا توجد قواعد هوامش مسجلة (الافتراضي: منع البيع بأقل من التكلفة فقط)</td></tr>';
+            return;
+          }
+          tbody.innerHTML = data.map(g => `
+            <tr class="hover:bg-slate-50 transition">
+              <td class="py-3 px-3 font-mono font-bold ${g.item_id === '*' ? 'text-brand' : 'text-slate-800'}">${escapeHtml(g.item_id === '*' ? '* (الهامش العام لجميع المنتجات)' : g.item_id)}</td>
+              <td class="py-3 px-3 font-black text-slate-800">${formatIQD(g.min_margin_iqd || 0)}</td>
+              <td class="py-3 px-3 font-bold text-slate-700">${g.min_margin_pct || 0}%</td>
+              <td class="py-3 px-3">${g.is_active ? '<span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-50 text-emerald-600">نشط</span>' : '<span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-slate-100 text-slate-500">معطل</span>'}</td>
+              <td class="py-3 px-3 text-slate-400 text-[11px]">${formatBaghdad(g.updated_at)}</td>
+              <td class="py-3 px-3 text-center">
+                <button onclick="deleteGuardSetting('${escapeHtml(g.item_id)}')" class="px-2 py-1 bg-rose-50 text-rose-600 hover:bg-rose-100 rounded-lg text-xs font-bold transition">حذف</button>
+              </td>
+            </tr>
+          `).join('');
+        }
+      } catch (err) {
+        tbody.innerHTML = '<tr><td colspan="6" class="py-8 text-center text-rose-500 font-bold">خطأ في تحميل إعدادات الحماية</td></tr>';
+      }
+    }
+
+    function openAddGuardModal() {
+      document.getElementById('guard-item-id').value = '';
+      document.getElementById('guard-margin-iqd').value = '0';
+      document.getElementById('guard-margin-pct').value = '0';
+      document.getElementById('guard-is-active').checked = true;
+      openModal('modal-add-guard');
+    }
+
+    async function submitAddGuardSetting(e) {
+      e.preventDefault();
+      const payload = {
+        item_id: document.getElementById('guard-item-id').value.trim(),
+        min_margin_iqd: parseInt(document.getElementById('guard-margin-iqd').value, 10) || 0,
+        min_margin_pct: parseFloat(document.getElementById('guard-margin-pct').value) || 0,
+        is_active: document.getElementById('guard-is-active').checked
+      };
+      try {
+        const res = await apiFetch('/api/admin/guard/settings', {
+          method: 'POST',
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'فشل حفظ إعدادات الهامش');
+        closeModal('modal-add-guard');
+        showToast('تم حفظ قاعدة الهامش الأدنى بنجاح');
+        loadGuardSettings();
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    }
+
+    async function deleteGuardSetting(itemId) {
+      if (!confirm('هل أنت متأكد من حذف قاعدة الهامش الأدنى للصنف: ' + itemId + '؟')) return;
+      try {
+        const res = await apiFetch('/api/admin/guard/settings/' + encodeURIComponent(itemId), { method: 'DELETE' });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'فشل حذف قاعدة الهامش');
+        showToast('تم حذف قاعدة الهامش بنجاح');
+        loadGuardSettings();
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
     }
 
     function openSetTierPriceModal(tierId) {
@@ -3165,6 +3848,158 @@
         checkRadarAlerts();
       } catch (err) {
         showToast(err.message, 'error');
+      }
+    }
+
+    // =========================================================================
+    // STAGE 4: SURGE PRICING, REWARDS RULES & AUTO-RESTOCK
+    // =========================================================================
+    async function loadSurgeConfig() {
+      try {
+        const res = await apiFetch('/api/admin/surge/config');
+        const cfg = await res.json();
+        if (res.ok) {
+          const isEnabled = document.getElementById('surge-is-enabled');
+          const pct = document.getElementById('surge-percentage');
+          const maxCap = document.getElementById('surge-max-cap');
+          const reason = document.getElementById('surge-reason');
+          if (isEnabled) isEnabled.checked = cfg.is_enabled || false;
+          if (pct) pct.value = cfg.surge_percentage || 0;
+          if (maxCap) maxCap.value = cfg.max_surge_cap || 20;
+          if (reason) reason.value = cfg.reason || '';
+        }
+      } catch (err) {
+        console.error('loadSurgeConfig err:', err);
+      }
+    }
+
+    async function saveSurgeConfig() {
+      const payload = {
+        is_enabled: document.getElementById('surge-is-enabled').checked,
+        surge_percentage: parseFloat(document.getElementById('surge-percentage').value) || 0,
+        max_surge_cap: parseFloat(document.getElementById('surge-max-cap').value) || 20,
+        reason: document.getElementById('surge-reason').value.trim()
+      };
+
+      try {
+        const res = await apiFetch('/api/admin/surge/config', {
+          method: 'POST',
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'فشل حفظ إعدادات تسعير الذروة');
+        showToast('تم حفظ إعدادات تسعير الذروة بنجاح');
+        loadSurgeConfig();
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    }
+
+    async function loadRewardRules() {
+      const tbody = document.getElementById('reward-rules-table-body');
+      if (!tbody) return;
+      try {
+        const res = await apiFetch('/api/admin/rewards/rules');
+        const list = await res.json();
+        if (res.ok && Array.isArray(list)) {
+          if (list.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" class="py-6 text-center text-slate-400 font-bold">لا توجد قواعد مكافآت مسجلة</td></tr>';
+            return;
+          }
+          tbody.innerHTML = list.map(r => `
+            <tr class="hover:bg-slate-50 transition">
+              <td class="py-3 px-3 font-bold text-slate-800">${escapeHtml(r.name)}</td>
+              <td class="py-3 px-3 font-black text-slate-700">${r.metric === 'sales_amount' ? formatIQD(r.target_value) : r.target_value + ' عملية'}</td>
+              <td class="py-3 px-3 font-black text-purple-600">${formatIQD(r.reward_amount)}</td>
+              <td class="py-3 px-3"><span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-slate-100 text-slate-600">${r.period === 'monthly' ? 'شهري' : 'أسبوعي'}</span></td>
+              <td class="py-3 px-3">${r.is_active ? '<span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-50 text-emerald-600">نشط</span>' : '<span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-slate-100 text-slate-500">معطل</span>'}</td>
+              <td class="py-3 px-3 text-center">
+                <button onclick="evaluateRewardForMerchant(${r.id})" class="px-2.5 py-1 bg-purple-50 text-purple-700 hover:bg-purple-100 rounded-lg text-xs font-bold transition flex items-center gap-1 mx-auto">
+                  <i class="fa-solid fa-bolt text-[10px]"></i><span>صرف وتقييم</span>
+                </button>
+              </td>
+            </tr>
+          `).join('');
+        }
+      } catch (err) {
+        tbody.innerHTML = '<tr><td colspan="6" class="py-6 text-center text-rose-500 font-bold">خطأ في تحميل قواعد المكافآت</td></tr>';
+      }
+    }
+
+    function openAddRewardRuleModal() {
+      document.getElementById('reward-rule-name').value = '';
+      document.getElementById('reward-rule-target').value = '';
+      document.getElementById('reward-rule-reward').value = '';
+      document.getElementById('reward-rule-is-active').checked = true;
+      openModal('modal-add-reward-rule');
+    }
+
+    async function submitAddRewardRule(e) {
+      e.preventDefault();
+      const payload = {
+        name: document.getElementById('reward-rule-name').value.trim(),
+        metric: document.getElementById('reward-rule-metric').value,
+        period: document.getElementById('reward-rule-period').value,
+        target_value: parseInt(document.getElementById('reward-rule-target').value, 10),
+        reward_amount: parseInt(document.getElementById('reward-rule-reward').value, 10),
+        is_active: document.getElementById('reward-rule-is-active').checked
+      };
+
+      try {
+        const res = await apiFetch('/api/admin/rewards/rules', {
+          method: 'POST',
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'فشل حفظ قاعدة المكافأة');
+        closeModal('modal-add-reward-rule');
+        showToast('تمت إضافة قاعدة المكافأة بنجاح 🎁');
+        loadRewardRules();
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    }
+
+    async function evaluateRewardForMerchant(ruleId) {
+      const merchantIdStr = prompt('ادخل رقم المشترك / التاجر (Merchant ID) للتقييم والصرف:');
+      if (!merchantIdStr) return;
+      const merchantId = parseInt(merchantIdStr.trim(), 10);
+      if (!merchantId) return;
+
+      try {
+        const res = await apiFetch('/api/admin/rewards/evaluate/' + merchantId + '/' + ruleId, { method: 'POST' });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'لم يتم استيفاء شروط المكافأة أو تم صرفها مسبقاً');
+        showToast('تم تقييم وصرف المكافأة بنجاح في محفظة التاجر! 🎉');
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    }
+
+    async function loadRestockOrders() {
+      const tbody = document.getElementById('restock-orders-table-body');
+      if (!tbody) return;
+      try {
+        const res = await apiFetch('/api/admin/restock/orders');
+        const list = await res.json();
+        if (res.ok && Array.isArray(list)) {
+          if (list.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" class="py-6 text-center text-slate-400 font-bold">لا توجد طلبات توريد سابقة</td></tr>';
+            return;
+          }
+          tbody.innerHTML = list.map(o => `
+            <tr class="hover:bg-slate-50 transition">
+              <td class="py-3 px-3 font-mono font-bold text-slate-800">#${o.id}</td>
+              <td class="py-3 px-3 font-bold text-blue-600 uppercase">${escapeHtml(o.provider)}</td>
+              <td class="py-3 px-3 font-mono font-bold text-slate-700">${escapeHtml(o.item_id)}</td>
+              <td class="py-3 px-3 font-black text-slate-800">${o.quantity}</td>
+              <td class="py-3 px-3"><span class="px-2 py-0.5 rounded-full text-[10px] font-black ${o.status === 'completed' ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-700'}">${escapeHtml(o.status)}</span></td>
+              <td class="py-3 px-3 text-slate-400 text-[11px]">${formatBaghdad(o.created_at)}</td>
+            </tr>
+          `).join('');
+        }
+      } catch (err) {
+        tbody.innerHTML = '<tr><td colspan="6" class="py-6 text-center text-rose-500 font-bold">خطأ في تحميل طلبات التوريد</td></tr>';
       }
     }
 
@@ -3628,6 +4463,255 @@
       } catch (e) {
         keysBody.innerHTML = '<tr><td colspan="4" class="py-6 text-center text-rose-500 font-bold">خطأ في تحميل المفاتيح</td></tr>';
       }
+
+      // 3. Limits Blocks (Stage 1)
+      await loadLimitsBlocks();
+
+      // 4. Dead Jobs Queue (Stage 2)
+      await loadDeadJobs();
+
+      // 5. Notify Channels (Stage 3)
+      await loadNotifyChannels();
+
+      // 6. Risk Profiles & API Keys v2 (Stage 4)
+      await loadRiskProfiles();
+      await loadApiKeysV2();
+    }
+
+    async function loadDeadJobs() {
+      const tbody = document.getElementById('dead-jobs-table-body');
+      if (!tbody) return;
+      try {
+        const res = await apiFetch('/api/admin/jobs/dead');
+        const data = await res.json();
+        const items = data.items || [];
+        if (items.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="7" class="py-6 text-center text-slate-400 font-bold">لا توجد مهام متعثرة (جميع المهام الخلفية تعمل بسلاسة)</td></tr>';
+          return;
+        }
+        tbody.innerHTML = items.map(j => `
+          <tr class="hover:bg-slate-50 transition">
+            <td class="py-2.5 px-3 font-mono text-slate-500 font-bold">#${j.id}</td>
+            <td class="py-2.5 px-3 font-bold text-slate-800">مشترك #${j.merchant_id}</td>
+            <td class="py-2.5 px-3"><span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-blue-50 text-brand">${escapeHtml(j.kind)}</span></td>
+            <td class="py-2.5 px-3 font-bold text-amber-600">${j.attempts} / ${j.max_attempts}</td>
+            <td class="py-2.5 px-3 font-mono text-xs text-rose-600 max-w-xs truncate" title="${escapeHtml(j.last_error)}">${escapeHtml(j.last_error || '—')}</td>
+            <td class="py-2.5 px-3 text-slate-400 text-[11px]">${formatBaghdad(j.created_at)}</td>
+            <td class="py-2.5 px-3 text-center">
+              <button onclick="retryDeadJob(${j.id})" class="px-2.5 py-1 bg-brand text-white hover:bg-brand-dark rounded-lg text-xs font-bold transition flex items-center gap-1 mx-auto shadow-sm">
+                <i class="fa-solid fa-rotate-right text-[10px]"></i><span>أعد المحاولة</span>
+              </button>
+            </td>
+          </tr>
+        `).join('');
+      } catch (err) {
+        tbody.innerHTML = '<tr><td colspan="7" class="py-6 text-center text-rose-500 font-bold">خطأ في تحميل المهام المتعثرة</td></tr>';
+      }
+    }
+
+    async function retryDeadJob(id) {
+      try {
+        const res = await apiFetch('/api/admin/jobs/' + id + '/retry', { method: 'POST' });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'فشل إعادة تشغيل المهمة');
+        showToast('تمت إعادة جدولة المهمة بنجاح للتنفيذ الفوري');
+        loadDeadJobs();
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    }
+
+    async function loadLimitsBlocks() {
+      const tbody = document.getElementById('limits-blocks-table-body');
+      if (!tbody) return;
+      try {
+        const res = await apiFetch('/api/admin/limits/blocks');
+        const data = await res.json();
+        if (res.ok && Array.isArray(data)) {
+          if (data.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" class="py-6 text-center text-slate-400 font-bold">لا يوجد أي حساب أو IP محظور حالياً (النظام آمن ومستقر)</td></tr>';
+            return;
+          }
+          tbody.innerHTML = data.map(b => `
+            <tr class="hover:bg-slate-50 transition">
+              <td class="py-2.5 px-3"><span class="px-2 py-0.5 rounded-full text-[10px] font-black ${b.key_type === 'ip' ? 'bg-amber-50 text-amber-700' : 'bg-rose-50 text-rose-600'}">${escapeHtml(b.key_type.toUpperCase())}</span></td>
+              <td class="py-2.5 px-3 font-mono font-bold text-slate-800">${escapeHtml(b.key_value)}</td>
+              <td class="py-2.5 px-3 text-slate-600">${escapeHtml(b.reason || 'تجاوز حد المحاولات')}</td>
+              <td class="py-2.5 px-3 font-bold text-rose-600">${b.attempts || 0}</td>
+              <td class="py-2.5 px-3 text-slate-500 text-[11px]">${formatBaghdad(b.blocked_until)}</td>
+              <td class="py-2.5 px-3 text-center">
+                <button onclick="unblockLimit(${b.id})" class="px-2.5 py-1 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded-lg text-xs font-bold transition flex items-center gap-1 mx-auto">
+                  <i class="fa-solid fa-lock-open text-[10px]"></i><span>فك الحظر</span>
+                </button>
+              </td>
+            </tr>
+          `).join('');
+        }
+      } catch (err) {
+        tbody.innerHTML = '<tr><td colspan="6" class="py-6 text-center text-rose-500 font-bold">خطأ في تحميل سجلات الحظر</td></tr>';
+      }
+    }
+
+    async function unblockLimit(id) {
+      if (!confirm('هل تريد بالتأكيد فك الحظر عن هذا السجل فورياً؟')) return;
+      try {
+        const res = await apiFetch('/api/admin/limits/unblock/' + id, { method: 'POST' });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'فشل فك الحظر');
+        showToast('تم فك الحظر بنجاح');
+        loadLimitsBlocks();
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    }
+
+    // =========================================================================
+    // STAGE 3: NOTIFY CHANNELS, SEAL VERIFIER & REPORTS
+    // =========================================================================
+    async function loadNotifyChannels() {
+      const tbody = document.getElementById('notify-channels-table-body');
+      if (!tbody) return;
+      try {
+        const res = await apiFetch('/api/admin/notify/channels');
+        const list = await res.json();
+        if (res.ok && Array.isArray(list)) {
+          if (list.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" class="py-6 text-center text-slate-400 font-bold">لا توجد قنوات إشعار مخصصة (يتم استخدام إشعارات Push الافتراضية)</td></tr>';
+            return;
+          }
+          tbody.innerHTML = list.map(c => `
+            <tr class="hover:bg-slate-50 transition">
+              <td class="py-2.5 px-3 font-mono font-black text-brand text-center">${c.priority}</td>
+              <td class="py-2.5 px-3 font-bold text-slate-800"><span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-blue-50 text-brand uppercase">${escapeHtml(c.channel_type)}</span></td>
+              <td class="py-2.5 px-3">${c.is_active ? '<span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-50 text-emerald-600">نشط</span>' : '<span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-slate-100 text-slate-500">معطل</span>'}</td>
+              <td class="py-2.5 px-3 font-mono text-xs text-slate-600 truncate max-w-xs">${escapeHtml(JSON.stringify(c.config))}</td>
+              <td class="py-2.5 px-3 text-center">
+                <button onclick="deleteNotifyChannel(${c.id})" class="p-1 text-slate-400 hover:text-rose-600"><i class="fa-solid fa-trash-can"></i></button>
+              </td>
+            </tr>
+          `).join('');
+        }
+      } catch (err) {
+        tbody.innerHTML = '<tr><td colspan="5" class="py-6 text-center text-rose-500 font-bold">خطأ في تحميل قنوات الإشعار</td></tr>';
+      }
+    }
+
+    function openAddNotifyChannelModal() {
+      document.getElementById('notify-token').value = '';
+      document.getElementById('notify-target').value = '';
+      document.getElementById('notify-priority').value = '1';
+      document.getElementById('notify-is-active').checked = true;
+      openModal('modal-add-notify-channel');
+    }
+
+    function toggleNotifyFields() {
+      const type = document.getElementById('notify-channel-type').value;
+      const tokenField = document.getElementById('notify-field-token');
+      const targetField = document.getElementById('notify-field-target');
+      if (type === 'push') {
+        tokenField.classList.add('hidden');
+        targetField.classList.add('hidden');
+      } else {
+        tokenField.classList.remove('hidden');
+        targetField.classList.remove('hidden');
+      }
+    }
+
+    async function submitAddNotifyChannel(e) {
+      e.preventDefault();
+      const type = document.getElementById('notify-channel-type').value;
+      const token = document.getElementById('notify-token').value.trim();
+      const target = document.getElementById('notify-target').value.trim();
+
+      const config = {};
+      if (type === 'telegram') {
+        config.bot_token = token;
+        config.chat_id = target;
+      } else if (type === 'whatsapp') {
+        config.endpoint_url = target;
+        config.api_key = token;
+      } else if (type === 'sms') {
+        config.provider_url = target;
+        config.api_key = token;
+      }
+
+      const payload = {
+        channel_type: type,
+        config: config,
+        priority: parseInt(document.getElementById('notify-priority').value, 10) || 1,
+        is_active: document.getElementById('notify-is-active').checked
+      };
+
+      try {
+        const res = await apiFetch('/api/admin/notify/channels', {
+          method: 'POST',
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'فشل حفظ القناة');
+        closeModal('modal-add-notify-channel');
+        showToast('تمت إضافة قناة الإشعار بنجاح');
+        loadNotifyChannels();
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    }
+
+    async function deleteNotifyChannel(id) {
+      if (!confirm('هل أنت متأكد من حذف قناة الإشعار هذه؟')) return;
+      try {
+        const res = await apiFetch('/api/admin/notify/channels/' + id, { method: 'DELETE' });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'فشل حذف القناة');
+        showToast('تم حذف القناة بنجاح');
+        loadNotifyChannels();
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    }
+
+    async function verifySealTokenManually() {
+      const input = document.getElementById('seal-verify-token-input');
+      const box = document.getElementById('seal-verify-result-box');
+      const token = input.value.trim();
+      if (!token) {
+        showToast('يرجى إدخال رمز الفاتورة', 'error');
+        return;
+      }
+      box.classList.remove('hidden');
+      box.innerHTML = '<span class="text-slate-400 font-bold">جاري فحص التوقيع الرقمي...</span>';
+
+      try {
+        const res = await fetch('/verify/' + encodeURIComponent(token), {
+          headers: { 'Accept': 'application/json' }
+        });
+        const data = await res.json();
+        if (!res.ok || !data.valid) {
+          box.innerHTML = '<span class="text-rose-600 font-black"><i class="fa-solid fa-xmark ml-1"></i>فاتورة غير معتمدة أو توقيع HMAC غير مطابق!</span>';
+          return;
+        }
+        box.innerHTML = `
+          <div class="text-emerald-700 font-black flex items-center gap-1.5"><i class="fa-solid fa-circle-check"></i><span>فاتورة أصلية معتمدة وموثقة:</span></div>
+          <div class="text-slate-700 font-bold">المتجر / الوكيل: <span class="font-black text-slate-900">${escapeHtml(data.store_name)} (${escapeHtml(data.merchant_name)})</span></div>
+          <div class="text-slate-700 font-bold">المبلغ المدفوع: <span class="font-black text-emerald-600">${formatIQD(data.amount)}</span></div>
+          <div class="text-slate-700 font-bold">رقم الإيصال: <span class="font-mono text-slate-900">${escapeHtml(data.receipt_id)}</span></div>
+          <div class="text-slate-500 font-mono text-[11px]">توقيت بغداد المعتمد: ${escapeHtml(data.baghdad_time)}</div>
+        `;
+      } catch (err) {
+        box.innerHTML = '<span class="text-rose-600 font-bold">خطأ في الاتصال بالخدمة</span>';
+      }
+    }
+
+    async function sendReportsNow() {
+      if (!confirm('هل تريد توليد وإرسال التقرير المالي اليومي الآن إلى جميع القنوات الفعالة؟')) return;
+      try {
+        const res = await apiFetch('/api/admin/reports/send-now', { method: 'POST' });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'فشل إرسال التقرير');
+        showToast('تم توليد وإرسال التقرير اليومي بنجاح إلى الإدارة والمشتركين 📊');
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
     }
 
     function openAddIPRuleModal() {
@@ -3749,6 +4833,9 @@
           document.getElementById('bi-goroutines').innerText = tel.goroutines_count || 18;
           document.getElementById('bi-ram').innerText = (tel.ram_alloc_mb || 42) + ' MB';
           document.getElementById('bi-server-time').innerText = formatBaghdad(tel.server_time_utc || new Date().toISOString());
+
+          // Stage 4: 7-Day Liquidity Forecast
+          await loadForecastData();
         }
       } catch (err) {
         console.error('BI load err:', err);
@@ -3799,6 +4886,203 @@
         };
       } catch (err) {
         console.warn('WS connect error:', err);
+      }
+    }
+
+    // =========================================================================
+    // STAGE 4: RISK PROFILES, API KEYS V2 & LIQUIDITY FORECAST
+    // =========================================================================
+    async function loadRiskProfiles() {
+      const tbody = document.getElementById('risk-profiles-table-body');
+      if (!tbody) return;
+      try {
+        const res = await apiFetch('/api/admin/risk/profiles');
+        const list = await res.json();
+        if (res.ok && Array.isArray(list)) {
+          if (list.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" class="py-6 text-center text-slate-400 font-bold">لا توجد ملفات مخاطر مسجلة (الوضع المالي طبيعي ومستقر)</td></tr>';
+            return;
+          }
+          tbody.innerHTML = list.map(p => {
+            let scoreColor = 'bg-emerald-50 text-emerald-700 border-emerald-200';
+            let statusText = '<span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-50 text-emerald-600">آمن</span>';
+            if (p.is_frozen) {
+              scoreColor = 'bg-rose-50 text-rose-700 border-rose-200';
+              statusText = '<span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-rose-50 text-rose-600 font-black">مجمد فورياً</span>';
+            } else if (p.risk_score >= 80) {
+              scoreColor = 'bg-rose-50 text-rose-700 border-rose-200';
+              statusText = '<span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-rose-50 text-rose-600">خطر مرتفع</span>';
+            } else if (p.risk_score >= 40) {
+              scoreColor = 'bg-amber-50 text-amber-700 border-amber-200';
+              statusText = '<span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-50 text-amber-700">تحذير متوسط</span>';
+            }
+
+            const flags = (p.flags || []).map(f => `<span class="px-1.5 py-0.5 bg-slate-100 rounded text-[10px] font-mono text-slate-600 ml-1">${escapeHtml(f)}</span>`).join('') || '<span class="text-slate-400 text-[10px]">لا توجد أعلام</span>';
+
+            return `
+              <tr class="hover:bg-slate-50 transition">
+                <td class="py-2.5 px-3 font-mono font-bold text-slate-800">#${p.merchant_id}</td>
+                <td class="py-2.5 px-3">
+                  <span class="px-2.5 py-1 rounded-xl text-xs font-black border ${scoreColor}">${p.risk_score} / 100</span>
+                </td>
+                <td class="py-2.5 px-3">${flags}</td>
+                <td class="py-2.5 px-3">${statusText}</td>
+                <td class="py-2.5 px-3 text-slate-400 text-[11px]">${formatBaghdad(p.updated_at)}</td>
+                <td class="py-2.5 px-3 text-center">
+                  <button onclick="openOverrideRiskModal(${p.merchant_id}, ${p.risk_score})" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold transition flex items-center gap-1 mx-auto">
+                    <i class="fa-solid fa-pen-to-square text-[10px]"></i><span>تعديل</span>
+                  </button>
+                </td>
+              </tr>
+            `;
+          }).join('');
+        }
+      } catch (err) {
+        tbody.innerHTML = '<tr><td colspan="6" class="py-6 text-center text-rose-500 font-bold">خطأ في تحميل ملفات المخاطر</td></tr>';
+      }
+    }
+
+    function openOverrideRiskModal(merchantId, currentScore) {
+      document.getElementById('override-risk-merchant-id').value = merchantId;
+      document.getElementById('override-risk-merchant-info').innerText = 'المشترك رقم #' + merchantId;
+      document.getElementById('override-risk-score').value = currentScore;
+      document.getElementById('override-risk-unfreeze').checked = true;
+      openModal('modal-override-risk');
+    }
+
+    async function submitOverrideRisk(e) {
+      e.preventDefault();
+      const merchantId = document.getElementById('override-risk-merchant-id').value;
+      const newScore = parseInt(document.getElementById('override-risk-score').value, 10);
+      const unfreeze = document.getElementById('override-risk-unfreeze').checked;
+
+      try {
+        const res = await apiFetch('/api/admin/risk/override/' + merchantId, {
+          method: 'POST',
+          body: JSON.stringify({ new_score: newScore, unfreeze: unfreeze })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'فشل تعديل تقييم المخاطر');
+        closeModal('modal-override-risk');
+        showToast('تم تحديث تقييم المخاطر وتعديل حالة الحساب بنجاح');
+        loadRiskProfiles();
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    }
+
+    async function loadApiKeysV2() {
+      const tbody = document.getElementById('api-keys-v2-table-body');
+      if (!tbody) return;
+      try {
+        const res = await apiFetch('/api/admin/api-keys-v2');
+        const list = await res.json();
+        if (res.ok && Array.isArray(list)) {
+          if (list.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="7" class="py-6 text-center text-slate-400 font-bold">لا توجد مفاتيح API v2 مصدرة</td></tr>';
+            return;
+          }
+          tbody.innerHTML = list.map(k => `
+            <tr class="hover:bg-slate-50 transition">
+              <td class="py-2.5 px-3 font-bold text-slate-800">${escapeHtml(k.label)}</td>
+              <td class="py-2.5 px-3 font-mono font-bold text-brand">${escapeHtml(k.prefix)}...</td>
+              <td class="py-2.5 px-3">
+                ${(k.scopes || []).map(s => `<span class="px-1.5 py-0.5 rounded text-[10px] font-black bg-blue-50 text-brand ml-1">${escapeHtml(s)}</span>`).join('')}
+              </td>
+              <td class="py-2.5 px-3 font-mono text-xs font-bold text-slate-600">${k.rate_limit_per_minute}/دقيقة</td>
+              <td class="py-2.5 px-3 font-mono text-xs font-bold text-slate-800">${k.usage_count || 0}</td>
+              <td class="py-2.5 px-3">${k.is_active ? '<span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-50 text-emerald-600">نشط</span>' : '<span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-slate-100 text-slate-500">ملغي</span>'}</td>
+              <td class="py-2.5 px-3 text-center">
+                ${k.is_active ? `<button onclick="revokeApiKeyV2(${k.id})" class="p-1 text-slate-400 hover:text-rose-600 transition" title="إلغاء المفتاح"><i class="fa-solid fa-ban"></i></button>` : '—'}
+              </td>
+            </tr>
+          `).join('');
+        }
+      } catch (err) {
+        tbody.innerHTML = '<tr><td colspan="7" class="py-6 text-center text-rose-500 font-bold">خطأ في تحميل مفاتيح API v2</td></tr>';
+      }
+    }
+
+    function openAddApiKeyV2Modal() {
+      document.getElementById('apikey-v2-label').value = '';
+      document.getElementById('apikey-v2-rate-limit').value = '60';
+      document.getElementById('apikey-v2-result-box').classList.add('hidden');
+      document.getElementById('form-add-api-key-v2').classList.remove('hidden');
+      openModal('modal-add-api-key-v2');
+    }
+
+    let generatedApiKeyV2Secret = '';
+    async function submitAddApiKeyV2(e) {
+      e.preventDefault();
+      const scopes = Array.from(document.querySelectorAll('input[name="apikey-scope"]:checked')).map(cb => cb.value);
+      const payload = {
+        label: document.getElementById('apikey-v2-label').value.trim(),
+        scopes: scopes,
+        rate_limit: parseInt(document.getElementById('apikey-v2-rate-limit').value, 10) || 60
+      };
+
+      try {
+        const res = await apiFetch('/api/admin/api-keys-v2', {
+          method: 'POST',
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'فشل توليد المفتاح');
+
+        generatedApiKeyV2Secret = data.secret_key;
+        document.getElementById('apikey-v2-secret-value').innerText = generatedApiKeyV2Secret;
+        document.getElementById('form-add-api-key-v2').classList.add('hidden');
+        document.getElementById('apikey-v2-result-box').classList.remove('hidden');
+        showToast('تم توليد مفتاح API v2 بنجاح');
+        loadApiKeysV2();
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    }
+
+    function copyApiKeyV2ToClipboard() {
+      if (generatedApiKeyV2Secret) {
+        navigator.clipboard.writeText(generatedApiKeyV2Secret);
+        showToast('تم نسخ المفتاح السري للحافظة');
+      }
+    }
+
+    async function revokeApiKeyV2(id) {
+      if (!confirm('هل أنت متأكد من إلغاء مفتاح API هذا؟ سيتوقف أي نظام B2B مرتبط به فوراً.')) return;
+      try {
+        const res = await apiFetch('/api/admin/api-keys-v2/' + id, { method: 'DELETE' });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'فشل إلغاء المفتاح');
+        showToast('تم إلغاء المفتاح بنجاح');
+        loadApiKeysV2();
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    }
+
+    async function loadForecastData() {
+      const grid = document.getElementById('forecast-daily-grid');
+      try {
+        const res = await apiFetch('/api/admin/forecast');
+        const f = await res.json();
+        if (res.ok) {
+          document.getElementById('forecast-current-balance').innerText = formatIQD(f.current_balance_iqd || 0);
+          document.getElementById('forecast-projected-weekly').innerText = formatIQD(f.projected_weekly_inflow_iqd || 0);
+          document.getElementById('forecast-runway-days').innerText = (f.runway_days || 30) + ' يوم';
+          document.getElementById('forecast-burn-rate').innerText = formatIQD(f.daily_burn_rate_iqd || 0) + ' / يوم';
+
+          if (grid && Array.isArray(f.forecast_next_week)) {
+            grid.innerHTML = f.forecast_next_week.map(day => `
+              <div class="p-3 bg-slate-50 rounded-2xl border border-slate-200 text-center space-y-1">
+                <span class="text-[10px] text-slate-400 font-bold block">${day.date.substring(5)}</span>
+                <span class="text-xs font-black text-slate-800 block">${formatIQD(day.projected_inflow_iqd)}</span>
+                <span class="text-[9px] text-brand font-bold block">${day.estimated_sales_count} بيع</span>
+              </div>
+            `).join('');
+          }
+        }
+      } catch (err) {
+        console.error('loadForecastData err:', err);
       }
     }
 

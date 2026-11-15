@@ -335,6 +335,44 @@ func GetModalsFintech() string {
       </div>
     </div>
   </div>
+
+  <!-- MODAL: ADD / EDIT GUARD MINIMUM MARGIN (Stage 1) -->
+  <div id="modal-add-guard" class="fixed inset-0 z-50 flex items-center justify-center p-4 modal-backdrop hidden">
+    <div class="bg-white rounded-3xl p-6 w-full max-w-md shadow-2xl space-y-4">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+        <h3 class="font-black text-sm text-slate-800 flex items-center gap-2">
+          <i class="fa-solid fa-shield-halved text-brand"></i>
+          <span>ضبط الهامش الأدنى (حماية الأسعار)</span>
+        </h3>
+        <button onclick="closeModal('modal-add-guard')" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
+      </div>
+      <form id="form-add-guard" onsubmit="submitAddGuardSetting(event)" class="space-y-3">
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">معرف الصنف أو المنتج</label>
+          <input type="text" id="guard-item-id" required placeholder="اكتب * لتعيين هامش عام، أو اكتب رمز الصنف" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-brand">
+          <span class="text-[10px] text-slate-400 block mt-1">استخدم * لتطبيقه كقاعدة افتراضية عامة لجميع المنتجات غير المخصصة</span>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">الهامش الأدنى (د.ع)</label>
+            <input type="number" id="guard-margin-iqd" min="0" value="0" step="250" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-brand">
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">الهامش الأدنى (%)</label>
+            <input type="number" id="guard-margin-pct" min="0" max="100" value="0" step="0.5" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-brand">
+          </div>
+        </div>
+        <div class="flex items-center gap-2 pt-1">
+          <input type="checkbox" id="guard-is-active" checked class="w-4 h-4 accent-brand cursor-pointer">
+          <label for="guard-is-active" class="text-xs font-bold text-slate-700 cursor-pointer">تفعيل فحص الهامش</label>
+        </div>
+        <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+          <button type="button" onclick="closeModal('modal-add-guard')" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-xs font-bold">إلغاء</button>
+          <button type="submit" class="px-5 py-2 bg-brand hover:bg-brand-dark text-white rounded-xl text-xs font-bold shadow-sm transition">حفظ قاعدة الهامش</button>
+        </div>
+      </form>
+    </div>
+  </div>
 `
 }
 
@@ -672,6 +710,188 @@ func GetModalsEnterprise() string {
         <span class="text-xs font-black text-emerald-800 block">انسخ المفتاح الآن! لن يتم عرضه مرة أخرى:</span>
         <div class="p-2.5 bg-white rounded-xl border border-emerald-200 font-mono text-xs font-bold text-slate-800 select-all break-all" id="apikey-secret-value">vsk_live_...</div>
         <button type="button" onclick="copyAPIKeyToClipboard()" class="w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-sm transition flex items-center justify-center gap-2">
+          <i class="fa-solid fa-copy"></i><span>نسخ المفتاح للحافظة</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: ADD NOTIFY CHANNEL (Stage 3) -->
+  <div id="modal-add-notify-channel" class="fixed inset-0 z-50 flex items-center justify-center p-4 modal-backdrop hidden">
+    <div class="bg-white rounded-3xl p-6 w-full max-w-md shadow-2xl space-y-4">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+        <h3 class="font-black text-sm text-slate-800 flex items-center gap-2">
+          <i class="fa-solid fa-bullhorn text-brand"></i>
+          <span>إضافة قناة إشعارات جديدة</span>
+        </h3>
+        <button onclick="closeModal('modal-add-notify-channel')" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
+      </div>
+      <form id="form-add-notify-channel" onsubmit="submitAddNotifyChannel(event)" class="space-y-3">
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">نوع القناة</label>
+          <select id="notify-channel-type" onchange="toggleNotifyFields()" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-brand">
+            <option value="telegram">Telegram Bot</option>
+            <option value="whatsapp">WhatsApp Gateway</option>
+            <option value="sms">SMS Gateway</option>
+            <option value="push">Push Notification</option>
+          </select>
+        </div>
+        <div id="notify-field-token">
+          <label class="block text-xs font-bold text-slate-700 mb-1">رمز البوت (Bot Token / API Key)</label>
+          <input type="text" id="notify-token" placeholder="bot123456:ABC-DEF..." class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono font-bold text-slate-800 outline-none focus:border-brand">
+        </div>
+        <div id="notify-field-target">
+          <label class="block text-xs font-bold text-slate-700 mb-1">المعرف أو الرابط (Chat ID / Endpoint URL)</label>
+          <input type="text" id="notify-target" placeholder="-100123456789 أو https://api.gateway.com/send" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono font-bold text-slate-800 outline-none focus:border-brand">
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">الأولوية (Priority)</label>
+            <input type="number" id="notify-priority" min="1" max="10" value="1" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-brand">
+            <span class="text-[10px] text-slate-400 block mt-0.5">1 يُنفَّذ أولاً ثم 2 كبديل</span>
+          </div>
+          <div class="flex items-center gap-2 pt-6">
+            <input type="checkbox" id="notify-is-active" checked class="w-4 h-4 accent-brand cursor-pointer">
+            <label for="notify-is-active" class="text-xs font-bold text-slate-700 cursor-pointer">القناة نشطة</label>
+          </div>
+        </div>
+        <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+          <button type="button" onclick="closeModal('modal-add-notify-channel')" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-xs font-bold">إلغاء</button>
+          <button type="submit" class="px-5 py-2 bg-brand hover:bg-brand-dark text-white rounded-xl text-xs font-bold shadow-sm transition">حفظ القناة</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: ADD REWARD RULE (Stage 4) -->
+  <div id="modal-add-reward-rule" class="fixed inset-0 z-50 flex items-center justify-center p-4 modal-backdrop hidden">
+    <div class="bg-white rounded-3xl p-6 w-full max-w-md shadow-2xl space-y-4">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+        <h3 class="font-black text-sm text-slate-800 flex items-center gap-2">
+          <i class="fa-solid fa-gift text-purple-600"></i>
+          <span>إضافة قاعدة مكافأة جديدة</span>
+        </h3>
+        <button onclick="closeModal('modal-add-reward-rule')" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
+      </div>
+      <form id="form-add-reward-rule" onsubmit="submitAddRewardRule(event)" class="space-y-3">
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">اسم القاعدة / الحملة</label>
+          <input type="text" id="reward-rule-name" required placeholder="مثال: حافز بطل المبيعات الشهري" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-brand">
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">المعيار (Metric)</label>
+            <select id="reward-rule-metric" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-brand">
+              <option value="sales_amount">إجمالي المبيعات (د.ع)</option>
+              <option value="sales_count">عدد عمليات البيع</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">الفترة الزمنية</label>
+            <select id="reward-rule-period" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-brand">
+              <option value="monthly">شهري</option>
+              <option value="weekly">أسبوعي</option>
+            </select>
+          </div>
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">المستهدف المطلوب (Target)</label>
+          <input type="number" id="reward-rule-target" required min="1" step="1000" placeholder="مثال: 5000000" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-brand">
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">مبلغ المكافأة عند الإنجاز (د.ع)</label>
+          <input type="number" id="reward-rule-reward" required min="1" step="1000" placeholder="مثال: 50000" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-brand">
+        </div>
+        <div class="flex items-center gap-2 pt-2">
+          <input type="checkbox" id="reward-rule-is-active" checked class="w-4 h-4 accent-brand cursor-pointer">
+          <label for="reward-rule-is-active" class="text-xs font-bold text-slate-700 cursor-pointer">القاعدة مفعلة</label>
+        </div>
+        <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+          <button type="button" onclick="closeModal('modal-add-reward-rule')" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-xs font-bold">إلغاء</button>
+          <button type="submit" class="px-5 py-2 bg-brand hover:bg-brand-dark text-white rounded-xl text-xs font-bold shadow-sm transition">حفظ وتفعيل</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: OVERRIDE RISK (Stage 4) -->
+  <div id="modal-override-risk" class="fixed inset-0 z-50 flex items-center justify-center p-4 modal-backdrop hidden">
+    <div class="bg-white rounded-3xl p-6 w-full max-w-md shadow-2xl space-y-4">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+        <h3 class="font-black text-sm text-slate-800 flex items-center gap-2">
+          <i class="fa-solid fa-user-shield text-brand"></i>
+          <span>تعديل تقييم المخاطر وفك التجميد</span>
+        </h3>
+        <button onclick="closeModal('modal-override-risk')" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
+      </div>
+      <form id="form-override-risk" onsubmit="submitOverrideRisk(event)" class="space-y-3">
+        <input type="hidden" id="override-risk-merchant-id">
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">المشترك / التاجر</label>
+          <div id="override-risk-merchant-info" class="p-2.5 bg-slate-50 rounded-xl font-bold text-xs text-slate-800 border border-slate-200">#</div>
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">درجة المخاطرة اليدوية الجديدة (0-100)</label>
+          <input type="number" id="override-risk-score" min="0" max="100" required class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-brand">
+          <span class="text-[10px] text-slate-400 block mt-0.5">0-40 آمن، 41-79 تحذير، 80-100 تجميد فوري</span>
+        </div>
+        <div class="flex items-center gap-2 pt-2">
+          <input type="checkbox" id="override-risk-unfreeze" checked class="w-4 h-4 accent-brand cursor-pointer">
+          <label for="override-risk-unfreeze" class="text-xs font-bold text-slate-700 cursor-pointer">إلغاء التجميد فورياً والسماح بالعمليات</label>
+        </div>
+        <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+          <button type="button" onclick="closeModal('modal-override-risk')" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-xs font-bold">إلغاء</button>
+          <button type="submit" class="px-5 py-2 bg-brand hover:bg-brand-dark text-white rounded-xl text-xs font-bold shadow-sm transition">حفظ التعديل</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: ADD API KEY V2 (Stage 4) -->
+  <div id="modal-add-api-key-v2" class="fixed inset-0 z-50 flex items-center justify-center p-4 modal-backdrop hidden">
+    <div class="bg-white rounded-3xl p-6 w-full max-w-md shadow-2xl space-y-4">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+        <h3 class="font-black text-sm text-slate-800 flex items-center gap-2">
+          <i class="fa-solid fa-network-wired text-brand"></i>
+          <span>توليد مفتاح برمجي B2B (API Key v2)</span>
+        </h3>
+        <button onclick="closeModal('modal-add-api-key-v2')" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
+      </div>
+      <form id="form-add-api-key-v2" onsubmit="submitAddApiKeyV2(event)" class="space-y-3">
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">اسم المفتاح / الشريك</label>
+          <input type="text" id="apikey-v2-label" required placeholder="مثال: تطبيق نقاط بيع بغداد كاش" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-brand">
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">صلاحيات الوصول (Scopes)</label>
+          <div class="grid grid-cols-2 gap-2 text-xs font-bold text-slate-700 p-2.5 bg-slate-50 rounded-xl border border-slate-200">
+            <label class="flex items-center gap-1.5 cursor-pointer">
+              <input type="checkbox" name="apikey-scope" value="read" checked class="accent-brand"><span>قراءة (read)</span>
+            </label>
+            <label class="flex items-center gap-1.5 cursor-pointer">
+              <input type="checkbox" name="apikey-scope" value="sales" checked class="accent-brand"><span>المبيعات (sales)</span>
+            </label>
+            <label class="flex items-center gap-1.5 cursor-pointer">
+              <input type="checkbox" name="apikey-scope" value="vouchers" class="accent-brand"><span>البطاقات (vouchers)</span>
+            </label>
+            <label class="flex items-center gap-1.5 cursor-pointer">
+              <input type="checkbox" name="apikey-scope" value="sync" class="accent-brand"><span>المزامنة (sync)</span>
+            </label>
+          </div>
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">سقف الطلبات في الدقيقة (Rate Limit)</label>
+          <input type="number" id="apikey-v2-rate-limit" min="10" max="600" value="60" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-brand">
+        </div>
+        <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+          <button type="button" onclick="closeModal('modal-add-api-key-v2')" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-xs font-bold">إلغاء</button>
+          <button type="submit" class="px-5 py-2 bg-brand hover:bg-brand-dark text-white rounded-xl text-xs font-bold shadow-sm transition">توليد المفتاح المشفر</button>
+        </div>
+      </form>
+      <div id="apikey-v2-result-box" class="p-4 bg-emerald-50 rounded-2xl border border-emerald-200 space-y-2 hidden">
+        <span class="text-xs font-black text-emerald-800 block">احفظ هذا المفتاح فوراً! لن يظهر لك مرة ثانية:</span>
+        <div class="p-2.5 bg-white rounded-xl border border-emerald-200 font-mono text-xs font-bold text-slate-800 select-all break-all" id="apikey-v2-secret-value">upos_...</div>
+        <button type="button" onclick="copyApiKeyV2ToClipboard()" class="w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-sm transition flex items-center justify-center gap-2">
           <i class="fa-solid fa-copy"></i><span>نسخ المفتاح للحافظة</span>
         </button>
       </div>

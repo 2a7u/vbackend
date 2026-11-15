@@ -223,6 +223,201 @@ func GetTabsEnterprise() string {
                 </table>
               </div>
             </div>
+
+            <!-- Limits Blocks Table (Stage 1) -->
+            <div class="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-sm space-y-3 lg:col-span-2">
+              <div class="flex items-center justify-between">
+                <div>
+                  <h3 class="text-sm font-black text-slate-800 flex items-center gap-2">
+                    <i class="fa-solid fa-user-slash text-rose-600"></i>
+                    <span>قائمة الحظر والحدود (Limits & Anti-Brute-Force)</span>
+                  </h3>
+                  <p class="text-[11px] text-slate-400">المشتركون وعناوين IP المحظورة مؤقتاً لتجاوز محاولات التفعيل أو معدل الطلبات</p>
+                </div>
+                <button onclick="loadLimitsBlocks()" class="px-3 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl font-bold text-xs transition flex items-center gap-1.5">
+                  <i class="fa-solid fa-rotate-right"></i><span>تحديث</span>
+                </button>
+              </div>
+              <div class="overflow-x-auto">
+                <table class="w-full text-right border-collapse text-xs">
+                  <thead>
+                    <tr class="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold">
+                      <th class="py-2.5 px-3">النوع</th>
+                      <th class="py-2.5 px-3">المعرف / المفتاح</th>
+                      <th class="py-2.5 px-3">السبب</th>
+                      <th class="py-2.5 px-3">المحاولات</th>
+                      <th class="py-2.5 px-3">ينتهي الحظر في</th>
+                      <th class="py-2.5 px-3 text-center">إجراء</th>
+                    </tr>
+                  </thead>
+                  <tbody id="limits-blocks-table-body" class="divide-y divide-slate-100 font-medium">
+                    <tr><td colspan="6" class="py-6 text-center text-slate-400">جاري تحميل المحظورين...</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- Dead Jobs Queue (Stage 2) -->
+            <div class="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-sm space-y-3 lg:col-span-2">
+              <div class="flex items-center justify-between">
+                <div>
+                  <h3 class="text-sm font-black text-slate-800 flex items-center gap-2">
+                    <i class="fa-solid fa-triangle-exclamation text-amber-500"></i>
+                    <span>المهام الخلفية المتعثرة (Dead Jobs Queue)</span>
+                  </h3>
+                  <p class="text-[11px] text-slate-400">المهام التي استنفدت 10 محاولات تنفيذ متتالية (مثل فحص زين كاش أو إشعارات الشبكة) وتحتاج تدخلاً أو إعادة محاولة</p>
+                </div>
+                <button onclick="loadDeadJobs()" class="px-3 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl font-bold text-xs transition flex items-center gap-1.5">
+                  <i class="fa-solid fa-rotate-right"></i><span>تحديث</span>
+                </button>
+              </div>
+              <div class="overflow-x-auto">
+                <table class="w-full text-right border-collapse text-xs">
+                  <thead>
+                    <tr class="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold">
+                      <th class="py-2.5 px-3">رقم المهمة</th>
+                      <th class="py-2.5 px-3">المشترك</th>
+                      <th class="py-2.5 px-3">نوع المهمة</th>
+                      <th class="py-2.5 px-3">المحاولات</th>
+                      <th class="py-2.5 px-3">الخطأ الأخير</th>
+                      <th class="py-2.5 px-3">تاريخ الإنشاء</th>
+                      <th class="py-2.5 px-3 text-center">إجراء</th>
+                    </tr>
+                  </thead>
+                  <tbody id="dead-jobs-table-body" class="divide-y divide-slate-100 font-medium">
+                    <tr><td colspan="7" class="py-6 text-center text-slate-400">جاري تحميل المهام المتعثرة...</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- Notify Channels & Fallback Configuration (Stage 3) -->
+            <div class="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-sm space-y-3 lg:col-span-2">
+              <div class="flex items-center justify-between">
+                <div>
+                  <h3 class="text-sm font-black text-slate-800 flex items-center gap-2">
+                    <i class="fa-solid fa-bullhorn text-brand"></i>
+                    <span>قنوات الإشعارات والـ Fallback الموحد (Notify Channels)</span>
+                  </h3>
+                  <p class="text-[11px] text-slate-400">إدارة قنوات الإشعار (Telegram, WhatsApp, SMS, Push) وترتيب الأولوية التلقائي عند تعطل إحداها</p>
+                </div>
+                <div class="flex items-center gap-2">
+                  <button onclick="openAddNotifyChannelModal()" class="px-3.5 py-1.5 bg-brand hover:bg-brand-dark text-white rounded-xl font-bold text-xs shadow-sm flex items-center gap-1.5 transition">
+                    <i class="fa-solid fa-plus"></i><span>إضافة قناة</span>
+                  </button>
+                  <button onclick="loadNotifyChannels()" class="px-3 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl font-bold text-xs transition flex items-center gap-1.5">
+                    <i class="fa-solid fa-rotate-right"></i><span>تحديث</span>
+                  </button>
+                </div>
+              </div>
+              <div class="overflow-x-auto">
+                <table class="w-full text-right border-collapse text-xs">
+                  <thead>
+                    <tr class="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold">
+                      <th class="py-2.5 px-3">الأولوية (Fallback Order)</th>
+                      <th class="py-2.5 px-3">نوع القناة</th>
+                      <th class="py-2.5 px-3">الحالة</th>
+                      <th class="py-2.5 px-3">الإعدادات</th>
+                      <th class="py-2.5 px-3 text-center">إجراء</th>
+                    </tr>
+                  </thead>
+                  <tbody id="notify-channels-table-body" class="divide-y divide-slate-100 font-medium">
+                    <tr><td colspan="5" class="py-6 text-center text-slate-400">جاري تحميل قنوات الإشعار...</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- Seal Receipt Verifier Tool (Stage 3) -->
+            <div class="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-sm space-y-3 lg:col-span-2">
+              <h3 class="text-sm font-black text-slate-800 flex items-center gap-2">
+                <i class="fa-solid fa-stamp text-emerald-600"></i>
+                <span>فاحص الأختام الرقمية وصحة الفواتير (Seal Verifier)</span>
+              </h3>
+              <p class="text-[11px] text-slate-400">تحقق فوري من أي توقيع أو رمز فاتورة HMAC-SHA256 لمعرفة المتجر والمبلغ وتوقيت بغداد المعتمد</p>
+              <div class="flex gap-2">
+                <input type="text" id="seal-verify-token-input" placeholder="ادخل رمز الختم (مثال: v-ab12cd34ef)" class="flex-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono font-bold text-slate-800 outline-none focus:border-brand">
+                <button onclick="verifySealTokenManually()" class="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-sm transition flex items-center gap-1.5">
+                  <i class="fa-solid fa-check-double"></i><span>تحقق الآن</span>
+                </button>
+              </div>
+              <div id="seal-verify-result-box" class="p-4 bg-slate-50 rounded-2xl border border-slate-200 hidden text-xs space-y-1"></div>
+            </div>
+
+            <!-- Risk Engine & Profiles (Stage 4) -->
+            <div class="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-sm space-y-3 lg:col-span-2">
+              <div class="flex items-center justify-between">
+                <div>
+                  <h3 class="text-sm font-black text-slate-800 flex items-center gap-2">
+                    <i class="fa-solid fa-triangle-exclamation text-rose-600"></i>
+                    <span>محرك تقييم المخاطر والاحتيال (Risk Profiles)</span>
+                  </h3>
+                  <p class="text-[11px] text-slate-400">تقييم نقاط الخطر تلقائياً بناءً على العمليات الليلية، تسارع الطلبات، ومحاولات تسجيل الدخول الفاشلة</p>
+                </div>
+                <button onclick="loadRiskProfiles()" class="px-3 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl font-bold text-xs transition flex items-center gap-1.5">
+                  <i class="fa-solid fa-rotate-right"></i><span>تحديث</span>
+                </button>
+              </div>
+              <div class="overflow-x-auto">
+                <table class="w-full text-right border-collapse text-xs">
+                  <thead>
+                    <tr class="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold">
+                      <th class="py-2.5 px-3">رقم التاجر / المشترك</th>
+                      <th class="py-2.5 px-3">مؤشر الخطر (0-100)</th>
+                      <th class="py-2.5 px-3">المؤشرات المرصودة (Flags)</th>
+                      <th class="py-2.5 px-3">حالة الحساب</th>
+                      <th class="py-2.5 px-3">آخر تقييم</th>
+                      <th class="py-2.5 px-3 text-center">إجراءات</th>
+                    </tr>
+                  </thead>
+                  <tbody id="risk-profiles-table-body" class="divide-y divide-slate-100 font-medium">
+                    <tr><td colspan="6" class="py-6 text-center text-slate-400">جاري تحميل تقييمات المخاطر...</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- B2B API Keys v2 (Stage 4) -->
+            <div class="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-sm space-y-3 lg:col-span-2">
+              <div class="flex items-center justify-between">
+                <div>
+                  <h3 class="text-sm font-black text-slate-800 flex items-center gap-2">
+                    <i class="fa-solid fa-network-wired text-brand"></i>
+                    <span>مفاتيح الربط البرمجي B2B (API Keys v2)</span>
+                  </h3>
+                  <p class="text-[11px] text-slate-400">مفاتيح API مشفرة بـ SHA-256 للشركاء مع تحديد الصلاحيات وسقوف الاستهلاك ووثائق OpenAPI</p>
+                </div>
+                <div class="flex items-center gap-2">
+                  <a href="/api/docs/openapi.json" target="_blank" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-xs transition flex items-center gap-1">
+                    <i class="fa-solid fa-book-open"></i><span>وثائق OpenAPI</span>
+                  </a>
+                  <button onclick="openAddApiKeyV2Modal()" class="px-3.5 py-1.5 bg-brand hover:bg-brand-dark text-white rounded-xl font-bold text-xs shadow-sm flex items-center gap-1.5 transition">
+                    <i class="fa-solid fa-plus"></i><span>توليد مفتاح جديد</span>
+                  </button>
+                  <button onclick="loadApiKeysV2()" class="px-3 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl font-bold text-xs transition">
+                    <i class="fa-solid fa-rotate-right"></i>
+                  </button>
+                </div>
+              </div>
+              <div class="overflow-x-auto">
+                <table class="w-full text-right border-collapse text-xs">
+                  <thead>
+                    <tr class="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold">
+                      <th class="py-2.5 px-3">التسمية</th>
+                      <th class="py-2.5 px-3">البادئة (Prefix)</th>
+                      <th class="py-2.5 px-3">الصلاحيات (Scopes)</th>
+                      <th class="py-2.5 px-3">الحد / دقيقة</th>
+                      <th class="py-2.5 px-3">مرات الاستخدام</th>
+                      <th class="py-2.5 px-3">الحالة</th>
+                      <th class="py-2.5 px-3 text-center">إجراء</th>
+                    </tr>
+                  </thead>
+                  <tbody id="api-keys-v2-table-body" class="divide-y divide-slate-100 font-medium">
+                    <tr><td colspan="7" class="py-6 text-center text-slate-400">جاري تحميل مفاتيح API v2...</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
           </div>
         </section>
 
@@ -233,12 +428,18 @@ func GetTabsEnterprise() string {
           <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
               <h2 class="text-xl font-black text-slate-800">التقارير</h2>
-              <p class="text-xs text-slate-500 mt-0.5">تحليلات الأرباح الصافية، معدلات الاحتفاظ والانسحاب، والنسخ السريع للبيانات</p>
+              <p class="text-xs text-slate-500 mt-0.5">تحليلات الأرباح الصافية، التقرير اليومي التلقائي (00:00 بغداد)، والنسخ السريع للبيانات</p>
             </div>
-            <button onclick="downloadSecureBackup()" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs shadow-md shadow-emerald-600/20 flex items-center gap-2 transition">
-              <i class="fa-solid fa-download"></i>
-              <span>تنزيل نسخة احتياطية كاملة (JSON مشفر)</span>
-            </button>
+            <div class="flex items-center gap-2">
+              <button onclick="sendReportsNow()" class="px-4 py-2 bg-brand hover:bg-brand-dark text-white rounded-xl font-bold text-xs shadow-md shadow-brand/20 flex items-center gap-2 transition active:scale-[0.99]">
+                <i class="fa-solid fa-paper-plane"></i>
+                <span>أرسل التقرير الآن</span>
+              </button>
+              <button onclick="downloadSecureBackup()" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs shadow-md shadow-emerald-600/20 flex items-center gap-2 transition">
+                <i class="fa-solid fa-download"></i>
+                <span>نسخة احتياطية (JSON)</span>
+              </button>
+            </div>
           </div>
 
           <!-- BI KPI Cards -->
@@ -283,6 +484,50 @@ func GetTabsEnterprise() string {
               <div class="p-3 bg-slate-50 rounded-xl border border-slate-200/80">
                 <span class="text-slate-400 block text-[10px]">توقيت السيرفر الرسمي</span>
                 <span id="bi-server-time" class="text-xs font-bold text-slate-600">—</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 7-Day Liquidity Forecast (Stage 4) -->
+          <div class="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-sm space-y-4">
+            <div class="flex items-center justify-between">
+              <div>
+                <h3 class="text-sm font-black text-slate-800 flex items-center gap-2">
+                  <i class="fa-solid fa-chart-line text-brand"></i>
+                  <span>توقعات السيولة المالية للـ 7 أيام القادمة (Liquidity Forecast)</span>
+                </h3>
+                <p class="text-[11px] text-slate-400">حساب المتوسط المتحرك لوتيرة المبيعات والتنبؤ بالسيولة وأيام الأمان المالي</p>
+              </div>
+              <button onclick="loadForecastData()" class="px-3 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl font-bold text-xs transition flex items-center gap-1.5">
+                <i class="fa-solid fa-rotate-right"></i><span>تحديث التوقعات</span>
+              </button>
+            </div>
+
+            <!-- Forecast KPI Summary Cards -->
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs font-bold text-slate-700">
+              <div class="p-4 bg-emerald-50/60 rounded-2xl border border-emerald-200/60">
+                <span class="text-emerald-700 block text-[11px] font-bold">الرصيد الفعلي الحالي</span>
+                <span id="forecast-current-balance" class="text-base font-black text-emerald-800 block mt-1">0 د.ع</span>
+              </div>
+              <div class="p-4 bg-blue-50/60 rounded-2xl border border-blue-200/60">
+                <span class="text-blue-700 block text-[11px] font-bold">التدفق المتوقع للأسبوع</span>
+                <span id="forecast-projected-weekly" class="text-base font-black text-brand block mt-1">0 د.ع</span>
+              </div>
+              <div class="p-4 bg-purple-50/60 rounded-2xl border border-purple-200/60">
+                <span class="text-purple-700 block text-[11px] font-bold">أيام الأمان المالي (Runway)</span>
+                <span id="forecast-runway-days" class="text-base font-black text-purple-800 block mt-1">0 يوم</span>
+              </div>
+              <div class="p-4 bg-amber-50/60 rounded-2xl border border-amber-200/60">
+                <span class="text-amber-700 block text-[11px] font-bold">معدل الاستنزاف اليومي</span>
+                <span id="forecast-burn-rate" class="text-base font-black text-amber-800 block mt-1">0 د.ع / يوم</span>
+              </div>
+            </div>
+
+            <!-- 7-Day Projected Cards Grid -->
+            <div>
+              <span class="text-xs font-black text-slate-700 block mb-2">التوزيع التقديري للمبيعات والسيولة لكل يوم:</span>
+              <div class="grid grid-cols-1 sm:grid-cols-7 gap-3" id="forecast-daily-grid">
+                <div class="col-span-full py-4 text-center text-slate-400 font-bold text-xs">جاري حساب التوقعات الرياضية...</div>
               </div>
             </div>
           </div>

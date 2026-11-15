@@ -358,6 +358,144 @@ func GetTabsFintech() string {
               </table>
             </div>
           </div>
+
+          <!-- Guard Minimum Margin Settings (Stage 1) -->
+          <div class="bg-white rounded-3xl border border-slate-200/80 shadow-sm overflow-hidden p-5 space-y-3">
+            <div class="flex items-center justify-between">
+              <div>
+                <h3 class="text-sm font-black text-slate-800 flex items-center gap-2">
+                  <i class="fa-solid fa-shield-halved text-brand"></i>
+                  <span>حماية الأسعار وهامش الربح الأدنى (Guard)</span>
+                </h3>
+                <p class="text-[11px] text-slate-400">منع البيع بأقل من التكلفة وإلزام هامش ربح أدنى لكل صنف أو للكل (*)</p>
+              </div>
+              <button onclick="openAddGuardModal()" class="px-3.5 py-2 bg-brand hover:bg-brand-dark text-white rounded-xl font-bold text-xs shadow-sm flex items-center gap-1.5 transition">
+                <i class="fa-solid fa-plus"></i><span>إضافة هامش أدنى</span>
+              </button>
+            </div>
+            <div class="overflow-x-auto">
+              <table class="w-full text-right border-collapse text-xs">
+                <thead>
+                  <tr class="bg-slate-50/80 border-b border-slate-200 text-slate-500 font-bold">
+                    <th class="py-3 px-3">رمز الصنف / المنتج</th>
+                    <th class="py-3 px-3">الهامش الأدنى (د.ع)</th>
+                    <th class="py-3 px-3">الهامش الأدنى (%)</th>
+                    <th class="py-3 px-3">الحالة</th>
+                    <th class="py-3 px-3">آخر تحديث</th>
+                    <th class="py-3 px-3 text-center">إجراء</th>
+                  </tr>
+                </thead>
+                <tbody id="guard-settings-table-body" class="divide-y divide-slate-100 font-medium">
+                  <tr><td colspan="6" class="py-6 text-center text-slate-400">جاري تحميل إعدادات الحماية...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Surge Dynamic Pricing (Stage 4) -->
+          <div class="bg-white rounded-3xl border border-slate-200/80 shadow-sm overflow-hidden p-5 space-y-4">
+            <div class="flex items-center justify-between">
+              <div>
+                <h3 class="text-sm font-black text-slate-800 flex items-center gap-2">
+                  <i class="fa-solid fa-arrow-trend-up text-amber-500"></i>
+                  <span>تسعير الذروة الديناميكي (Surge Pricing)</span>
+                </h3>
+                <p class="text-[11px] text-slate-400">معطل افتراضياً، مع تحديد سقف أقصى للزيادة وعرض النسبة والسبب للمشتري قبل الدفع</p>
+              </div>
+              <button onclick="saveSurgeConfig()" class="px-4 py-2 bg-brand hover:bg-brand-dark text-white rounded-xl font-bold text-xs shadow-sm transition">
+                <i class="fa-solid fa-check ml-1"></i>حفظ إعدادات الذروة
+              </button>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-4 gap-4 text-xs font-bold text-slate-700 bg-slate-50 p-4 rounded-2xl border border-slate-200/80">
+              <label class="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" id="surge-is-enabled" class="accent-brand w-4 h-4">
+                <span>تفعيل تسعير الذروة</span>
+              </label>
+              <div>
+                <label class="block text-[11px] text-slate-500 mb-1">نسبة الزيادة الحالية (%)</label>
+                <input type="number" id="surge-percentage" min="0" max="100" class="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-bold">
+              </div>
+              <div>
+                <label class="block text-[11px] text-slate-500 mb-1">السقف الأقصى المسموح (%)</label>
+                <input type="number" id="surge-max-cap" min="0" max="100" class="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-bold">
+              </div>
+              <div>
+                <label class="block text-[11px] text-slate-500 mb-1">سبب الذروة للمشتري</label>
+                <input type="text" id="surge-reason" placeholder="مثال: ذروة الطلب بداية الشهر" class="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-bold">
+              </div>
+            </div>
+          </div>
+
+          <!-- Sales Rewards Rules (Stage 4) -->
+          <div class="bg-white rounded-3xl border border-slate-200/80 shadow-sm overflow-hidden p-5 space-y-3">
+            <div class="flex items-center justify-between">
+              <div>
+                <h3 class="text-sm font-black text-slate-800 flex items-center gap-2">
+                  <i class="fa-solid fa-gift text-purple-600"></i>
+                  <span>برنامج مكافآت وحوافز المبيعات (Sales Rewards)</span>
+                </h3>
+                <p class="text-[11px] text-slate-400">صرف مكافآت آلية لمحفظة التاجر عند تجاوز مستهدف المبيعات شهرياً أو أسبوعياً</p>
+              </div>
+              <div class="flex items-center gap-2">
+                <button onclick="openAddRewardRuleModal()" class="px-3.5 py-2 bg-brand hover:bg-brand-dark text-white rounded-xl font-bold text-xs shadow-sm flex items-center gap-1.5 transition">
+                  <i class="fa-solid fa-plus"></i><span>إضافة قاعدة مكافأة</span>
+                </button>
+                <button onclick="loadRewardRules()" class="px-3 py-2 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl font-bold text-xs transition">
+                  <i class="fa-solid fa-rotate-right"></i>
+                </button>
+              </div>
+            </div>
+            <div class="overflow-x-auto">
+              <table class="w-full text-right border-collapse text-xs">
+                <thead>
+                  <tr class="bg-slate-50/80 border-b border-slate-200 text-slate-500 font-bold">
+                    <th class="py-3 px-3">اسم القاعدة</th>
+                    <th class="py-3 px-3">المستهدف (Target)</th>
+                    <th class="py-3 px-3">المكافأة (د.ع)</th>
+                    <th class="py-3 px-3">الفترة</th>
+                    <th class="py-3 px-3">الحالة</th>
+                    <th class="py-3 px-3 text-center">إجراء</th>
+                  </tr>
+                </thead>
+                <tbody id="reward-rules-table-body" class="divide-y divide-slate-100 font-medium">
+                  <tr><td colspan="6" class="py-6 text-center text-slate-400">جاري تحميل قواعد المكافآت...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Restock Orders (Stage 4) -->
+          <div class="bg-white rounded-3xl border border-slate-200/80 shadow-sm overflow-hidden p-5 space-y-3">
+            <div class="flex items-center justify-between">
+              <div>
+                <h3 class="text-sm font-black text-slate-800 flex items-center gap-2">
+                  <i class="fa-solid fa-boxes-packing text-blue-600"></i>
+                  <span>طلبات إعادة التعبئة والتوريد الآلي (Auto-Restock)</span>
+                </h3>
+                <p class="text-[11px] text-slate-400">سجل طلبات التوريد التلقائية من المزودين الخارجيين عند اقتراب نفاد المخزون</p>
+              </div>
+              <button onclick="loadRestockOrders()" class="px-3 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl font-bold text-xs transition">
+                <i class="fa-solid fa-rotate-right"></i><span>تحديث</span>
+              </button>
+            </div>
+            <div class="overflow-x-auto">
+              <table class="w-full text-right border-collapse text-xs">
+                <thead>
+                  <tr class="bg-slate-50/80 border-b border-slate-200 text-slate-500 font-bold">
+                    <th class="py-3 px-3">رقم الطلب</th>
+                    <th class="py-3 px-3">المزود</th>
+                    <th class="py-3 px-3">رمز الصنف</th>
+                    <th class="py-3 px-3">الكمية</th>
+                    <th class="py-3 px-3">الحالة</th>
+                    <th class="py-3 px-3">التاريخ</th>
+                  </tr>
+                </thead>
+                <tbody id="restock-orders-table-body" class="divide-y divide-slate-100 font-medium">
+                  <tr><td colspan="6" class="py-6 text-center text-slate-400">جاري تحميل طلبات التوريد...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
         </section>
 
         <!-- ========================================================================= -->

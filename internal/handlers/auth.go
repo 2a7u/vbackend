@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"golang.org/x/crypto/bcrypt"
 
+	"venus_backend/internal/limits"
 	"venus_backend/internal/middleware"
 )
 
@@ -20,6 +21,7 @@ type AuthHandler struct {
 	JWTSecret       string
 	TokenTTL        time.Duration
 	SuperAdminEmail string
+	LimitsSvc       *limits.Service
 }
 
 type credentialsRequest struct {
@@ -515,6 +517,19 @@ func (h *AuthHandler) RedeemActivationCode(c *fiber.Ctx) error {
 		uid = 1
 	}
 
+	if h.LimitsSvc != nil {
+		blocked, retrySec, reason, _ := h.LimitsSvc.IsBlocked(c.Context(), c.IP(), uid)
+		if blocked {
+			c.Set("Retry-After", fmt.Sprintf("%d", retrySec))
+			return c.Status(fiber.StatusTooManyRequests).JSON(fiber.Map{
+				"error":       "TEMPORARILY_BLOCKED",
+				"code":        "TEMPORARILY_BLOCKED",
+				"retry_after": retrySec,
+				"message":     fmt.Sprintf("تم حظر محاولات التفعيل مؤقتاً: %s. يرجى الانتظار %d ثانية.", reason, retrySec),
+			})
+		}
+	}
+
 	tx, err := h.Pool.Begin(c.Context())
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "database error"})
@@ -534,6 +549,17 @@ func (h *AuthHandler) RedeemActivationCode(c *fiber.Ctx) error {
 		 FOR UPDATE`, code,
 	).Scan(&codeID, &planName, &durationDays, &isUsed)
 	if err == pgx.ErrNoRows || isUsed {
+		if h.LimitsSvc != nil {
+			isBlocked, _, _ := h.LimitsSvc.RecordFailedAttempt(c.Context(), uid, c.IP(), code, "activation", 5, 15*time.Minute)
+			if isBlocked {
+				return c.Status(fiber.StatusTooManyRequests).JSON(fiber.Map{
+					"error":       "TEMPORARILY_BLOCKED",
+					"code":        "TEMPORARILY_BLOCKED",
+					"retry_after": 900,
+					"message":     "تم تجاوز عدد المحاولات المسموح به لرمز التفعيل. تم الحظر لمدة 15 دقيقة.",
+				})
+			}
+		}
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "رمز التفعيل غير صالح أو تم استخدامه مسبقاً"})
 	}
 	if err != nil {
@@ -567,6 +593,10 @@ func (h *AuthHandler) RedeemActivationCode(c *fiber.Ctx) error {
 
 	if err := tx.Commit(c.Context()); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "transaction commit failed"})
+	}
+
+	if h.LimitsSvc != nil {
+		_ = h.LimitsSvc.ResetAttempts(c.Context(), c.IP(), code, "activation")
 	}
 
 	writeAudit(c.Context(), h.Pool, uid, "", "REDEEM_CODE", "activation_codes", itoa(codeID), map[string]any{

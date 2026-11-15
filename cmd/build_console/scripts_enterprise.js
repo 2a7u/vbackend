@@ -457,6 +457,255 @@
       } catch (e) {
         keysBody.innerHTML = '<tr><td colspan="4" class="py-6 text-center text-rose-500 font-bold">خطأ في تحميل المفاتيح</td></tr>';
       }
+
+      // 3. Limits Blocks (Stage 1)
+      await loadLimitsBlocks();
+
+      // 4. Dead Jobs Queue (Stage 2)
+      await loadDeadJobs();
+
+      // 5. Notify Channels (Stage 3)
+      await loadNotifyChannels();
+
+      // 6. Risk Profiles & API Keys v2 (Stage 4)
+      await loadRiskProfiles();
+      await loadApiKeysV2();
+    }
+
+    async function loadDeadJobs() {
+      const tbody = document.getElementById('dead-jobs-table-body');
+      if (!tbody) return;
+      try {
+        const res = await apiFetch('/api/admin/jobs/dead');
+        const data = await res.json();
+        const items = data.items || [];
+        if (items.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="7" class="py-6 text-center text-slate-400 font-bold">لا توجد مهام متعثرة (جميع المهام الخلفية تعمل بسلاسة)</td></tr>';
+          return;
+        }
+        tbody.innerHTML = items.map(j => `
+          <tr class="hover:bg-slate-50 transition">
+            <td class="py-2.5 px-3 font-mono text-slate-500 font-bold">#${j.id}</td>
+            <td class="py-2.5 px-3 font-bold text-slate-800">مشترك #${j.merchant_id}</td>
+            <td class="py-2.5 px-3"><span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-blue-50 text-brand">${escapeHtml(j.kind)}</span></td>
+            <td class="py-2.5 px-3 font-bold text-amber-600">${j.attempts} / ${j.max_attempts}</td>
+            <td class="py-2.5 px-3 font-mono text-xs text-rose-600 max-w-xs truncate" title="${escapeHtml(j.last_error)}">${escapeHtml(j.last_error || '—')}</td>
+            <td class="py-2.5 px-3 text-slate-400 text-[11px]">${formatBaghdad(j.created_at)}</td>
+            <td class="py-2.5 px-3 text-center">
+              <button onclick="retryDeadJob(${j.id})" class="px-2.5 py-1 bg-brand text-white hover:bg-brand-dark rounded-lg text-xs font-bold transition flex items-center gap-1 mx-auto shadow-sm">
+                <i class="fa-solid fa-rotate-right text-[10px]"></i><span>أعد المحاولة</span>
+              </button>
+            </td>
+          </tr>
+        `).join('');
+      } catch (err) {
+        tbody.innerHTML = '<tr><td colspan="7" class="py-6 text-center text-rose-500 font-bold">خطأ في تحميل المهام المتعثرة</td></tr>';
+      }
+    }
+
+    async function retryDeadJob(id) {
+      try {
+        const res = await apiFetch('/api/admin/jobs/' + id + '/retry', { method: 'POST' });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'فشل إعادة تشغيل المهمة');
+        showToast('تمت إعادة جدولة المهمة بنجاح للتنفيذ الفوري');
+        loadDeadJobs();
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    }
+
+    async function loadLimitsBlocks() {
+      const tbody = document.getElementById('limits-blocks-table-body');
+      if (!tbody) return;
+      try {
+        const res = await apiFetch('/api/admin/limits/blocks');
+        const data = await res.json();
+        if (res.ok && Array.isArray(data)) {
+          if (data.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" class="py-6 text-center text-slate-400 font-bold">لا يوجد أي حساب أو IP محظور حالياً (النظام آمن ومستقر)</td></tr>';
+            return;
+          }
+          tbody.innerHTML = data.map(b => `
+            <tr class="hover:bg-slate-50 transition">
+              <td class="py-2.5 px-3"><span class="px-2 py-0.5 rounded-full text-[10px] font-black ${b.key_type === 'ip' ? 'bg-amber-50 text-amber-700' : 'bg-rose-50 text-rose-600'}">${escapeHtml(b.key_type.toUpperCase())}</span></td>
+              <td class="py-2.5 px-3 font-mono font-bold text-slate-800">${escapeHtml(b.key_value)}</td>
+              <td class="py-2.5 px-3 text-slate-600">${escapeHtml(b.reason || 'تجاوز حد المحاولات')}</td>
+              <td class="py-2.5 px-3 font-bold text-rose-600">${b.attempts || 0}</td>
+              <td class="py-2.5 px-3 text-slate-500 text-[11px]">${formatBaghdad(b.blocked_until)}</td>
+              <td class="py-2.5 px-3 text-center">
+                <button onclick="unblockLimit(${b.id})" class="px-2.5 py-1 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded-lg text-xs font-bold transition flex items-center gap-1 mx-auto">
+                  <i class="fa-solid fa-lock-open text-[10px]"></i><span>فك الحظر</span>
+                </button>
+              </td>
+            </tr>
+          `).join('');
+        }
+      } catch (err) {
+        tbody.innerHTML = '<tr><td colspan="6" class="py-6 text-center text-rose-500 font-bold">خطأ في تحميل سجلات الحظر</td></tr>';
+      }
+    }
+
+    async function unblockLimit(id) {
+      if (!confirm('هل تريد بالتأكيد فك الحظر عن هذا السجل فورياً؟')) return;
+      try {
+        const res = await apiFetch('/api/admin/limits/unblock/' + id, { method: 'POST' });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'فشل فك الحظر');
+        showToast('تم فك الحظر بنجاح');
+        loadLimitsBlocks();
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    }
+
+    // =========================================================================
+    // STAGE 3: NOTIFY CHANNELS, SEAL VERIFIER & REPORTS
+    // =========================================================================
+    async function loadNotifyChannels() {
+      const tbody = document.getElementById('notify-channels-table-body');
+      if (!tbody) return;
+      try {
+        const res = await apiFetch('/api/admin/notify/channels');
+        const list = await res.json();
+        if (res.ok && Array.isArray(list)) {
+          if (list.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" class="py-6 text-center text-slate-400 font-bold">لا توجد قنوات إشعار مخصصة (يتم استخدام إشعارات Push الافتراضية)</td></tr>';
+            return;
+          }
+          tbody.innerHTML = list.map(c => `
+            <tr class="hover:bg-slate-50 transition">
+              <td class="py-2.5 px-3 font-mono font-black text-brand text-center">${c.priority}</td>
+              <td class="py-2.5 px-3 font-bold text-slate-800"><span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-blue-50 text-brand uppercase">${escapeHtml(c.channel_type)}</span></td>
+              <td class="py-2.5 px-3">${c.is_active ? '<span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-50 text-emerald-600">نشط</span>' : '<span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-slate-100 text-slate-500">معطل</span>'}</td>
+              <td class="py-2.5 px-3 font-mono text-xs text-slate-600 truncate max-w-xs">${escapeHtml(JSON.stringify(c.config))}</td>
+              <td class="py-2.5 px-3 text-center">
+                <button onclick="deleteNotifyChannel(${c.id})" class="p-1 text-slate-400 hover:text-rose-600"><i class="fa-solid fa-trash-can"></i></button>
+              </td>
+            </tr>
+          `).join('');
+        }
+      } catch (err) {
+        tbody.innerHTML = '<tr><td colspan="5" class="py-6 text-center text-rose-500 font-bold">خطأ في تحميل قنوات الإشعار</td></tr>';
+      }
+    }
+
+    function openAddNotifyChannelModal() {
+      document.getElementById('notify-token').value = '';
+      document.getElementById('notify-target').value = '';
+      document.getElementById('notify-priority').value = '1';
+      document.getElementById('notify-is-active').checked = true;
+      openModal('modal-add-notify-channel');
+    }
+
+    function toggleNotifyFields() {
+      const type = document.getElementById('notify-channel-type').value;
+      const tokenField = document.getElementById('notify-field-token');
+      const targetField = document.getElementById('notify-field-target');
+      if (type === 'push') {
+        tokenField.classList.add('hidden');
+        targetField.classList.add('hidden');
+      } else {
+        tokenField.classList.remove('hidden');
+        targetField.classList.remove('hidden');
+      }
+    }
+
+    async function submitAddNotifyChannel(e) {
+      e.preventDefault();
+      const type = document.getElementById('notify-channel-type').value;
+      const token = document.getElementById('notify-token').value.trim();
+      const target = document.getElementById('notify-target').value.trim();
+
+      const config = {};
+      if (type === 'telegram') {
+        config.bot_token = token;
+        config.chat_id = target;
+      } else if (type === 'whatsapp') {
+        config.endpoint_url = target;
+        config.api_key = token;
+      } else if (type === 'sms') {
+        config.provider_url = target;
+        config.api_key = token;
+      }
+
+      const payload = {
+        channel_type: type,
+        config: config,
+        priority: parseInt(document.getElementById('notify-priority').value, 10) || 1,
+        is_active: document.getElementById('notify-is-active').checked
+      };
+
+      try {
+        const res = await apiFetch('/api/admin/notify/channels', {
+          method: 'POST',
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'فشل حفظ القناة');
+        closeModal('modal-add-notify-channel');
+        showToast('تمت إضافة قناة الإشعار بنجاح');
+        loadNotifyChannels();
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    }
+
+    async function deleteNotifyChannel(id) {
+      if (!confirm('هل أنت متأكد من حذف قناة الإشعار هذه؟')) return;
+      try {
+        const res = await apiFetch('/api/admin/notify/channels/' + id, { method: 'DELETE' });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'فشل حذف القناة');
+        showToast('تم حذف القناة بنجاح');
+        loadNotifyChannels();
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    }
+
+    async function verifySealTokenManually() {
+      const input = document.getElementById('seal-verify-token-input');
+      const box = document.getElementById('seal-verify-result-box');
+      const token = input.value.trim();
+      if (!token) {
+        showToast('يرجى إدخال رمز الفاتورة', 'error');
+        return;
+      }
+      box.classList.remove('hidden');
+      box.innerHTML = '<span class="text-slate-400 font-bold">جاري فحص التوقيع الرقمي...</span>';
+
+      try {
+        const res = await fetch('/verify/' + encodeURIComponent(token), {
+          headers: { 'Accept': 'application/json' }
+        });
+        const data = await res.json();
+        if (!res.ok || !data.valid) {
+          box.innerHTML = '<span class="text-rose-600 font-black"><i class="fa-solid fa-xmark ml-1"></i>فاتورة غير معتمدة أو توقيع HMAC غير مطابق!</span>';
+          return;
+        }
+        box.innerHTML = `
+          <div class="text-emerald-700 font-black flex items-center gap-1.5"><i class="fa-solid fa-circle-check"></i><span>فاتورة أصلية معتمدة وموثقة:</span></div>
+          <div class="text-slate-700 font-bold">المتجر / الوكيل: <span class="font-black text-slate-900">${escapeHtml(data.store_name)} (${escapeHtml(data.merchant_name)})</span></div>
+          <div class="text-slate-700 font-bold">المبلغ المدفوع: <span class="font-black text-emerald-600">${formatIQD(data.amount)}</span></div>
+          <div class="text-slate-700 font-bold">رقم الإيصال: <span class="font-mono text-slate-900">${escapeHtml(data.receipt_id)}</span></div>
+          <div class="text-slate-500 font-mono text-[11px]">توقيت بغداد المعتمد: ${escapeHtml(data.baghdad_time)}</div>
+        `;
+      } catch (err) {
+        box.innerHTML = '<span class="text-rose-600 font-bold">خطأ في الاتصال بالخدمة</span>';
+      }
+    }
+
+    async function sendReportsNow() {
+      if (!confirm('هل تريد توليد وإرسال التقرير المالي اليومي الآن إلى جميع القنوات الفعالة؟')) return;
+      try {
+        const res = await apiFetch('/api/admin/reports/send-now', { method: 'POST' });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'فشل إرسال التقرير');
+        showToast('تم توليد وإرسال التقرير اليومي بنجاح إلى الإدارة والمشتركين 📊');
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
     }
 
     function openAddIPRuleModal() {
@@ -578,6 +827,9 @@
           document.getElementById('bi-goroutines').innerText = tel.goroutines_count || 18;
           document.getElementById('bi-ram').innerText = (tel.ram_alloc_mb || 42) + ' MB';
           document.getElementById('bi-server-time').innerText = formatBaghdad(tel.server_time_utc || new Date().toISOString());
+
+          // Stage 4: 7-Day Liquidity Forecast
+          await loadForecastData();
         }
       } catch (err) {
         console.error('BI load err:', err);
@@ -628,5 +880,202 @@
         };
       } catch (err) {
         console.warn('WS connect error:', err);
+      }
+    }
+
+    // =========================================================================
+    // STAGE 4: RISK PROFILES, API KEYS V2 & LIQUIDITY FORECAST
+    // =========================================================================
+    async function loadRiskProfiles() {
+      const tbody = document.getElementById('risk-profiles-table-body');
+      if (!tbody) return;
+      try {
+        const res = await apiFetch('/api/admin/risk/profiles');
+        const list = await res.json();
+        if (res.ok && Array.isArray(list)) {
+          if (list.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" class="py-6 text-center text-slate-400 font-bold">لا توجد ملفات مخاطر مسجلة (الوضع المالي طبيعي ومستقر)</td></tr>';
+            return;
+          }
+          tbody.innerHTML = list.map(p => {
+            let scoreColor = 'bg-emerald-50 text-emerald-700 border-emerald-200';
+            let statusText = '<span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-50 text-emerald-600">آمن</span>';
+            if (p.is_frozen) {
+              scoreColor = 'bg-rose-50 text-rose-700 border-rose-200';
+              statusText = '<span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-rose-50 text-rose-600 font-black">مجمد فورياً</span>';
+            } else if (p.risk_score >= 80) {
+              scoreColor = 'bg-rose-50 text-rose-700 border-rose-200';
+              statusText = '<span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-rose-50 text-rose-600">خطر مرتفع</span>';
+            } else if (p.risk_score >= 40) {
+              scoreColor = 'bg-amber-50 text-amber-700 border-amber-200';
+              statusText = '<span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-50 text-amber-700">تحذير متوسط</span>';
+            }
+
+            const flags = (p.flags || []).map(f => `<span class="px-1.5 py-0.5 bg-slate-100 rounded text-[10px] font-mono text-slate-600 ml-1">${escapeHtml(f)}</span>`).join('') || '<span class="text-slate-400 text-[10px]">لا توجد أعلام</span>';
+
+            return `
+              <tr class="hover:bg-slate-50 transition">
+                <td class="py-2.5 px-3 font-mono font-bold text-slate-800">#${p.merchant_id}</td>
+                <td class="py-2.5 px-3">
+                  <span class="px-2.5 py-1 rounded-xl text-xs font-black border ${scoreColor}">${p.risk_score} / 100</span>
+                </td>
+                <td class="py-2.5 px-3">${flags}</td>
+                <td class="py-2.5 px-3">${statusText}</td>
+                <td class="py-2.5 px-3 text-slate-400 text-[11px]">${formatBaghdad(p.updated_at)}</td>
+                <td class="py-2.5 px-3 text-center">
+                  <button onclick="openOverrideRiskModal(${p.merchant_id}, ${p.risk_score})" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold transition flex items-center gap-1 mx-auto">
+                    <i class="fa-solid fa-pen-to-square text-[10px]"></i><span>تعديل</span>
+                  </button>
+                </td>
+              </tr>
+            `;
+          }).join('');
+        }
+      } catch (err) {
+        tbody.innerHTML = '<tr><td colspan="6" class="py-6 text-center text-rose-500 font-bold">خطأ في تحميل ملفات المخاطر</td></tr>';
+      }
+    }
+
+    function openOverrideRiskModal(merchantId, currentScore) {
+      document.getElementById('override-risk-merchant-id').value = merchantId;
+      document.getElementById('override-risk-merchant-info').innerText = 'المشترك رقم #' + merchantId;
+      document.getElementById('override-risk-score').value = currentScore;
+      document.getElementById('override-risk-unfreeze').checked = true;
+      openModal('modal-override-risk');
+    }
+
+    async function submitOverrideRisk(e) {
+      e.preventDefault();
+      const merchantId = document.getElementById('override-risk-merchant-id').value;
+      const newScore = parseInt(document.getElementById('override-risk-score').value, 10);
+      const unfreeze = document.getElementById('override-risk-unfreeze').checked;
+
+      try {
+        const res = await apiFetch('/api/admin/risk/override/' + merchantId, {
+          method: 'POST',
+          body: JSON.stringify({ new_score: newScore, unfreeze: unfreeze })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'فشل تعديل تقييم المخاطر');
+        closeModal('modal-override-risk');
+        showToast('تم تحديث تقييم المخاطر وتعديل حالة الحساب بنجاح');
+        loadRiskProfiles();
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    }
+
+    async function loadApiKeysV2() {
+      const tbody = document.getElementById('api-keys-v2-table-body');
+      if (!tbody) return;
+      try {
+        const res = await apiFetch('/api/admin/api-keys-v2');
+        const list = await res.json();
+        if (res.ok && Array.isArray(list)) {
+          if (list.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="7" class="py-6 text-center text-slate-400 font-bold">لا توجد مفاتيح API v2 مصدرة</td></tr>';
+            return;
+          }
+          tbody.innerHTML = list.map(k => `
+            <tr class="hover:bg-slate-50 transition">
+              <td class="py-2.5 px-3 font-bold text-slate-800">${escapeHtml(k.label)}</td>
+              <td class="py-2.5 px-3 font-mono font-bold text-brand">${escapeHtml(k.prefix)}...</td>
+              <td class="py-2.5 px-3">
+                ${(k.scopes || []).map(s => `<span class="px-1.5 py-0.5 rounded text-[10px] font-black bg-blue-50 text-brand ml-1">${escapeHtml(s)}</span>`).join('')}
+              </td>
+              <td class="py-2.5 px-3 font-mono text-xs font-bold text-slate-600">${k.rate_limit_per_minute}/دقيقة</td>
+              <td class="py-2.5 px-3 font-mono text-xs font-bold text-slate-800">${k.usage_count || 0}</td>
+              <td class="py-2.5 px-3">${k.is_active ? '<span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-50 text-emerald-600">نشط</span>' : '<span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-slate-100 text-slate-500">ملغي</span>'}</td>
+              <td class="py-2.5 px-3 text-center">
+                ${k.is_active ? `<button onclick="revokeApiKeyV2(${k.id})" class="p-1 text-slate-400 hover:text-rose-600 transition" title="إلغاء المفتاح"><i class="fa-solid fa-ban"></i></button>` : '—'}
+              </td>
+            </tr>
+          `).join('');
+        }
+      } catch (err) {
+        tbody.innerHTML = '<tr><td colspan="7" class="py-6 text-center text-rose-500 font-bold">خطأ في تحميل مفاتيح API v2</td></tr>';
+      }
+    }
+
+    function openAddApiKeyV2Modal() {
+      document.getElementById('apikey-v2-label').value = '';
+      document.getElementById('apikey-v2-rate-limit').value = '60';
+      document.getElementById('apikey-v2-result-box').classList.add('hidden');
+      document.getElementById('form-add-api-key-v2').classList.remove('hidden');
+      openModal('modal-add-api-key-v2');
+    }
+
+    let generatedApiKeyV2Secret = '';
+    async function submitAddApiKeyV2(e) {
+      e.preventDefault();
+      const scopes = Array.from(document.querySelectorAll('input[name="apikey-scope"]:checked')).map(cb => cb.value);
+      const payload = {
+        label: document.getElementById('apikey-v2-label').value.trim(),
+        scopes: scopes,
+        rate_limit: parseInt(document.getElementById('apikey-v2-rate-limit').value, 10) || 60
+      };
+
+      try {
+        const res = await apiFetch('/api/admin/api-keys-v2', {
+          method: 'POST',
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'فشل توليد المفتاح');
+
+        generatedApiKeyV2Secret = data.secret_key;
+        document.getElementById('apikey-v2-secret-value').innerText = generatedApiKeyV2Secret;
+        document.getElementById('form-add-api-key-v2').classList.add('hidden');
+        document.getElementById('apikey-v2-result-box').classList.remove('hidden');
+        showToast('تم توليد مفتاح API v2 بنجاح');
+        loadApiKeysV2();
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    }
+
+    function copyApiKeyV2ToClipboard() {
+      if (generatedApiKeyV2Secret) {
+        navigator.clipboard.writeText(generatedApiKeyV2Secret);
+        showToast('تم نسخ المفتاح السري للحافظة');
+      }
+    }
+
+    async function revokeApiKeyV2(id) {
+      if (!confirm('هل أنت متأكد من إلغاء مفتاح API هذا؟ سيتوقف أي نظام B2B مرتبط به فوراً.')) return;
+      try {
+        const res = await apiFetch('/api/admin/api-keys-v2/' + id, { method: 'DELETE' });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'فشل إلغاء المفتاح');
+        showToast('تم إلغاء المفتاح بنجاح');
+        loadApiKeysV2();
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    }
+
+    async function loadForecastData() {
+      const grid = document.getElementById('forecast-daily-grid');
+      try {
+        const res = await apiFetch('/api/admin/forecast');
+        const f = await res.json();
+        if (res.ok) {
+          document.getElementById('forecast-current-balance').innerText = formatIQD(f.current_balance_iqd || 0);
+          document.getElementById('forecast-projected-weekly').innerText = formatIQD(f.projected_weekly_inflow_iqd || 0);
+          document.getElementById('forecast-runway-days').innerText = (f.runway_days || 30) + ' يوم';
+          document.getElementById('forecast-burn-rate').innerText = formatIQD(f.daily_burn_rate_iqd || 0) + ' / يوم';
+
+          if (grid && Array.isArray(f.forecast_next_week)) {
+            grid.innerHTML = f.forecast_next_week.map(day => `
+              <div class="p-3 bg-slate-50 rounded-2xl border border-slate-200 text-center space-y-1">
+                <span class="text-[10px] text-slate-400 font-bold block">${day.date.substring(5)}</span>
+                <span class="text-xs font-black text-slate-800 block">${formatIQD(day.projected_inflow_iqd)}</span>
+                <span class="text-[9px] text-brand font-bold block">${day.estimated_sales_count} بيع</span>
+              </div>
+            `).join('');
+          }
+        }
+      } catch (err) {
+        console.error('loadForecastData err:', err);
       }
     }
