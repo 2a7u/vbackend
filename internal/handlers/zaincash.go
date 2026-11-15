@@ -32,14 +32,18 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"venus_backend/internal/fraud"
+	"venus_backend/internal/ledger"
 	"venus_backend/internal/middleware"
 )
 
 // ZainCashHandler owns the ZainCash endpoints.
 type ZainCashHandler struct {
-	Pool      *pgxpool.Pool
-	Hub       *WSHub
-	JWTSecret string
+	Pool        *pgxpool.Pool
+	Hub         *WSHub
+	JWTSecret   string
+	LedgerSvc   *ledger.Service
+	FraudEngine *fraud.Engine
 }
 
 const (
@@ -874,14 +878,29 @@ func (h *ZainCashHandler) markPaymentSuccess(ctx context.Context, txID, orderID 
 	defer tx.Rollback(ctx)
 
 	if purpose == "WALLET_TOPUP" {
-		_, err = tx.Exec(ctx,
-			`UPDATE users 
-			 SET wallet_balance = COALESCE(wallet_balance, 0) + $1, 
-			     status = 'active',
-			     updated_at = now() 
-			 WHERE id = $2`, amount, uid)
-		if err != nil {
-			return fmt.Errorf("update user wallet_balance: %w", err)
+		if h.FraudEngine != nil {
+			_, _ = h.FraudEngine.Evaluate(ctx, tx, fraud.CheckRequest{
+				UserID:    uid,
+				AmountIQD: int64(amount),
+				TxType:    "topup",
+			})
+		}
+
+		if h.LedgerSvc != nil {
+			_, err = h.LedgerSvc.RecordTopup(ctx, tx, uid, int64(amount), "zaincash_topup", txID, orderID)
+			if err != nil {
+				return fmt.Errorf("record double-entry topup: %w", err)
+			}
+		} else {
+			_, err = tx.Exec(ctx,
+				`UPDATE users 
+				 SET wallet_balance = COALESCE(wallet_balance, 0) + $1, 
+				     status = 'active',
+				     updated_at = now() 
+				 WHERE id = $2`, amount, uid)
+			if err != nil {
+				return fmt.Errorf("update user wallet_balance: %w", err)
+			}
 		}
 
 		var existingLedgerID int64
@@ -903,7 +922,23 @@ func (h *ZainCashHandler) markPaymentSuccess(ctx context.Context, txID, orderID 
 			}
 		}
 	} else {
-		// SUBSCRIPTION: Extend subscription period atomically
+		// SUBSCRIPTION: Record double-entry settlement -> revenue and extend subscription period
+		if h.LedgerSvc != nil && amount > 0 {
+			settlementID, sErr := h.LedgerSvc.GetSystemAccountID(ctx, ledger.SystemEmailSettlement)
+			revenueID, rErr := h.LedgerSvc.GetSystemAccountID(ctx, ledger.SystemEmailRevenue)
+			if sErr == nil && rErr == nil {
+				_, _ = h.LedgerSvc.ExecuteDoubleEntry(ctx, tx, ledger.DoubleEntryRequest{
+					TxID:    uuid.New(),
+					RefType: "subscription_payment",
+					RefID:   txID,
+					Legs: []ledger.Leg{
+						{AccountID: settlementID, Debit: int64(amount), Credit: 0},
+						{AccountID: revenueID, Debit: 0, Credit: int64(amount)},
+					},
+				})
+			}
+		}
+
 		_, err = tx.Exec(ctx,
 			`UPDATE users 
 			 SET plan_name = $1, 

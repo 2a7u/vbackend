@@ -435,6 +435,199 @@ VALUES
   ('business', 'أعمال', 125000, 125000, 0, 365, 'أفضل قيمة')
 ON CONFLICT (plan_key) DO NOTHING;
 
+-- =============================================================================
+-- PHASE 1: FINTECH CORE - Double-Entry Ledger, Fraud, Reconcile, Closes
+-- =============================================================================
+
+-- Additive columns to users for B2B overdraft and risk management
+ALTER TABLE users ADD COLUMN IF NOT EXISTS credit_limit BIGINT NOT NULL DEFAULT 0;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS wallet_status TEXT NOT NULL DEFAULT 'active';
+
+DO $$
+BEGIN
+    ALTER TABLE users DROP CONSTRAINT IF EXISTS users_wallet_status_check;
+    ALTER TABLE users ADD CONSTRAINT users_wallet_status_check CHECK (wallet_status IN ('active', 'frozen', 'restricted'));
+EXCEPTION
+    WHEN OTHERS THEN NULL;
+END $$;
+
+DO $$
+BEGIN
+    ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;
+    ALTER TABLE users ADD CONSTRAINT users_role_check CHECK (role IN ('subscriber', 'admin', 'system'));
+EXCEPTION
+    WHEN OTHERS THEN NULL;
+END $$;
+
+-- System accounts for balanced double-entry accounting
+INSERT INTO users (email, password_hash, full_name, role, is_approved)
+VALUES
+  ('settlement@venus.internal', 'SYSTEM_ACCOUNT_LOCKED', 'حساب التسوية المركزية - زين كاش', 'system', true),
+  ('revenue@venus.internal', 'SYSTEM_ACCOUNT_LOCKED', 'حساب إيرادات الاشتراكات والرسوم', 'system', true),
+  ('vouchers@venus.internal', 'SYSTEM_ACCOUNT_LOCKED', 'حساب مخزون البطاقات الرقمية', 'system', true),
+  ('adjustments@venus.internal', 'SYSTEM_ACCOUNT_LOCKED', 'حساب التسويات الإدارية', 'system', true)
+ON CONFLICT (email) DO NOTHING;
+
+-- -----------------------------------------------------------------------------
+-- ledger_entries: immutable double-entry ledger with SHA-256 hash chaining
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS ledger_entries (
+    id              BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    tx_id           UUID NOT NULL,
+    account_id      BIGINT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+    debit           BIGINT NOT NULL DEFAULT 0 CHECK (debit >= 0),
+    credit          BIGINT NOT NULL DEFAULT 0 CHECK (credit >= 0),
+    balance_after   BIGINT NOT NULL,
+    currency        TEXT NOT NULL DEFAULT 'IQD',
+    ref_type        TEXT NOT NULL,
+    ref_id          TEXT NOT NULL,
+    idempotency_key TEXT,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    prev_hash       TEXT NOT NULL,
+    hash            TEXT NOT NULL,
+    CONSTRAINT chk_ledger_entry_amount CHECK ((debit > 0 AND credit = 0) OR (credit > 0 AND debit = 0))
+);
+CREATE INDEX IF NOT EXISTS idx_ledger_account_created ON ledger_entries (account_id, created_at DESC, id DESC);
+CREATE INDEX IF NOT EXISTS idx_ledger_tx_id ON ledger_entries (tx_id);
+CREATE INDEX IF NOT EXISTS idx_ledger_ref ON ledger_entries (ref_type, ref_id);
+CREATE INDEX IF NOT EXISTS idx_ledger_idempotency ON ledger_entries (idempotency_key) WHERE idempotency_key IS NOT NULL;
+
+-- DB-level immutability trigger for ledger_entries
+CREATE OR REPLACE FUNCTION prevent_ledger_modification()
+RETURNS TRIGGER AS $$
+BEGIN
+    RAISE EXCEPTION 'Ledger entries are strictly immutable: UPDATE and DELETE are prohibited by the financial protocol';
+END;
+$$ LANGUAGE plpgsql;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_trigger WHERE tgname = 'trg_prevent_ledger_update'
+    ) THEN
+        CREATE TRIGGER trg_prevent_ledger_update
+        BEFORE UPDATE OR DELETE ON ledger_entries
+        FOR EACH ROW EXECUTE FUNCTION prevent_ledger_modification();
+    END IF;
+END $$;
+
+-- -----------------------------------------------------------------------------
+-- integrity_alerts: tamper detection and cryptographic chain verification
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS integrity_alerts (
+    id             BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    alert_type     TEXT NOT NULL,
+    account_id     BIGINT REFERENCES users(id) ON DELETE SET NULL,
+    tx_id          UUID,
+    entry_id       BIGINT,
+    expected_value TEXT NOT NULL DEFAULT '',
+    actual_value   TEXT NOT NULL DEFAULT '',
+    details        JSONB NOT NULL DEFAULT '{}'::jsonb,
+    status         TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'investigating', 'resolved', 'dismissed')),
+    created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+    resolved_at    TIMESTAMPTZ,
+    resolved_by    BIGINT REFERENCES users(id) ON DELETE SET NULL
+);
+CREATE INDEX IF NOT EXISTS idx_integrity_alerts_status ON integrity_alerts (status, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_integrity_alerts_account ON integrity_alerts (account_id, created_at DESC);
+
+-- -----------------------------------------------------------------------------
+-- fraud_rules & fraud_events: risk mitigation & real-time wallet protection
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS fraud_rules (
+    id                  BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    rule_code           TEXT NOT NULL UNIQUE,
+    name_ar             TEXT NOT NULL,
+    description         TEXT NOT NULL DEFAULT '',
+    condition_type      TEXT NOT NULL,
+    threshold_value     BIGINT NOT NULL DEFAULT 0,
+    time_window_seconds INTEGER NOT NULL DEFAULT 60,
+    action              TEXT NOT NULL DEFAULT 'alert' CHECK (action IN ('alert', 'freeze_wallet', 'require_otp')),
+    is_active           BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at          TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS fraud_events (
+    id           BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    user_id      BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    rule_code    TEXT NOT NULL,
+    severity     TEXT NOT NULL DEFAULT 'high' CHECK (severity IN ('low', 'medium', 'high', 'critical')),
+    action_taken TEXT NOT NULL DEFAULT 'alert',
+    details      JSONB NOT NULL DEFAULT '{}'::jsonb,
+    status       TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'reviewed', 'dismissed')),
+    triggered_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    reviewed_at  TIMESTAMPTZ,
+    reviewed_by  BIGINT REFERENCES users(id) ON DELETE SET NULL
+);
+CREATE INDEX IF NOT EXISTS idx_fraud_events_user ON fraud_events (user_id, triggered_at DESC);
+CREATE INDEX IF NOT EXISTS idx_fraud_events_status ON fraud_events (status, triggered_at DESC);
+
+INSERT INTO fraud_rules (rule_code, name_ar, description, condition_type, threshold_value, time_window_seconds, action, is_active)
+VALUES
+  ('VELOCITY_TOPUP', 'سرعة الشحن المفرطة', 'أكثر من 5 عمليات شحن خلال 60 ثانية', 'velocity', 5, 60, 'freeze_wallet', TRUE),
+  ('LARGE_DEBIT', 'عملية شراء منفردة ضخمة', 'خصم منفرد يتجاوز 1,500,000 دينار', 'max_single_amount', 1500000, 0, 'alert', TRUE),
+  ('HIGH_VELOCITY_VOUCHER', 'سحب متكرر للبطاقات', 'سحب أكثر من 10 بطاقات خلال 120 ثانية', 'velocity', 10, 120, 'alert', TRUE),
+  ('DAILY_VOLUME_SPIKE', 'تجاوز حجم التداول اليومي', 'تجاوز حجم العمليات اليومية 5,000,000 دينار', 'daily_volume', 5000000, 86400, 'alert', TRUE)
+ON CONFLICT (rule_code) DO NOTHING;
+
+-- -----------------------------------------------------------------------------
+-- reconciliation_reports: automated daily reconciliation of all accounts
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS reconciliation_reports (
+    id                       BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    report_date              DATE NOT NULL,
+    total_system_balance     BIGINT NOT NULL DEFAULT 0,
+    total_gateway_volume     BIGINT NOT NULL DEFAULT 0,
+    total_ledger_credits     BIGINT NOT NULL DEFAULT 0,
+    total_ledger_debits      BIGINT NOT NULL DEFAULT 0,
+    expected_closing_balance BIGINT NOT NULL DEFAULT 0,
+    actual_closing_balance   BIGINT NOT NULL DEFAULT 0,
+    discrepancy              BIGINT NOT NULL DEFAULT 0,
+    status                   TEXT NOT NULL DEFAULT 'matched' CHECK (status IN ('matched', 'discrepancy', 'investigating')),
+    details                  JSONB NOT NULL DEFAULT '{}'::jsonb,
+    generated_by             TEXT NOT NULL DEFAULT 'system_cron',
+    created_at               TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_reconciliation_date ON reconciliation_reports (report_date DESC);
+
+-- -----------------------------------------------------------------------------
+-- financial_closes: sealed daily & monthly periods with SHA-256 seal
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS financial_closes (
+    id                     BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    period_type            TEXT NOT NULL CHECK (period_type IN ('daily', 'monthly')),
+    period_date            DATE NOT NULL,
+    total_inflow           BIGINT NOT NULL DEFAULT 0,
+    total_outflow          BIGINT NOT NULL DEFAULT 0,
+    net_revenue            BIGINT NOT NULL DEFAULT 0,
+    total_wallet_liability BIGINT NOT NULL DEFAULT 0,
+    transaction_count      BIGINT NOT NULL DEFAULT 0,
+    closing_hash           TEXT NOT NULL,
+    status                 TEXT NOT NULL DEFAULT 'sealed' CHECK (status IN ('sealed', 'unsealed')),
+    closed_by              BIGINT REFERENCES users(id) ON DELETE SET NULL,
+    closed_at              TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE(period_type, period_date)
+);
+CREATE INDEX IF NOT EXISTS idx_financial_closes_period ON financial_closes (period_type, period_date DESC);
+
+-- -----------------------------------------------------------------------------
+-- idempotency_keys: duplicate request prevention with response caching
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS idempotency_keys (
+    key             TEXT PRIMARY KEY,
+    user_id         BIGINT REFERENCES users(id) ON DELETE CASCADE,
+    request_path    TEXT NOT NULL DEFAULT '',
+    request_hash    TEXT NOT NULL DEFAULT '',
+    response_status INTEGER NOT NULL DEFAULT 0,
+    response_body   TEXT NOT NULL DEFAULT '',
+    status          TEXT NOT NULL DEFAULT 'in_flight' CHECK (status IN ('in_flight', 'completed', 'failed')),
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    completed_at    TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_idempotency_keys_user ON idempotency_keys (user_id, created_at DESC);
+
+
 
 
 

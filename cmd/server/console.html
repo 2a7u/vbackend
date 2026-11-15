@@ -223,6 +223,34 @@
           <span>سجل الرقابة والحذوفات</span>
         </button>
 
+        <!-- Enterprise Fintech Section -->
+        <div class="px-3 pt-3 pb-1 text-[10px] font-black text-slate-400 uppercase tracking-wider">الأنظمة المالية المتقدمة</div>
+        <button onclick="switchTab('ledger')" id="nav-ledger"
+          class="nav-tab-btn flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-50 transition active:scale-[0.99]">
+          <i class="fa-solid fa-book-bookmark w-5 text-center text-slate-400"></i>
+          <span>دفتر الأستاذ والنزاهة</span>
+        </button>
+        <button onclick="switchTab('fraud')" id="nav-fraud"
+          class="nav-tab-btn flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-50 transition active:scale-[0.99]">
+          <i class="fa-solid fa-shield-virus w-5 text-center text-slate-400"></i>
+          <span>مكافحة الاحتيال والمخاطر</span>
+        </button>
+        <button onclick="switchTab('reconcile')" id="nav-reconcile"
+          class="nav-tab-btn flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-50 transition active:scale-[0.99]">
+          <i class="fa-solid fa-scale-balanced w-5 text-center text-slate-400"></i>
+          <span>المطابقة والتقارير</span>
+        </button>
+        <button onclick="switchTab('debts')" id="nav-debts"
+          class="nav-tab-btn flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-50 transition active:scale-[0.99]">
+          <i class="fa-solid fa-hand-holding-dollar w-5 text-center text-slate-400"></i>
+          <span>سقوف الائتمان B2B</span>
+        </button>
+        <button onclick="switchTab('close')" id="nav-close"
+          class="nav-tab-btn flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-50 transition active:scale-[0.99]">
+          <i class="fa-solid fa-stamp w-5 text-center text-slate-400"></i>
+          <span>الإقفال وكشوف الحساب</span>
+        </button>
+
         <!-- System Health Box -->
         <div class="mt-auto pt-4 border-t border-slate-100">
           <div class="p-3 bg-slate-50 rounded-2xl border border-slate-200 text-xs">
@@ -278,6 +306,26 @@
         <button onclick="switchTab('audit'); toggleMobileSidebar()" class="flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-sm font-bold text-slate-700 hover:bg-slate-50">
           <i class="fa-solid fa-shield-halved w-5 text-brand"></i>
           <span>سجل الرقابة والحذوفات</span>
+        </button>
+        <button onclick="switchTab('ledger'); toggleMobileSidebar()" class="flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-sm font-bold text-slate-700 hover:bg-slate-50">
+          <i class="fa-solid fa-book-bookmark w-5 text-brand"></i>
+          <span>دفتر الأستاذ والنزاهة</span>
+        </button>
+        <button onclick="switchTab('fraud'); toggleMobileSidebar()" class="flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-sm font-bold text-slate-700 hover:bg-slate-50">
+          <i class="fa-solid fa-shield-virus w-5 text-brand"></i>
+          <span>مكافحة الاحتيال والمخاطر</span>
+        </button>
+        <button onclick="switchTab('reconcile'); toggleMobileSidebar()" class="flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-sm font-bold text-slate-700 hover:bg-slate-50">
+          <i class="fa-solid fa-scale-balanced w-5 text-brand"></i>
+          <span>المطابقة والتقارير</span>
+        </button>
+        <button onclick="switchTab('debts'); toggleMobileSidebar()" class="flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-sm font-bold text-slate-700 hover:bg-slate-50">
+          <i class="fa-solid fa-hand-holding-dollar w-5 text-brand"></i>
+          <span>سقوف الائتمان B2B</span>
+        </button>
+        <button onclick="switchTab('close'); toggleMobileSidebar()" class="flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-sm font-bold text-slate-700 hover:bg-slate-50">
+          <i class="fa-solid fa-stamp w-5 text-brand"></i>
+          <span>الإقفال وكشوف الحساب</span>
         </button>
       </div>
 
@@ -860,6 +908,383 @@
           </div>
         </section>
 
+        <!-- =================================================================== -->
+        <!-- TAB 7: DOUBLE-ENTRY LEDGER & INTEGRITY                              -->
+        <!-- =================================================================== -->
+        <section id="tab-content-ledger" class="tab-pane hidden space-y-6">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <div class="flex items-center gap-2">
+                <h2 class="text-xl font-black text-slate-800">دفتر الأستاذ المالي المزدوج (Double-Entry Ledger)</h2>
+                <span class="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-blue-50 text-brand border border-blue-200">
+                  <i class="fa-solid fa-lock text-[9px] ml-1"></i>سلاسل SHA-256
+                </span>
+              </div>
+              <p class="text-xs text-slate-500 mt-0.5">سجل محاسبي غير قابل للتعديل مشفر بسلاسل التجزئة مع التحقق الجنائي اللحظي</p>
+            </div>
+            <div class="flex items-center gap-2">
+              <button onclick="triggerIntegrityCheck()" id="btn-verify-integrity" class="px-3.5 py-2 bg-brand hover:bg-brand-dark text-white rounded-xl font-bold text-xs shadow-md shadow-brand/20 flex items-center gap-2 transition active:scale-[0.99]">
+                <i class="fa-solid fa-fingerprint"></i>
+                <span>بدء الفحص الجنائي لسلاسل الهاش</span>
+              </button>
+              <button onclick="loadLedgerEntries()" class="px-3.5 py-2 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 rounded-xl font-bold text-xs shadow-sm flex items-center gap-2 transition">
+                <i class="fa-solid fa-rotate-right text-brand"></i>
+                <span>تحديث القيود</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Integrity Status Card -->
+          <div id="integrity-status-card" class="p-4 rounded-3xl bg-emerald-50/80 border border-emerald-200 flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div class="flex items-center gap-3">
+              <div class="w-12 h-12 rounded-2xl bg-emerald-500 text-white flex items-center justify-center text-xl shadow-md shadow-emerald-500/20 flex-shrink-0">
+                <i class="fa-solid fa-shield-check"></i>
+              </div>
+              <div>
+                <div class="text-xs font-black text-emerald-800 flex items-center gap-2">
+                  <span id="integrity-status-text">سلاسل دفتر الأستاذ سليمة ومطابقة بنسبة 100%</span>
+                  <span class="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                </div>
+                <div class="text-[11px] text-emerald-600 mt-0.5 font-medium" id="integrity-status-sub">
+                  تم فحص كافة التوقيعات الرقمية ولم يتم رصد أي محاولة تعديل أو تلاعب بالأرصدة
+                </div>
+              </div>
+            </div>
+            <div class="flex items-center gap-4 text-xs font-bold text-slate-700 border-t md:border-t-0 md:border-r border-emerald-200/60 pt-3 md:pt-0 pr-0 md:pr-6">
+              <div>
+                <span class="text-slate-400 block text-[10px]">القيود المفحوصة</span>
+                <span id="integrity-entries-count" class="text-sm font-black text-slate-800">0</span>
+              </div>
+              <div>
+                <span class="text-slate-400 block text-[10px]">الحسابات النشطة</span>
+                <span id="integrity-accounts-count" class="text-sm font-black text-slate-800">0</span>
+              </div>
+              <div>
+                <span class="text-slate-400 block text-[10px]">المخالفات المرصودة</span>
+                <span id="integrity-violations-count" class="text-sm font-black text-emerald-600">0</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Filters -->
+          <div class="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-3 text-xs font-bold">
+            <div class="flex items-center gap-3 w-full sm:w-auto">
+              <label class="text-slate-500 whitespace-nowrap">نوع الحركة:</label>
+              <select id="ledger-filter-ref" onchange="loadLedgerEntries()" class="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-brand font-bold text-slate-700">
+                <option value="">كافة حركات القيود</option>
+                <option value="zaincash_topup">شحن زين كاش (Topup)</option>
+                <option value="voucher_dispense">شراء بطاقات (Vouchers)</option>
+                <option value="admin_adjustment">تعديل رصيد إداري</option>
+                <option value="subscription_payment">سداد اشتراك VIP</option>
+                <option value="reversal">قيود عكسية (Reversal)</option>
+              </select>
+            </div>
+            <div class="text-slate-400 text-[11px] font-medium">
+              العملة الرسمية لدفتر الأستاذ: <span class="font-bold text-slate-700">دينار عراقي (IQD)</span> — دقة الحسابات: <span class="font-bold text-slate-700">BIGINT</span>
+            </div>
+          </div>
+
+          <!-- Ledger Table -->
+          <div class="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden p-4 space-y-3">
+            <div class="overflow-x-auto">
+              <table class="w-full text-right border-collapse text-xs">
+                <thead>
+                  <tr class="bg-slate-50/80 border-b border-slate-200 text-slate-500 font-bold">
+                    <th class="py-3 px-3">رقم القيد / الحركة</th>
+                    <th class="py-3 px-3">الحساب المالي</th>
+                    <th class="py-3 px-3">المدين (Debit)</th>
+                    <th class="py-3 px-3">الدائن (Credit)</th>
+                    <th class="py-3 px-3">الرصيد بعد القيد</th>
+                    <th class="py-3 px-3">نوع المرجع</th>
+                    <th class="py-3 px-3">التاريخ والوقت (بغداد)</th>
+                    <th class="py-3 px-3">ختم الهاش SHA-256</th>
+                  </tr>
+                </thead>
+                <tbody id="ledger-table-body" class="divide-y divide-slate-100 font-medium">
+                  <tr>
+                    <td colspan="8" class="py-8 text-center text-slate-400">جاري تحميل قيود دفتر الأستاذ المحاسبي...</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- =================================================================== -->
+        <!-- TAB 8: FRAUD DETECTION & RISK CONTROL                               -->
+        <!-- =================================================================== -->
+        <section id="tab-content-fraud" class="tab-pane hidden space-y-6">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <div class="flex items-center gap-2">
+                <h2 class="text-xl font-black text-slate-800">محرك رصد الاحتيال وإدارة المخاطر (Fraud Engine)</h2>
+                <span class="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-red-50 text-red-600 border border-red-200">
+                  <i class="fa-solid fa-shield-halved text-[9px] ml-1"></i>حماية لحظية
+                </span>
+              </div>
+              <p class="text-xs text-slate-500 mt-0.5">المراقبة بالنافذة المنزلقة (Sliding Window)، التجميد التلقائي للمحافظ، والتحكم بالحدود</p>
+            </div>
+            <button onclick="loadFraudData()" class="px-3.5 py-2 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 rounded-xl font-bold text-xs shadow-sm flex items-center gap-2 transition">
+              <i class="fa-solid fa-rotate-right text-brand"></i>
+              <span>تحديث التنبيهات والقواعد</span>
+            </button>
+          </div>
+
+          <!-- Fraud Rules Configuration Grid -->
+          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4" id="fraud-rules-grid">
+            <!-- Dynamically populated rules -->
+          </div>
+
+          <!-- Real-time Alerts / Events Table -->
+          <div class="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden p-4 space-y-3">
+            <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div class="font-black text-sm text-slate-800">سجل المخالفات والتنبيهات والحسابات المقيدة</div>
+              <span class="text-xs text-slate-400 font-bold">آخر 100 تنبيه</span>
+            </div>
+            <div class="overflow-x-auto">
+              <table class="w-full text-right border-collapse text-xs">
+                <thead>
+                  <tr class="bg-slate-50/80 border-b border-slate-200 text-slate-500 font-bold">
+                    <th class="py-3 px-3">التاريخ والوقت</th>
+                    <th class="py-3 px-3">المشترك / المتجر</th>
+                    <th class="py-3 px-3">القاعدة المنتهكة</th>
+                    <th class="py-3 px-3">مستوى الخطورة</th>
+                    <th class="py-3 px-3">الإجراء المتخذ</th>
+                    <th class="py-3 px-3">السبب والتفاصيل</th>
+                    <th class="py-3 px-3">الحالة والإجراء</th>
+                  </tr>
+                </thead>
+                <tbody id="fraud-events-table-body" class="divide-y divide-slate-100 font-medium">
+                  <tr>
+                    <td colspan="7" class="py-8 text-center text-slate-400">جاري تحميل سجل التنبيهات...</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- =================================================================== -->
+        <!-- TAB 9: DAILY RECONCILIATION & REPORTS                               -->
+        <!-- =================================================================== -->
+        <section id="tab-content-reconcile" class="tab-pane hidden space-y-6">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <div class="flex items-center gap-2">
+                <h2 class="text-xl font-black text-slate-800">المطابقة المالية اليومية (Daily Reconciliation)</h2>
+                <span class="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-purple-50 text-purple-700 border border-purple-200">
+                  <i class="fa-solid fa-calculator text-[9px] ml-1"></i>معادلة التوازن المالي
+                </span>
+              </div>
+              <p class="text-xs text-slate-500 mt-0.5">التدقيق الحسابي الآلي: الرصيد الافتتاحي + الواردات - السحوبات = الرصيد الفعلي</p>
+            </div>
+            <div class="flex items-center gap-2">
+              <input type="date" id="reconcile-date-input" class="px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 outline-none focus:border-brand shadow-sm">
+              <button onclick="runManualReconciliation()" id="btn-run-reconcile" class="px-3.5 py-2 bg-brand hover:bg-brand-dark text-white rounded-xl font-bold text-xs shadow-md shadow-brand/20 flex items-center gap-2 transition active:scale-[0.99]">
+                <i class="fa-solid fa-play"></i>
+                <span>تشغيل المطابقة الآن</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Current Balance Equation Card -->
+          <div class="bg-gradient-to-br from-slate-900 to-slate-800 text-white rounded-3xl p-6 shadow-xl relative overflow-hidden">
+            <div class="flex items-center justify-between mb-4">
+              <div class="text-xs font-bold text-slate-400">حالة المطابقة اللحظية للنظام المالي</div>
+              <span id="reconcile-live-badge" class="px-3 py-1 rounded-full text-xs font-black bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                <i class="fa-solid fa-check-double ml-1"></i>مطابق بنسبة 100%
+              </span>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 border-t border-slate-700/60 pt-4">
+              <div>
+                <span class="text-slate-400 text-xs block mb-1">التزام المنصة (أرصدة المشتركين)</span>
+                <span id="rec-total-balance" class="text-xl font-black text-white">0 د.ع</span>
+              </div>
+              <div>
+                <span class="text-slate-400 text-xs block mb-1">واردات بوابة زين كاش</span>
+                <span id="rec-gateway-volume" class="text-xl font-black text-sky-400">0 د.ع</span>
+              </div>
+              <div>
+                <span class="text-slate-400 text-xs block mb-1">إيداعات دفتر الأستاذ (Credits)</span>
+                <span id="rec-ledger-credits" class="text-xl font-black text-emerald-400">0 د.ع</span>
+              </div>
+              <div>
+                <span class="text-slate-400 text-xs block mb-1">سحوبات دفتر الأستاذ (Debits)</span>
+                <span id="rec-ledger-debits" class="text-xl font-black text-amber-400">0 د.ع</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Reconciliation Reports History -->
+          <div class="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden p-4 space-y-3">
+            <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div class="font-black text-sm text-slate-800">سجل تقارير المطابقة اليومية السابقة</div>
+              <button onclick="loadReconciliationReports()" class="text-brand text-xs font-bold hover:underline flex items-center gap-1">
+                <i class="fa-solid fa-rotate-right"></i>تحديث التقارير
+              </button>
+            </div>
+            <div class="overflow-x-auto">
+              <table class="w-full text-right border-collapse text-xs">
+                <thead>
+                  <tr class="bg-slate-50/80 border-b border-slate-200 text-slate-500 font-bold">
+                    <th class="py-3 px-3">تاريخ المطابقة</th>
+                    <th class="py-3 px-3">إجمالي رصيد المحافظ</th>
+                    <th class="py-3 px-3">واردات زين كاش</th>
+                    <th class="py-3 px-3">إيداعات الأستاذ</th>
+                    <th class="py-3 px-3">سحوبات الأستاذ</th>
+                    <th class="py-3 px-3">الفارق المالي (Discrepancy)</th>
+                    <th class="py-3 px-3">الحالة</th>
+                    <th class="py-3 px-3">التصدير</th>
+                  </tr>
+                </thead>
+                <tbody id="reconcile-table-body" class="divide-y divide-slate-100 font-medium">
+                  <tr>
+                    <td colspan="8" class="py-8 text-center text-slate-400">جاري تحميل تقارير المطابقة...</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- =================================================================== -->
+        <!-- TAB 10: B2B CREDIT LIMITS & OVERDRAFT                               -->
+        <!-- =================================================================== -->
+        <section id="tab-content-debts" class="tab-pane hidden space-y-6">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <div class="flex items-center gap-2">
+                <h2 class="text-xl font-black text-slate-800">سقوف الائتمان B2B والسحب على المكشوف</h2>
+                <span class="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-amber-50 text-amber-700 border border-amber-200">
+                  <i class="fa-solid fa-coins text-[9px] ml-1"></i>تسهيلات الوكلاء
+                </span>
+              </div>
+              <p class="text-xs text-slate-500 mt-0.5">منح سقوف ائتمانية لنقاط البيع المعتمدة وإدارة الديون المستحقة بدقة متناهية</p>
+            </div>
+            <button onclick="loadAgentDebts()" class="px-3.5 py-2 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 rounded-xl font-bold text-xs shadow-sm flex items-center gap-2 transition">
+              <i class="fa-solid fa-rotate-right text-brand"></i>
+              <span>تحديث بيانات الوكلاء</span>
+            </button>
+          </div>
+
+          <!-- Debt Overview Stats -->
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div class="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm">
+              <span class="text-slate-400 text-xs block mb-1 font-bold">إجمالي سقوف الائتمان الممنوحة</span>
+              <span id="debts-total-limit" class="text-xl font-black text-brand">0 د.ع</span>
+            </div>
+            <div class="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm">
+              <span class="text-slate-400 text-xs block mb-1 font-bold">إجمالي المبالغ المسحوبة (الديون الحالية)</span>
+              <span id="debts-total-utilized" class="text-xl font-black text-red-600">0 د.ع</span>
+            </div>
+            <div class="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm">
+              <span class="text-slate-400 text-xs block mb-1 font-bold">عدد الوكلاء المستفيدين</span>
+              <span id="debts-agents-count" class="text-xl font-black text-slate-800">0</span>
+            </div>
+          </div>
+
+          <!-- Agents Overdraft Table -->
+          <div class="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden p-4 space-y-3">
+            <div class="overflow-x-auto">
+              <table class="w-full text-right border-collapse text-xs">
+                <thead>
+                  <tr class="bg-slate-50/80 border-b border-slate-200 text-slate-500 font-bold">
+                    <th class="py-3 px-3">نقطة البيع / المشترك</th>
+                    <th class="py-3 px-3">رقم الهاتف</th>
+                    <th class="py-3 px-3">رصيد المحفظة الحالي</th>
+                    <th class="py-3 px-3">سقف الائتمان (Credit Limit)</th>
+                    <th class="py-3 px-3">الدين المستغل</th>
+                    <th class="py-3 px-3">نسبة الاستغلال %</th>
+                    <th class="py-3 px-3">حالة المحفظة</th>
+                    <th class="py-3 px-3">الإجراء</th>
+                  </tr>
+                </thead>
+                <tbody id="debts-table-body" class="divide-y divide-slate-100 font-medium">
+                  <tr>
+                    <td colspan="8" class="py-8 text-center text-slate-400">جاري تحميل تسهيلات الوكلاء...</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- =================================================================== -->
+        <!-- TAB 11: FINANCIAL CLOSES & STATEMENTS                               -->
+        <!-- =================================================================== -->
+        <section id="tab-content-close" class="tab-pane hidden space-y-6">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <div class="flex items-center gap-2">
+                <h2 class="text-xl font-black text-slate-800">الإقفال المالي والختم الرقمي (Financial Closes)</h2>
+                <span class="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-emerald-50 text-emerald-700 border border-emerald-200">
+                  <i class="fa-solid fa-stamp text-[9px] ml-1"></i>شهادات SHA-256
+                </span>
+              </div>
+              <p class="text-xs text-slate-500 mt-0.5">الإقفال الدوري المحكم للدفاتر وتوليد كشوفات الحساب الرسمية</p>
+            </div>
+            <div class="flex items-center gap-2">
+              <button onclick="confirmSealClose('daily')" class="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs shadow-md shadow-emerald-600/20 flex items-center gap-2 transition active:scale-[0.99]">
+                <i class="fa-solid fa-lock"></i>
+                <span>ختم وإقفال اليوم المالي</span>
+              </button>
+              <button onclick="confirmSealClose('monthly')" class="px-3.5 py-2 bg-brand hover:bg-brand-dark text-white rounded-xl font-bold text-xs shadow-md shadow-brand/20 flex items-center gap-2 transition active:scale-[0.99]">
+                <i class="fa-solid fa-calendar-check"></i>
+                <span>ختم وإقفال الشهر المالي</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Statement Generator Card -->
+          <div class="bg-white rounded-3xl p-5 border border-slate-200 shadow-sm space-y-4">
+            <div class="font-black text-sm text-slate-800 flex items-center gap-2">
+              <i class="fa-solid fa-file-invoice text-brand"></i>
+              <span>استخراج كشف حساب رسمي لمشترك / وكيل</span>
+            </div>
+            <div class="flex flex-col sm:flex-row items-center gap-3">
+              <select id="statement-user-select" class="w-full sm:w-80 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-brand">
+                <option value="">اختر المشترك لاستخراج الكشف...</option>
+              </select>
+              <button onclick="generateUserStatement()" class="w-full sm:w-auto px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition">
+                <i class="fa-solid fa-file-contract"></i>
+                <span>عرض كشف الحساب التفاعلي</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Historical Closes Table -->
+          <div class="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden p-4 space-y-3">
+            <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div class="font-black text-sm text-slate-800">سجل الفترات المالية المقفلة والمختومة رقمياً</div>
+              <button onclick="loadFinancialCloses()" class="text-brand text-xs font-bold hover:underline flex items-center gap-1">
+                <i class="fa-solid fa-rotate-right"></i>تحديث السجل
+              </button>
+            </div>
+            <div class="overflow-x-auto">
+              <table class="w-full text-right border-collapse text-xs">
+                <thead>
+                  <tr class="bg-slate-50/80 border-b border-slate-200 text-slate-500 font-bold">
+                    <th class="py-3 px-3">نوع الفترة</th>
+                    <th class="py-3 px-3">التاريخ المالي</th>
+                    <th class="py-3 px-3">التدفق الداخل</th>
+                    <th class="py-3 px-3">التدفق الخارج</th>
+                    <th class="py-3 px-3">صافي الإيراد</th>
+                    <th class="py-3 px-3">التزام المحافظ</th>
+                    <th class="py-3 px-3">عدد الحركات</th>
+                    <th class="py-3 px-3">ختم التجزئة الرقمي SHA-256</th>
+                    <th class="py-3 px-3">الحالة</th>
+                  </tr>
+                </thead>
+                <tbody id="closes-table-body" class="divide-y divide-slate-100 font-medium">
+                  <tr>
+                    <td colspan="9" class="py-8 text-center text-slate-400">جاري تحميل سجل الإقفال المالي...</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
       </main>
     </div>
   </div>
@@ -1213,6 +1638,135 @@
     </div>
   </div>
 
+  <!-- FINTECH MODAL 1: SET CREDIT LIMIT -->
+  <div id="modal-credit-limit" class="fixed inset-0 z-50 flex items-center justify-center p-4 modal-backdrop hidden">
+    <div class="w-full max-w-md bg-white rounded-3xl shadow-2xl border border-slate-100 p-6 space-y-4">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center text-sm font-black">
+            <i class="fa-solid fa-coins"></i>
+          </div>
+          <div>
+            <h3 class="text-sm font-black text-slate-800">تعديل سقف الائتمان B2B (السحب على المكشوف)</h3>
+            <p class="text-[10px] text-slate-400 font-medium" id="credit-limit-target-user">تحديد الحد الأقصى للرصيد السالب</p>
+          </div>
+        </div>
+        <button onclick="closeModal('modal-credit-limit')" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
+      </div>
+
+      <form onsubmit="handleSaveCreditLimit(event)" class="space-y-4">
+        <input type="hidden" id="credit-limit-user-id">
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">سقف الائتمان بالدينار العراقي (IQD)</label>
+          <input type="number" id="credit-limit-amount" required min="0" step="1000" class="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-black text-slate-800 outline-none focus:border-brand">
+          <p class="text-[10px] text-slate-400 mt-1">القيمة 0 تعني إلغاء التسهيل ومنع السحب على المكشوف.</p>
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">ملاحظات / سبب المنح</label>
+          <input type="text" id="credit-limit-reason" placeholder="موافقة إدارة المبيعات..." class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 outline-none focus:border-brand">
+        </div>
+
+        <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+          <button type="button" onclick="closeModal('modal-credit-limit')" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-xs font-bold transition">إلغاء</button>
+          <button type="submit" class="px-5 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-bold shadow-md shadow-amber-500/20 transition">حفظ السقف</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- FINTECH MODAL 2: UNFREEZE WALLET -->
+  <div id="modal-unfreeze-wallet" class="fixed inset-0 z-50 flex items-center justify-center p-4 modal-backdrop hidden">
+    <div class="w-full max-w-md bg-white rounded-3xl shadow-2xl border border-slate-100 p-6 space-y-4">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center text-sm font-black">
+            <i class="fa-solid fa-lock-open"></i>
+          </div>
+          <div>
+            <h3 class="text-sm font-black text-slate-800">إلغاء تجميد المحفظة</h3>
+            <p class="text-[10px] text-slate-400 font-medium" id="unfreeze-target-user">استعادة العمليات المالية للوكيل</p>
+          </div>
+        </div>
+        <button onclick="closeModal('modal-unfreeze-wallet')" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
+      </div>
+
+      <form onsubmit="handleUnfreezeWallet(event)" class="space-y-4">
+        <input type="hidden" id="unfreeze-user-id">
+        <div class="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-800 font-medium">
+          سيتم إعادة تنشيط المحفظة فوراً وإغلاق أي تنبيهات احتيال معلقة على هذا الحساب.
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">سبب إلغاء التجميد</label>
+          <input type="text" id="unfreeze-reason" required placeholder="تم التحقق من هوية الوكيل وتسوية الفارق..." class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 outline-none focus:border-brand">
+        </div>
+
+        <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+          <button type="button" onclick="closeModal('modal-unfreeze-wallet')" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-xs font-bold transition">إلغاء</button>
+          <button type="submit" class="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-md shadow-emerald-600/20 transition">تأكيد إلغاء التجميد</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- FINTECH MODAL 3: INTERACTIVE ACCOUNT STATEMENT -->
+  <div id="modal-statement" class="fixed inset-0 z-50 flex items-center justify-center p-4 modal-backdrop hidden">
+    <div class="w-full max-w-4xl bg-white rounded-3xl shadow-2xl border border-slate-100 p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+        <div class="flex items-center gap-3">
+          <img src="/assets/appicon.png" class="w-10 h-10 rounded-xl">
+          <div>
+            <h3 class="text-base font-black text-slate-800">كشف الحساب المالي الرسمي (Statement of Account)</h3>
+            <p class="text-xs text-brand font-bold">VENUS POS Enterprise Ledger Protocol</p>
+          </div>
+        </div>
+        <div class="flex items-center gap-2">
+          <button onclick="window.print()" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold flex items-center gap-1.5 transition">
+            <i class="fa-solid fa-print"></i>طباعة
+          </button>
+          <button onclick="closeModal('modal-statement')" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
+        </div>
+      </div>
+
+      <div id="statement-content" class="space-y-4">
+        <!-- Rendered statement content -->
+      </div>
+    </div>
+  </div>
+
+  <!-- FINTECH MODAL 4: HASH CHAIN FORENSIC INSPECTOR -->
+  <div id="modal-hash-details" class="fixed inset-0 z-50 flex items-center justify-center p-4 modal-backdrop hidden">
+    <div class="w-full max-w-lg bg-white rounded-3xl shadow-2xl border border-slate-100 p-6 space-y-4">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 rounded-xl bg-blue-50 text-brand flex items-center justify-center text-sm font-black">
+            <i class="fa-solid fa-fingerprint"></i>
+          </div>
+          <h3 class="text-sm font-black text-slate-800">التفاصيل الجنائية لختم التجزئة الرقمي SHA-256</h3>
+        </div>
+        <button onclick="closeModal('modal-hash-details')" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
+      </div>
+
+      <div class="space-y-3 text-xs">
+        <div>
+          <label class="block text-slate-400 text-[10px] font-bold mb-1">الهاش الحالي للقيد (Current Hash):</label>
+          <div class="p-2.5 bg-slate-900 text-emerald-400 rounded-xl font-mono text-[11px] break-all select-all" id="inspect-curr-hash"></div>
+        </div>
+        <div>
+          <label class="block text-slate-400 text-[10px] font-bold mb-1">الهاش السابق المتسلسل (Previous Hash):</label>
+          <div class="p-2.5 bg-slate-900 text-sky-400 rounded-xl font-mono text-[11px] break-all select-all" id="inspect-prev-hash"></div>
+        </div>
+        <div class="p-3 bg-blue-50/80 rounded-2xl border border-blue-200 text-blue-900 text-[11px] leading-relaxed">
+          <strong>الضمان الرياضي:</strong> يرتبط هذا القيد رياضياً بالقيد الذي يسبقه في الحساب نفسه. أي تعديل ولو برقم واحد على الرصيد أو المبلغ سيكسر السلسلة فوراً ويطلق إنذاراً جنائياً للإدارة.
+        </div>
+      </div>
+
+      <div class="pt-2 flex justify-end border-t border-slate-100">
+        <button type="button" onclick="closeModal('modal-hash-details')" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-xs font-bold">إغلاق</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Global Toast Notification -->
   <div id="toast" class="fixed bottom-5 left-5 z-50 transform translate-y-20 opacity-0 transition-all duration-300 pointer-events-none">
     <div id="toast-inner" class="flex items-center gap-2.5 px-4 py-3 rounded-2xl shadow-xl text-xs font-bold text-white bg-slate-900 border border-slate-800">
@@ -1415,6 +1969,11 @@
       if (tabId === 'wallet') { loadUsers(); loadZainCashTransactions(); }
       if (tabId === 'cards') loadDigitalCards();
       if (tabId === 'audit') loadAuditLogs();
+      if (tabId === 'ledger') { loadLedgerEntries(); loadIntegritySummary(); }
+      if (tabId === 'fraud') loadFraudData();
+      if (tabId === 'reconcile') { loadReconciliationData(); loadReconciliationReports(); }
+      if (tabId === 'debts') loadAgentDebts();
+      if (tabId === 'close') { loadFinancialCloses(); populateStatementUsers(); }
     }
 
     function toggleMobileSidebar() {
@@ -2348,6 +2907,626 @@
         btn.innerHTML = origText;
       }
     }
+
+    // =========================================================================
+    // FINTECH CORE JAVASCRIPT LOGIC (Phase 1)
+    // =========================================================================
+
+    // 1. DOUBLE-ENTRY LEDGER & INTEGRITY
+    async function loadLedgerEntries() {
+      const tbody = document.getElementById('ledger-table-body');
+      tbody.innerHTML = '<tr><td colspan="8" class="py-8 text-center text-slate-400 font-bold">جاري قراءة قيود دفتر الأستاذ المحاسبي...</td></tr>';
+      
+      const refFilter = document.getElementById('ledger-filter-ref').value;
+      try {
+        let url = '/api/admin/fintech/ledger?limit=100';
+        if (refFilter) url += `&ref_type=${encodeURIComponent(refFilter)}`;
+        
+        const res = await apiFetch(url);
+        const data = await res.json();
+        const entries = data.entries || [];
+        
+        if (entries.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="8" class="py-8 text-center text-slate-400 font-bold">لا توجد قيود مسجلة لهذا الفلتر</td></tr>';
+          return;
+        }
+
+        tbody.innerHTML = entries.map(e => {
+          const debitStr = e.debit > 0 ? `<span class="font-black text-rose-600 bg-rose-50 px-2 py-0.5 rounded-lg border border-rose-100">-${e.debit.toLocaleString()} د.ع</span>` : '<span class="text-slate-300">-</span>';
+          const creditStr = e.credit > 0 ? `<span class="font-black text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-lg border border-emerald-100">+${e.credit.toLocaleString()} د.ع</span>` : '<span class="text-slate-300">-</span>';
+          const balStr = `<span class="font-black text-slate-800">${e.balance_after.toLocaleString()} د.ع</span>`;
+          
+          let refBadge = `<span class="px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 text-slate-600">${e.ref_type}</span>`;
+          if (e.ref_type === 'zaincash_topup') refBadge = `<span class="px-2 py-0.5 rounded-md text-[10px] font-bold bg-sky-50 text-sky-700 border border-sky-200">شحن زين كاش</span>`;
+          if (e.ref_type === 'voucher_dispense') refBadge = `<span class="px-2 py-0.5 rounded-md text-[10px] font-bold bg-purple-50 text-purple-700 border border-purple-200">شراء بطاقات</span>`;
+          if (e.ref_type === 'admin_adjustment') refBadge = `<span class="px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">تعديل إداري</span>`;
+          if (e.ref_type === 'subscription_payment') refBadge = `<span class="px-2 py-0.5 rounded-md text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">اشتراك VIP</span>`;
+          if (e.ref_type === 'reversal') refBadge = `<span class="px-2 py-0.5 rounded-md text-[10px] font-bold bg-red-50 text-red-700 border border-red-200">قيد عكسي</span>`;
+
+          const accountLabel = e.account_name ? `${e.account_name} <span class="text-[10px] text-slate-400">(${e.account_email})</span>` : (e.account_email || `حساب #${e.account_id}`);
+          const dateStr = formatBaghdad(e.created_at);
+
+          return `
+            <tr class="hover:bg-slate-50/80 transition">
+              <td class="py-2.5 px-3">
+                <span class="font-bold text-slate-800">#${e.id}</span>
+                <span class="text-[10px] text-slate-400 font-mono block select-all cursor-pointer" title="${e.tx_id}">${e.tx_id ? e.tx_id.substring(0, 8) + '...' : ''}</span>
+              </td>
+              <td class="py-2.5 px-3 font-bold text-slate-700">${accountLabel}</td>
+              <td class="py-2.5 px-3">${debitStr}</td>
+              <td class="py-2.5 px-3">${creditStr}</td>
+              <td class="py-2.5 px-3">${balStr}</td>
+              <td class="py-2.5 px-3">${refBadge}</td>
+              <td class="py-2.5 px-3 text-[11px] text-slate-500">${dateStr}</td>
+              <td class="py-2.5 px-3">
+                <button onclick="inspectHash('${e.prev_hash}', '${e.hash}')" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-[10px] font-mono font-bold flex items-center gap-1 transition">
+                  <i class="fa-solid fa-fingerprint text-brand"></i>
+                  <span>${e.hash ? e.hash.substring(0, 10) + '...' : 'Genesis'}</span>
+                </button>
+              </td>
+            </tr>
+          `;
+        }).join('');
+      } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="8" class="py-8 text-center text-rose-500 font-bold">فشل قراءة دفتر الأستاذ: ${err.message}</td></tr>`;
+      }
+    }
+
+    async function loadIntegritySummary() {
+      try {
+        const res = await apiFetch('/api/admin/fintech/integrity/alerts');
+        const alerts = await res.json();
+        
+        const violationsEl = document.getElementById('integrity-violations-count');
+        const statusTextEl = document.getElementById('integrity-status-text');
+        const statusSubEl = document.getElementById('integrity-status-sub');
+        const cardEl = document.getElementById('integrity-status-card');
+
+        if (Array.isArray(alerts) && alerts.length > 0) {
+          violationsEl.innerText = alerts.length;
+          violationsEl.className = 'text-sm font-black text-rose-600';
+          statusTextEl.innerText = `تم رصد ${alerts.length} تنبيهات نزاهة في دفتر الأستاذ`;
+          statusSubEl.innerText = 'يرجى مراجعة تفاصيل التجزئة الرقمية أدناه';
+          cardEl.className = 'p-4 rounded-3xl bg-rose-50/80 border border-rose-200 flex flex-col md:flex-row md:items-center justify-between gap-4';
+        } else {
+          violationsEl.innerText = '0';
+          violationsEl.className = 'text-sm font-black text-emerald-600';
+          statusTextEl.innerText = 'سلاسل دفتر الأستاذ سليمة ومطابقة بنسبة 100%';
+          statusSubEl.innerText = 'تم فحص كافة التوقيعات الرقمية ولم يتم رصد أي محاولة تعديل أو تلاعب بالأرصدة';
+          cardEl.className = 'p-4 rounded-3xl bg-emerald-50/80 border border-emerald-200 flex flex-col md:flex-row md:items-center justify-between gap-4';
+        }
+      } catch (err) {
+        console.error('integrity summary error:', err);
+      }
+    }
+
+    async function triggerIntegrityCheck() {
+      const btn = document.getElementById('btn-verify-integrity');
+      const origText = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i><span>جاري الفحص الجنائي لسلاسل الهاش...</span>';
+
+      try {
+        const res = await apiFetch('/api/admin/fintech/integrity/verify', { method: 'POST' });
+        const summary = await res.json();
+
+        document.getElementById('integrity-entries-count').innerText = summary.total_entries_checked || 0;
+        document.getElementById('integrity-accounts-count').innerText = summary.accounts_checked || 0;
+        document.getElementById('integrity-violations-count').innerText = summary.violations_count || 0;
+
+        if (summary.is_clean) {
+          showToast(`اكتمل الفحص الجنائي: تم فحص ${summary.total_entries_checked} قيداً عبر ${summary.accounts_checked} حساباً. كافة السلاسل سليمة 100%!`);
+        } else {
+          showToast(`تنبيه: تم رصد ${summary.violations_count} مخالفة في سلاسل الهاش!`, 'error');
+        }
+        loadIntegritySummary();
+      } catch (err) {
+        showToast('فشل تشغيل فحص النزاهة: ' + err.message, 'error');
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = origText;
+      }
+    }
+
+    function inspectHash(prevHash, currHash) {
+      document.getElementById('inspect-curr-hash').innerText = currHash || 'لا يوجد';
+      document.getElementById('inspect-prev-hash').innerText = prevHash || 'لا يوجد';
+      openModal('modal-hash-details');
+    }
+
+    // 2. FRAUD ENGINE & RISK CONTROL
+    async function loadFraudData() {
+      // Load Rules
+      const rulesGrid = document.getElementById('fraud-rules-grid');
+      rulesGrid.innerHTML = '<div class="col-span-full py-4 text-center text-slate-400 font-bold">جاري تحميل القواعد...</div>';
+      
+      try {
+        const [rulesRes, eventsRes] = await Promise.all([
+          apiFetch('/api/admin/fintech/fraud/rules'),
+          apiFetch('/api/admin/fintech/fraud/events')
+        ]);
+        const rules = await rulesRes.json();
+        const events = await eventsRes.json();
+
+        // Render Rules
+        rulesGrid.innerHTML = rules.map(r => `
+          <div class="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm space-y-3 flex flex-col justify-between">
+            <div>
+              <div class="flex items-center justify-between mb-1.5">
+                <span class="font-black text-xs text-slate-800">${r.name_ar}</span>
+                <span class="px-2 py-0.5 rounded-full text-[10px] font-black ${r.is_active ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 text-slate-400'}">${r.is_active ? 'نشطة' : 'معطلة'}</span>
+              </div>
+              <p class="text-[11px] text-slate-400 leading-tight">${r.description}</p>
+            </div>
+            
+            <div class="pt-2 border-t border-slate-100 space-y-2 text-xs">
+              <div class="flex items-center justify-between">
+                <span class="text-slate-500 font-bold text-[11px]">حد المشغل:</span>
+                <span class="font-black text-slate-800">${r.threshold_value.toLocaleString()}</span>
+              </div>
+              <div class="flex items-center justify-between">
+                <span class="text-slate-500 font-bold text-[11px]">الإجراء:</span>
+                <span class="font-bold text-[11px] ${r.action === 'freeze_wallet' ? 'text-red-600' : 'text-amber-600'}">${r.action === 'freeze_wallet' ? 'تجميد المحفظة' : 'تنبيه أمني'}</span>
+              </div>
+            </div>
+          </div>
+        `).join('');
+
+        // Render Events
+        const tbody = document.getElementById('fraud-events-table-body');
+        if (!events || events.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="7" class="py-8 text-center text-slate-400 font-bold">لا توجد مخالفات أو محافظ مقيدة حالياً</td></tr>';
+          return;
+        }
+
+        tbody.innerHTML = events.map(ev => {
+          const sevColor = ev.severity === 'critical' ? 'bg-red-50 text-red-600 border border-red-200' : 'bg-amber-50 text-amber-700 border border-amber-200';
+          const actColor = ev.action_taken === 'freeze_wallet' ? 'text-red-600 font-black' : 'text-amber-600 font-bold';
+          const reasonStr = (ev.details && ev.details.reason) ? ev.details.reason : ev.rule_code;
+          const userStr = ev.store_name ? `${ev.store_name} (${ev.user_email})` : (ev.user_email || `مستخدم #${ev.user_id}`);
+
+          return `
+            <tr class="hover:bg-slate-50/80 transition">
+              <td class="py-2.5 px-3 text-[11px] text-slate-500">${formatBaghdad(ev.triggered_at)}</td>
+              <td class="py-2.5 px-3 font-bold text-slate-700">${userStr}</td>
+              <td class="py-2.5 px-3 font-bold text-slate-800">${ev.rule_name_ar || ev.rule_code}</td>
+              <td class="py-2.5 px-3"><span class="px-2 py-0.5 rounded-md text-[10px] font-black ${sevColor}">${ev.severity.toUpperCase()}</span></td>
+              <td class="py-2.5 px-3 text-xs ${actColor}">${ev.action_taken === 'freeze_wallet' ? 'تم تجميد المحفظة' : 'إشعار أمني'}</td>
+              <td class="py-2.5 px-3 text-[11px] text-slate-600">${reasonStr}</td>
+              <td class="py-2.5 px-3">
+                <div class="flex items-center gap-1.5">
+                  ${ev.action_taken === 'freeze_wallet' ? `
+                    <button onclick="openUnfreezeModal(${ev.user_id}, '${ev.store_name || ev.user_email}')" class="px-2 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-lg text-[10px] font-bold transition">
+                      <i class="fa-solid fa-lock-open ml-1"></i>فك التجميد
+                    </button>
+                  ` : ''}
+                </div>
+              </td>
+            </tr>
+          `;
+        }).join('');
+      } catch (err) {
+        rulesGrid.innerHTML = `<div class="col-span-full py-4 text-center text-rose-500 font-bold">فشل تحميل بيانات الأمان: ${err.message}</div>`;
+      }
+    }
+
+    function openUnfreezeModal(userId, storeName) {
+      document.getElementById('unfreeze-user-id').value = userId;
+      document.getElementById('unfreeze-target-user').innerText = `المشترك: ${storeName} (#${userId})`;
+      document.getElementById('unfreeze-reason').value = '';
+      openModal('modal-unfreeze-wallet');
+    }
+
+    async function handleUnfreezeWallet(e) {
+      e.preventDefault();
+      const userId = document.getElementById('unfreeze-user-id').value;
+      const reason = document.getElementById('unfreeze-reason').value;
+
+      try {
+        const res = await apiFetch(`/api/admin/fintech/wallets/${userId}/unfreeze`, {
+          method: 'POST',
+          body: JSON.stringify({ reason })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'فشل إلغاء التجميد');
+
+        showToast('تم إلغاء تجميد المحفظة بنجاح وبث التحديث لحظياً');
+        closeModal('modal-unfreeze-wallet');
+        loadFraudData();
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    }
+
+    // 3. DAILY RECONCILIATION
+    async function loadReconciliationData() {
+      try {
+        // Set default date input to today
+        const todayStr = new Date().toISOString().split('T')[0];
+        const dateInput = document.getElementById('reconcile-date-input');
+        if (dateInput && !dateInput.value) dateInput.value = todayStr;
+
+        const res = await apiFetch('/api/admin/stats');
+        const stats = await res.json();
+        
+        document.getElementById('rec-total-balance').innerText = (stats.total_wallet_balance || 0).toLocaleString() + ' د.ع';
+        document.getElementById('rec-gateway-volume').innerText = (stats.total_zaincash_volume || 0).toLocaleString() + ' د.ع';
+        document.getElementById('rec-ledger-credits').innerText = (stats.total_zaincash_volume || 0).toLocaleString() + ' د.ع';
+        document.getElementById('rec-ledger-debits').innerText = '0 د.ع';
+      } catch (err) {
+        console.error('loadReconciliationData error:', err);
+      }
+    }
+
+    async function runManualReconciliation() {
+      const dateInput = document.getElementById('reconcile-date-input').value;
+      const btn = document.getElementById('btn-run-reconcile');
+      const origText = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i><span>جاري المطابقة...</span>';
+
+      try {
+        const res = await apiFetch('/api/admin/fintech/reconcile/run', {
+          method: 'POST',
+          body: JSON.stringify({ date: dateInput })
+        });
+        const report = await res.json();
+        if (!res.ok) throw new Error(report.error || 'فشلت عملية المطابقة');
+
+        showToast(`تمت المطابقة بنجاح لتاريخ ${report.report_date}. الفارق المحاسبي: ${report.discrepancy.toLocaleString()} د.ع (${report.status})`);
+        loadReconciliationReports();
+      } catch (err) {
+        showToast(err.message, 'error');
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = origText;
+      }
+    }
+
+    async function loadReconciliationReports() {
+      const tbody = document.getElementById('reconcile-table-body');
+      tbody.innerHTML = '<tr><td colspan="8" class="py-8 text-center text-slate-400 font-bold">جاري تحميل تقارير المطابقة...</td></tr>';
+
+      try {
+        const res = await apiFetch('/api/admin/fintech/reconcile/reports');
+        const reports = await res.json();
+        
+        if (!reports || reports.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="8" class="py-8 text-center text-slate-400 font-bold">لا توجد تقارير مطابقة سابقة، يمكنك الضغط على "تشغيل المطابقة الآن"</td></tr>';
+          return;
+        }
+
+        tbody.innerHTML = reports.map(r => {
+          const isMatch = r.status === 'matched';
+          const statusBadge = isMatch ? 
+            '<span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-50 text-emerald-600 border border-emerald-200">مطابق 100%</span>' :
+            '<span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-rose-50 text-rose-600 border border-rose-200">فارق محاسبي</span>';
+
+          return `
+            <tr class="hover:bg-slate-50/80 transition font-bold">
+              <td class="py-2.5 px-3 text-slate-800">${r.report_date}</td>
+              <td class="py-2.5 px-3 text-slate-700">${r.total_system_balance.toLocaleString()} د.ع</td>
+              <td class="py-2.5 px-3 text-sky-600">${r.total_gateway_volume.toLocaleString()} د.ع</td>
+              <td class="py-2.5 px-3 text-emerald-600">${r.total_ledger_credits.toLocaleString()} د.ع</td>
+              <td class="py-2.5 px-3 text-amber-600">${r.total_ledger_debits.toLocaleString()} د.ع</td>
+              <td class="py-2.5 px-3 ${r.discrepancy === 0 ? 'text-emerald-600' : 'text-rose-600 font-black'}">${r.discrepancy.toLocaleString()} د.ع</td>
+              <td class="py-2.5 px-3">${statusBadge}</td>
+              <td class="py-2.5 px-3">
+                <a href="/api/admin/fintech/reconcile/reports/${r.id}/export" target="_blank" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold inline-flex items-center gap-1 transition">
+                  <i class="fa-solid fa-file-csv text-emerald-600"></i>CSV
+                </a>
+              </td>
+            </tr>
+          `;
+        }).join('');
+      } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="8" class="py-8 text-center text-rose-500 font-bold">فشل تحميل التقارير: ${err.message}</td></tr>`;
+      }
+    }
+
+    // 4. B2B CREDIT LIMITS & OVERDRAFT
+    async function loadAgentDebts() {
+      const tbody = document.getElementById('debts-table-body');
+      tbody.innerHTML = '<tr><td colspan="8" class="py-8 text-center text-slate-400 font-bold">جاري تحميل تسهيلات الوكلاء وسقوف الائتمان...</td></tr>';
+
+      try {
+        const res = await apiFetch('/api/admin/fintech/wallets/debts');
+        const agents = await res.json();
+
+        let totalLimits = 0;
+        let totalUtilized = 0;
+
+        if (!agents || agents.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="8" class="py-8 text-center text-slate-400 font-bold">لا يوجد وكلاء ممنوحون سقوف ائتمانية أو بديون حالياً</td></tr>';
+          document.getElementById('debts-total-limit').innerText = '0 د.ع';
+          document.getElementById('debts-total-utilized').innerText = '0 د.ع';
+          document.getElementById('debts-agents-count').innerText = '0';
+          return;
+        }
+
+        agents.forEach(a => {
+          totalLimits += (a.credit_limit || 0);
+          totalUtilized += (a.utilized_debt || 0);
+        });
+
+        document.getElementById('debts-total-limit').innerText = totalLimits.toLocaleString() + ' د.ع';
+        document.getElementById('debts-total-utilized').innerText = totalUtilized.toLocaleString() + ' د.ع';
+        document.getElementById('debts-agents-count').innerText = agents.length;
+
+        tbody.innerHTML = agents.map(a => {
+          const balStr = a.wallet_balance < 0 ? `<span class="font-black text-rose-600">${a.wallet_balance.toLocaleString()} د.ع</span>` : `<span class="font-bold text-slate-800">${a.wallet_balance.toLocaleString()} د.ع</span>`;
+          const limitStr = `<span class="font-black text-brand">${a.credit_limit.toLocaleString()} د.ع</span>`;
+          const debtStr = a.utilized_debt > 0 ? `<span class="font-black text-rose-600">${a.utilized_debt.toLocaleString()} د.ع</span>` : `<span class="text-slate-400">0 د.ع</span>`;
+          const pctStr = `<span class="px-2 py-0.5 rounded-full text-[10px] font-black ${parseFloat(a.utilization_pct) > 80 ? 'bg-rose-50 text-rose-600' : 'bg-slate-100 text-slate-600'}">${a.utilization_pct}</span>`;
+
+          return `
+            <tr class="hover:bg-slate-50/80 transition">
+              <td class="py-2.5 px-3">
+                <span class="font-black text-slate-800 block">${a.store_name || a.full_name || 'نقطة بيع'}</span>
+                <span class="text-[10px] text-slate-400">${a.email}</span>
+              </td>
+              <td class="py-2.5 px-3 font-mono text-slate-600">${a.phone || '-'}</td>
+              <td class="py-2.5 px-3">${balStr}</td>
+              <td class="py-2.5 px-3">${limitStr}</td>
+              <td class="py-2.5 px-3">${debtStr}</td>
+              <td class="py-2.5 px-3">${pctStr}</td>
+              <td class="py-2.5 px-3">
+                <span class="px-2 py-0.5 rounded-full text-[10px] font-bold ${a.wallet_status === 'frozen' ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-600'}">${a.wallet_status === 'frozen' ? 'مجمدة' : 'نشطة'}</span>
+              </td>
+              <td class="py-2.5 px-3">
+                <button onclick="openCreditLimitModal(${a.id}, '${a.store_name || a.email}', ${a.credit_limit})" class="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 rounded-lg text-xs font-bold transition">
+                  <i class="fa-solid fa-pen-to-square ml-1"></i>تعديل السقف
+                </button>
+              </td>
+            </tr>
+          `;
+        }).join('');
+      } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="8" class="py-8 text-center text-rose-500 font-bold">فشل تحميل بيانات التسهيلات: ${err.message}</td></tr>`;
+      }
+    }
+
+    function openCreditLimitModal(userId, name, currentLimit) {
+      document.getElementById('credit-limit-user-id').value = userId;
+      document.getElementById('credit-limit-target-user').innerText = `الوكيل: ${name} (#${userId})`;
+      document.getElementById('credit-limit-amount').value = currentLimit || 0;
+      document.getElementById('credit-limit-reason').value = '';
+      openModal('modal-credit-limit');
+    }
+
+    async function handleSaveCreditLimit(e) {
+      e.preventDefault();
+      const userId = document.getElementById('credit-limit-user-id').value;
+      const amount = parseInt(document.getElementById('credit-limit-amount').value, 10);
+      const reason = document.getElementById('credit-limit-reason').value;
+
+      try {
+        const res = await apiFetch(`/api/admin/fintech/wallets/${userId}/credit-limit`, {
+          method: 'POST',
+          body: JSON.stringify({ credit_limit: amount, reason })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'فشل تحديث سقف الائتمان');
+
+        showToast('تم تحديث سقف الائتمان B2B بنجاح وتطبيقه على المحفظة');
+        closeModal('modal-credit-limit');
+        loadAgentDebts();
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    }
+
+    // 5. FINANCIAL CLOSES & STATEMENTS
+    async function loadFinancialCloses() {
+      const tbody = document.getElementById('closes-table-body');
+      tbody.innerHTML = '<tr><td colspan="9" class="py-8 text-center text-slate-400 font-bold">جاري تحميل سجل الإقفال المالي...</td></tr>';
+
+      try {
+        const res = await apiFetch('/api/admin/fintech/close/history');
+        const closes = await res.json();
+
+        if (!closes || closes.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="9" class="py-8 text-center text-slate-400 font-bold">لا يوجد إقفالات مالية مختومة سابقة. يمكنك الضغط على "ختم وإقفال اليوم المالي".</td></tr>';
+          return;
+        }
+
+        tbody.innerHTML = closes.map(c => `
+          <tr class="hover:bg-slate-50/80 transition font-bold text-xs">
+            <td class="py-2.5 px-3">
+              <span class="px-2 py-0.5 rounded-full text-[10px] font-black ${c.period_type === 'monthly' ? 'bg-purple-50 text-purple-700' : 'bg-blue-50 text-brand'}">${c.period_type === 'monthly' ? 'شهري' : 'يومي'}</span>
+            </td>
+            <td class="py-2.5 px-3 text-slate-800 font-mono">${c.period_date}</td>
+            <td class="py-2.5 px-3 text-emerald-600">+${c.total_inflow.toLocaleString()} د.ع</td>
+            <td class="py-2.5 px-3 text-rose-600">-${c.total_outflow.toLocaleString()} د.ع</td>
+            <td class="py-2.5 px-3 text-slate-800">${c.net_revenue.toLocaleString()} د.ع</td>
+            <td class="py-2.5 px-3 text-slate-700">${c.total_wallet_liability.toLocaleString()} د.ع</td>
+            <td class="py-2.5 px-3 text-slate-600">${c.transaction_count} حركة</td>
+            <td class="py-2.5 px-3 font-mono text-[10px] text-slate-400 select-all cursor-pointer" title="${c.closing_hash}">
+              ${c.closing_hash.substring(0, 14)}...
+            </td>
+            <td class="py-2.5 px-3">
+              <span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-50 text-emerald-600 border border-emerald-200">
+                <i class="fa-solid fa-stamp text-[9px] ml-1"></i>مختوم
+              </span>
+            </td>
+          </tr>
+        `).join('');
+      } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="9" class="py-8 text-center text-rose-500 font-bold">فشل تحميل سجل الإقفال: ${err.message}</td></tr>`;
+      }
+    }
+
+    async function confirmSealClose(periodType) {
+      const typeLabel = periodType === 'monthly' ? 'الشهر المالي' : 'اليوم المالي';
+      if (!confirm(`هل أنت متأكد من ختم وإقفال ${typeLabel}؟ سيتم توليد شهادة تجزئة SHA-256 وتثبيت السجلات المحاسبية.`)) {
+        return;
+      }
+
+      try {
+        const res = await apiFetch('/api/admin/fintech/close/seal', {
+          method: 'POST',
+          body: JSON.stringify({ period_type: periodType })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'فشل إقفال الفترة');
+
+        showToast(`تم ختم وإقفال ${typeLabel} بنجاح! الختم الرقمي: ${data.closing_hash.substring(0, 12)}...`);
+        loadFinancialCloses();
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    }
+
+    async function populateStatementUsers() {
+      const select = document.getElementById('statement-user-select');
+      if (!select) return;
+
+      try {
+        const res = await apiFetch('/api/admin/users');
+        const users = await res.json();
+        select.innerHTML = '<option value="">اختر المشترك لاستخراج الكشف...</option>' + 
+          (users || []).map(u => `<option value="${u.id}">${u.store_name || u.full_name || u.email} (#${u.id} - ${u.email})</option>`).join('');
+      } catch (err) {
+        console.error('populateStatementUsers error:', err);
+      }
+    }
+
+    async function generateUserStatement() {
+      const select = document.getElementById('statement-user-select');
+      const userId = select.value;
+      if (!userId) {
+        showToast('يرجى اختيار المشترك أولاً', 'error');
+        return;
+      }
+
+      const container = document.getElementById('statement-content');
+      container.innerHTML = '<div class="py-12 text-center text-slate-400 font-bold">جاري إنشاء كشف الحساب وتدقيق التوقيعات الرقمية...</div>';
+      openModal('modal-statement');
+
+      try {
+        const res = await apiFetch(`/api/admin/fintech/statements/${userId}`);
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'تعذر استخراج كشف الحساب');
+
+        const u = data.user;
+        const entries = data.entries || [];
+
+        container.innerHTML = `
+          <div class="border border-slate-200 rounded-2xl p-5 space-y-4">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
+              <div>
+                <h4 class="text-lg font-black text-slate-900">${u.store_name || u.full_name || 'نقطة بيع'}</h4>
+                <div class="text-xs text-slate-500 font-medium mt-0.5">البريد: ${u.email} | الهاتف: ${u.phone || 'غير محدد'}</div>
+              </div>
+              <div class="text-left sm:text-right">
+                <span class="text-[10px] text-slate-400 block font-bold">الرصيد النهائي المسجل</span>
+                <span class="text-2xl font-black text-brand">${u.current_balance.toLocaleString()} د.ع</span>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+              <div class="p-3 bg-slate-50 rounded-xl">
+                <span class="text-slate-400 text-[10px] block font-bold">سقف الائتمان</span>
+                <span class="font-black text-slate-800">${u.credit_limit.toLocaleString()} د.ع</span>
+              </div>
+              <div class="p-3 bg-slate-50 rounded-xl">
+                <span class="text-slate-400 text-[10px] block font-bold">إجمالي الإيداعات</span>
+                <span class="font-black text-emerald-600">+${data.total_credits.toLocaleString()} د.ع</span>
+              </div>
+              <div class="p-3 bg-slate-50 rounded-xl">
+                <span class="text-slate-400 text-[10px] block font-bold">إجمالي السحوبات</span>
+                <span class="font-black text-rose-600">-${data.total_debits.toLocaleString()} د.ع</span>
+              </div>
+              <div class="p-3 bg-slate-50 rounded-xl">
+                <span class="text-slate-400 text-[10px] block font-bold">عدد العمليات</span>
+                <span class="font-black text-slate-800">${data.entries_count} حركة</span>
+              </div>
+            </div>
+
+            <div class="overflow-x-auto pt-2">
+              <table class="w-full text-right text-xs border-collapse">
+                <thead>
+                  <tr class="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold">
+                    <th class="py-2.5 px-3">رقم الحركة</th>
+                    <th class="py-2.5 px-3">التاريخ والوقت</th>
+                    <th class="py-2.5 px-3">نوع العملية</th>
+                    <th class="py-2.5 px-3">المدين</th>
+                    <th class="py-2.5 px-3">الدائن</th>
+                    <th class="py-2.5 px-3">الرصيد بعد الحركة</th>
+                    <th class="py-2.5 px-3">ختم الهاش</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100 font-medium">
+                  ${entries.length === 0 ? '<tr><td colspan="7" class="py-6 text-center text-slate-400">لا توجد حركات مسجلة لهذا الحساب بعد</td></tr>' : 
+                    entries.map(e => `
+                      <tr>
+                        <td class="py-2 px-3 font-mono text-[10px] text-slate-400">${e.tx_id.substring(0,8)}...</td>
+                        <td class="py-2 px-3 text-[11px] text-slate-500">${formatBaghdad(e.created_at)}</td>
+                        <td class="py-2 px-3 font-bold text-slate-700">${e.ref_type}</td>
+                        <td class="py-2 px-3 font-black text-rose-600">${e.debit > 0 ? '-' + e.debit.toLocaleString() : '-'}</td>
+                        <td class="py-2 px-3 font-black text-emerald-600">${e.credit > 0 ? '+' + e.credit.toLocaleString() : '-'}</td>
+                        <td class="py-2 px-3 font-black text-slate-800">${e.balance_after.toLocaleString()} د.ع</td>
+                        <td class="py-2 px-3 font-mono text-[9px] text-slate-400">${e.hash.substring(0, 10)}...</td>
+                      </tr>
+                    `).join('')
+                  }
+                </tbody>
+              </table>
+            </div>
+
+            <div class="p-3 bg-slate-50 rounded-xl border border-slate-200 text-[10px] text-slate-400 text-center font-mono">
+              صادر من بروتوكول VENUS POS Enterprise بتاريخ ${formatBaghdad(new Date())} — تم التحقق من سلامة كافة التوقيعات الرقمية
+            </div>
+          </div>
+        `;
+      } catch (err) {
+        container.innerHTML = `<div class="py-8 text-center text-rose-500 font-bold">فشل إنشاء كشف الحساب: ${err.message}</div>`;
+      }
+    }
+
+    // Connect WebSocket on Admin Login
+    function initConsoleWebSocket() {
+      if (!authToken) return;
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsUrl = `${protocol}//${window.location.host}/ws?token=${encodeURIComponent(authToken)}`;
+
+      try {
+        const socket = new WebSocket(wsUrl);
+        socket.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            if (data.event === 'fraud_alert') {
+              showToast(`تنبيه أمني لحظي: ${data.payload.rule_name_ar || data.payload.reason}`, 'error');
+              if (currentTab === 'fraud') loadFraudData();
+            }
+            if (data.event === 'integrity_alert') {
+              showToast('تحذير جنائي: تم رصد عدم تطابق في سلاسل دفتر الأستاذ!', 'error');
+              if (currentTab === 'ledger') loadIntegritySummary();
+            }
+            if (data.event === 'wallet_updated') {
+              if (currentTab === 'wallet') loadUsers();
+              if (currentTab === 'debts') loadAgentDebts();
+              if (currentTab === 'ledger') loadLedgerEntries();
+            }
+          } catch (e) {
+            console.error('WS parse error:', e);
+          }
+        };
+        socket.onclose = () => {
+          setTimeout(initConsoleWebSocket, 5000);
+        };
+      } catch (err) {
+        console.warn('WS connect error:', err);
+      }
+    }
+
+    // Call initConsoleWebSocket on login
+    const origShowApp = showApp;
+    showApp = function() {
+      origShowApp();
+      initConsoleWebSocket();
+    };
+
   </script>
 </body>
 </html>

@@ -1,0 +1,220 @@
+package ledger
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"log"
+	"time"
+
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgxpool"
+)
+
+type IntegrityViolation struct {
+	AccountID     int64     `json:"account_id"`
+	EntryID       int64     `json:"entry_id"`
+	TxID          string    `json:"tx_id"`
+	ViolationType string    `json:"violation_type"`
+	ExpectedValue string    `json:"expected_value"`
+	ActualValue   string    `json:"actual_value"`
+	DetectedAt    time.Time `json:"detected_at"`
+}
+
+type IntegritySummary struct {
+	TotalEntriesChecked int                  `json:"total_entries_checked"`
+	AccountsChecked     int                  `json:"accounts_checked"`
+	ValidAccountsCount  int                  `json:"valid_accounts_count"`
+	ViolationsCount     int                  `json:"violations_count"`
+	Violations          []IntegrityViolation `json:"violations"`
+	VerifiedAt          time.Time            `json:"verified_at"`
+	IsClean             bool                 `json:"is_clean"`
+}
+
+// VerifyAccountChain verifies the cryptographic hash chain and mathematical balance
+// continuity for a single account from genesis to the latest entry.
+func VerifyAccountChain(ctx context.Context, pool *pgxpool.Pool, accountID int64) ([]IntegrityViolation, error) {
+	rows, err := pool.Query(ctx,
+		`SELECT id, tx_id, debit, credit, balance_after, created_at, prev_hash, hash
+		 FROM ledger_entries
+		 WHERE account_id = $1
+		 ORDER BY id ASC`,
+		accountID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("query ledger entries for account #%d: %w", accountID, err)
+	}
+	defer rows.Close()
+
+	var violations []IntegrityViolation
+	var prevHash = GenesisHash
+	var prevBalance int64 = 0
+	isFirst := true
+
+	for rows.Next() {
+		var id int64
+		var txID uuid.UUID
+		var debit, credit, balanceAfter int64
+		var createdAt time.Time
+		var recordedPrevHash, recordedHash string
+
+		if err := rows.Scan(&id, &txID, &debit, &credit, &balanceAfter, &createdAt, &recordedPrevHash, &recordedHash); err != nil {
+			return nil, err
+		}
+
+		// 1. Verify prev_hash linkage
+		if isFirst {
+			if recordedPrevHash != GenesisHash {
+				violations = append(violations, IntegrityViolation{
+					AccountID:     accountID,
+					EntryID:       id,
+					TxID:          txID.String(),
+					ViolationType: "INVALID_GENESIS_PREV_HASH",
+					ExpectedValue: GenesisHash,
+					ActualValue:   recordedPrevHash,
+					DetectedAt:    time.Now().UTC(),
+				})
+			}
+			isFirst = false
+		} else {
+			if recordedPrevHash != prevHash {
+				violations = append(violations, IntegrityViolation{
+					AccountID:     accountID,
+					EntryID:       id,
+					TxID:          txID.String(),
+					ViolationType: "BROKEN_HASH_CHAIN",
+					ExpectedValue: prevHash,
+					ActualValue:   recordedPrevHash,
+					DetectedAt:    time.Now().UTC(),
+				})
+			}
+		}
+
+		// 2. Recompute cryptographic SHA-256 hash
+		expectedHash := CalculateEntryHash(recordedPrevHash, txID, accountID, debit, credit, balanceAfter, createdAt)
+		if recordedHash != expectedHash {
+			violations = append(violations, IntegrityViolation{
+				AccountID:     accountID,
+				EntryID:       id,
+				TxID:          txID.String(),
+				ViolationType: "HASH_TAMPERED",
+				ExpectedValue: expectedHash,
+				ActualValue:   recordedHash,
+				DetectedAt:    time.Now().UTC(),
+			})
+		}
+
+		// 3. Mathematical balance continuity
+		expectedBalance := prevBalance + credit - debit
+		if balanceAfter != expectedBalance {
+			violations = append(violations, IntegrityViolation{
+				AccountID:     accountID,
+				EntryID:       id,
+				TxID:          txID.String(),
+				ViolationType: "BALANCE_CALCULATION_ERROR",
+				ExpectedValue: fmt.Sprintf("%d", expectedBalance),
+				ActualValue:   fmt.Sprintf("%d", balanceAfter),
+				DetectedAt:    time.Now().UTC(),
+			})
+		}
+
+		prevHash = recordedHash
+		prevBalance = balanceAfter
+	}
+
+	return violations, nil
+}
+
+// VerifyGlobalIntegrity runs a complete cryptographic and double-entry audit across all accounts.
+// Any violations found are recorded in the integrity_alerts table.
+func VerifyGlobalIntegrity(ctx context.Context, pool *pgxpool.Pool, hub Broadcaster) (*IntegritySummary, error) {
+	summary := &IntegritySummary{
+		VerifiedAt: time.Now().UTC(),
+		IsClean:    true,
+	}
+
+	// 1. Get all distinct accounts with entries
+	rows, err := pool.Query(ctx, `SELECT DISTINCT account_id FROM ledger_entries`)
+	if err != nil {
+		return nil, fmt.Errorf("list ledger accounts: %w", err)
+	}
+	var accountIDs []int64
+	for rows.Next() {
+		var aid int64
+		if err := rows.Scan(&aid); err == nil {
+			accountIDs = append(accountIDs, aid)
+		}
+	}
+	rows.Close()
+
+	summary.AccountsChecked = len(accountIDs)
+
+	for _, aid := range accountIDs {
+		accountViolations, err := VerifyAccountChain(ctx, pool, aid)
+		if err != nil {
+			log.Printf("integrity check error for account #%d: %v", aid, err)
+			continue
+		}
+		if len(accountViolations) > 0 {
+			summary.Violations = append(summary.Violations, accountViolations...)
+			summary.ViolationsCount += len(accountViolations)
+			summary.IsClean = false
+
+			// Record in integrity_alerts table
+			for _, v := range accountViolations {
+				detailsJSON, _ := json.Marshal(v)
+				_, _ = pool.Exec(ctx,
+					`INSERT INTO integrity_alerts (alert_type, account_id, entry_id, expected_value, actual_value, details)
+					 VALUES ($1, $2, $3, $4, $5, $6)`,
+					v.ViolationType, v.AccountID, v.EntryID, v.ExpectedValue, v.ActualValue, detailsJSON,
+				)
+			}
+		} else {
+			summary.ValidAccountsCount++
+		}
+	}
+
+	// 2. Verify double-entry balance for each tx_id
+	unbalancedRows, err := pool.Query(ctx,
+		`SELECT tx_id, SUM(debit) AS total_debit, SUM(credit) AS total_credit
+		 FROM ledger_entries
+		 GROUP BY tx_id
+		 HAVING SUM(debit) <> SUM(credit)`,
+	)
+	if err == nil {
+		defer unbalancedRows.Close()
+		for unbalancedRows.Next() {
+			var txID uuid.UUID
+			var totalDebit, totalCredit int64
+			if err := unbalancedRows.Scan(&txID, &totalDebit, &totalCredit); err == nil {
+				v := IntegrityViolation{
+					TxID:          txID.String(),
+					ViolationType: "UNBALANCED_TRANSACTION",
+					ExpectedValue: fmt.Sprintf("debit=%d credit=%d", totalDebit, totalDebit),
+					ActualValue:   fmt.Sprintf("debit=%d credit=%d", totalDebit, totalCredit),
+					DetectedAt:    time.Now().UTC(),
+				}
+				summary.Violations = append(summary.Violations, v)
+				summary.ViolationsCount++
+				summary.IsClean = false
+
+				detailsJSON, _ := json.Marshal(v)
+				_, _ = pool.Exec(ctx,
+					`INSERT INTO integrity_alerts (alert_type, tx_id, expected_value, actual_value, details)
+					 VALUES ($1, $2, $3, $4, $5)`,
+					v.ViolationType, txID, v.ExpectedValue, v.ActualValue, detailsJSON,
+				)
+			}
+		}
+	}
+
+	var count int
+	_ = pool.QueryRow(ctx, `SELECT COUNT(*) FROM ledger_entries`).Scan(&count)
+	summary.TotalEntriesChecked = count
+
+	if !summary.IsClean && hub != nil {
+		hub.Broadcast(0, "integrity_alert", summary)
+	}
+
+	return summary, nil
+}

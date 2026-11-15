@@ -9,13 +9,17 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"venus_backend/internal/fraud"
+	"venus_backend/internal/ledger"
 	"venus_backend/internal/middleware"
 )
 
 // VouchersHandler owns the encrypted digital voucher vault endpoints.
 type VouchersHandler struct {
-	Pool *pgxpool.Pool
-	Hub  *WSHub
+	Pool        *pgxpool.Pool
+	Hub         *WSHub
+	LedgerSvc   *ledger.Service
+	FraudEngine *fraud.Engine
 }
 
 type rawPinItem struct {
@@ -305,6 +309,44 @@ func (h *VouchersHandler) DispenseVoucher(c *fiber.Ctx) error {
 		storeName = cl.Email
 	}
 
+	totalPrice := int64(req.SellingPrice) * int64(len(claimed))
+	if totalPrice > 0 {
+		// Risk & Fraud Check
+		if h.FraudEngine != nil {
+			eval, fErr := h.FraudEngine.Evaluate(c.Context(), tx, fraud.CheckRequest{
+				UserID:    uid,
+				AmountIQD: totalPrice,
+				TxType:    "voucher_dispense",
+				IPAddress: c.IP(),
+			})
+			if fErr == nil && eval != nil && !eval.Allowed {
+				return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+					"success": false,
+					"error":   "تم تعليق سحب البطاقات مؤقتاً: " + eval.Reason,
+				})
+			}
+		}
+
+		// Double-Entry Ledger deduction (checks balance + credit limit)
+		if h.LedgerSvc != nil {
+			idempotencyKey := c.Get("Idempotency-Key")
+			_, lErr := h.LedgerSvc.RecordPurchase(c.Context(), tx, uid, ledger.SystemEmailVouchers, totalPrice, "voucher_dispense", req.VoucherID, idempotencyKey)
+			if lErr != nil {
+				return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+					"success":                 false,
+					"error":                   lErr.Error(),
+					"is_insufficient_balance": true,
+				})
+			}
+		}
+
+		_, _ = tx.Exec(c.Context(),
+			`INSERT INTO wallet_ledger (user_id, amount, kind, provider, status, note, completed_at)
+			 VALUES ($1, $2, 'payment', 'vouchers', 'success', $3, now())`,
+			uid, totalPrice, "شراء بطاقات رقمية: "+req.VoucherID,
+		)
+	}
+
 	// Update rows to sold
 	batch := &pgx.Batch{}
 	for _, id := range ids {
@@ -341,6 +383,17 @@ func (h *VouchersHandler) DispenseVoucher(c *fiber.Ctx) error {
 		"pins_count":  len(resultPins),
 		"voucher_name": req.VoucherName,
 	}, c.IP())
+
+	if totalPrice > 0 && h.Hub != nil {
+		var newBal float64
+		_ = h.Pool.QueryRow(c.Context(), `SELECT wallet_balance FROM users WHERE id = $1`, uid).Scan(&newBal)
+		h.Hub.Broadcast(uid, "wallet_updated", fiber.Map{
+			"user_id":        uid,
+			"wallet_balance": newBal,
+			"amount":         -totalPrice,
+			"note":           "شراء بطاقات رقمية: " + req.VoucherID,
+		})
+	}
 
 	return c.JSON(fiber.Map{
 		"success": true,

@@ -12,13 +12,17 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/compress"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/logger"
 	"github.com/gofiber/fiber/v2/middleware/recover"
 
 	"venus_backend/internal/db"
+	"venus_backend/internal/fraud"
 	"venus_backend/internal/handlers"
+	"venus_backend/internal/ledger"
 	"venus_backend/internal/middleware"
+	"venus_backend/internal/reconcile"
 )
 
 func getenv(key, fallback string) string {
@@ -65,7 +69,13 @@ func main() {
 
 	hub := handlers.NewWSHub()
 
-	adminH := &handlers.AdminHandler{Pool: pool, Hub: hub}
+	// Fintech Core Services (Phase 1)
+	ledgerSvc := ledger.NewService(pool, hub)
+	fraudEngine := fraud.NewEngine(pool, hub)
+	reconcileSvc := reconcile.NewService(pool)
+	fintechH := handlers.NewFintechHandler(pool, hub, ledgerSvc, fraudEngine, reconcileSvc)
+
+	adminH := &handlers.AdminHandler{Pool: pool, Hub: hub, LedgerSvc: ledgerSvc, FraudEngine: fraudEngine}
 	// R1: one-time clean reset (reset_v2_clean) — runs exactly ONCE per deploy,
 	// guarded by the system_meta marker so restarts never wipe data again.
 	if err := adminH.RunOneTimeResets(ctx); err != nil {
@@ -81,8 +91,8 @@ func main() {
 	backupsH := &handlers.BackupsHandler{Pool: pool, Hub: hub}
 	expensesH := &handlers.ExpensesHandler{Pool: pool, Hub: hub}
 	announcementsH := &handlers.AnnouncementsHandler{Pool: pool, Hub: hub}
-	zainH := &handlers.ZainCashHandler{Pool: pool, Hub: hub, JWTSecret: jwtSecret}
-	vouchersH := &handlers.VouchersHandler{Pool: pool, Hub: hub}
+	zainH := &handlers.ZainCashHandler{Pool: pool, Hub: hub, JWTSecret: jwtSecret, LedgerSvc: ledgerSvc, FraudEngine: fraudEngine}
+	vouchersH := &handlers.VouchersHandler{Pool: pool, Hub: hub, LedgerSvc: ledgerSvc, FraudEngine: fraudEngine}
 	syncH := &handlers.SyncHandler{Pool: pool, Hub: hub}
 
 	app := fiber.New(fiber.Config{
@@ -91,6 +101,9 @@ func main() {
 		WriteTimeout: 15 * time.Second,
 		IdleTimeout:  60 * time.Second,
 	})
+	app.Use(compress.New(compress.Config{
+		Level: compress.LevelBestSpeed,
+	}))
 	app.Use(cors.New(cors.Config{
 		AllowOrigins:     "*",
 		AllowMethods:     "GET,POST,PUT,PATCH,DELETE,OPTIONS",
@@ -167,10 +180,12 @@ func main() {
 
 	auth.Get("/announcements", announcementsH.ListAnnouncements)
 
+	idempotencyMw := middleware.Idempotency(pool)
+
 	// Encrypted Voucher Vault
 	auth.Post("/vouchers/upload", vouchersH.UploadVouchers)
 	auth.Get("/vouchers", vouchersH.GetVouchers)
-	auth.Post("/vouchers/dispense", vouchersH.DispenseVoucher)
+	auth.Post("/vouchers/dispense", idempotencyMw, vouchersH.DispenseVoucher)
 
 	// Admin-only area.
 	admin := api.Group("/admin", middleware.JWT(jwtSecret), middleware.AdminOnly())
@@ -182,14 +197,32 @@ func main() {
 	admin.Put("/users/:id/credentials", authH.AdminChangeUserCredentials)
 	admin.Put("/users/:id", adminH.AdminUpdateUser)
 	admin.Delete("/users/:id", adminH.AdminDeleteUser)
-	admin.Post("/users/:id/wallet", adminH.AdminAdjustWallet)
-	admin.Post("/wallet/credit", adminH.AdminAdjustWallet)
+	admin.Post("/users/:id/wallet", idempotencyMw, adminH.AdminAdjustWallet)
+	admin.Post("/wallet/credit", idempotencyMw, adminH.AdminAdjustWallet)
 	admin.Get("/users/:id/backup", backupsH.Backup)
 	admin.Post("/users/:id/restore", backupsH.Restore)
 	admin.Get("/tickets", ticketsH.ListAllTickets)
 	admin.Put("/tickets/:id/reply", ticketsH.ReplyTicket)
 	admin.Post("/announcements", announcementsH.SaveAnnouncement)
 	admin.Delete("/announcements/:id", announcementsH.DeleteAnnouncement)
+
+	// Phase 1 Fintech Core API endpoints
+	fintech := admin.Group("/fintech")
+	fintech.Get("/ledger", fintechH.GetLedgerEntries)
+	fintech.Get("/integrity/alerts", fintechH.ListIntegrityAlerts)
+	fintech.Post("/integrity/verify", fintechH.VerifyIntegrityNow)
+	fintech.Get("/fraud/rules", fintechH.ListFraudRules)
+	fintech.Put("/fraud/rules/:id", fintechH.UpdateFraudRule)
+	fintech.Get("/fraud/events", fintechH.ListFraudEvents)
+	fintech.Post("/wallets/:id/unfreeze", fintechH.UnfreezeWallet)
+	fintech.Post("/wallets/:id/credit-limit", fintechH.SetCreditLimit)
+	fintech.Get("/wallets/debts", fintechH.ListAgentDebts)
+	fintech.Post("/reconcile/run", fintechH.RunReconciliation)
+	fintech.Get("/reconcile/reports", fintechH.ListReconciliationReports)
+	fintech.Get("/reconcile/reports/:id/export", fintechH.ExportReconciliationReportCSV)
+	fintech.Post("/close/seal", fintechH.SealFinancialClose)
+	fintech.Get("/close/history", fintechH.ListFinancialCloses)
+	fintech.Get("/statements/:id", fintechH.GetAccountStatement)
 
 	// Admin Activation Codes management
 	admin.Post("/activation-codes/generate", adminH.GenerateActivationCodes)

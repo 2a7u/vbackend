@@ -16,13 +16,17 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"venus_backend/internal/fraud"
+	"venus_backend/internal/ledger"
 	"venus_backend/internal/middleware"
 )
 
 // AdminHandler groups all admin-only endpoints.
 type AdminHandler struct {
-	Pool *pgxpool.Pool
-	Hub  *WSHub
+	Pool        *pgxpool.Pool
+	Hub         *WSHub
+	LedgerSvc   *ledger.Service
+	FraudEngine *fraud.Engine
 }
 
 // audit writes one row into audit_logs. Never fails the request.
@@ -511,11 +515,11 @@ func (h *AdminHandler) AdminDeleteDigitalCard(c *fiber.Ctx) error {
 }
 
 // AdminAdjustWallet atomically updates a subscriber's wallet balance.
+// Guarded by Double-Entry Ledger, SHA-256 hash chaining, and B2B overdraft limits.
 // POST /api/admin/users/:id/wallet or POST /api/admin/wallet/credit
 func (h *AdminHandler) AdminAdjustWallet(c *fiber.Ctx) error {
 	id, err := paramID(c)
 	if err != nil || id <= 0 {
-		// Try reading user_id or target_user_id from body
 		var b struct {
 			UserID       int64   `json:"user_id"`
 			TargetUserID string  `json:"target_user_id"`
@@ -555,25 +559,57 @@ func (h *AdminHandler) AdminAdjustWallet(c *fiber.Ctx) error {
 		}
 	}
 
+	adminID := middleware.UserID(c)
+	amountIQD := int64(req.Amount)
+	idempotencyKey := c.Get("Idempotency-Key")
+
 	tx, err := h.Pool.Begin(c.Context())
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "database error"})
 	}
 	defer tx.Rollback(c.Context())
 
-	var newBalance float64
-	err = tx.QueryRow(c.Context(),
-		`UPDATE users
-		 SET wallet_balance = COALESCE(wallet_balance, 0) + $1,
-		     updated_at = now()
-		 WHERE id = $2
-		 RETURNING wallet_balance`, req.Amount, id,
-	).Scan(&newBalance)
-	if err == pgx.ErrNoRows {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "user not found"})
+	// Fraud check if debit
+	if amountIQD < 0 && h.FraudEngine != nil {
+		eval, fErr := h.FraudEngine.Evaluate(c.Context(), tx, fraud.CheckRequest{
+			UserID:    id,
+			AmountIQD: -amountIQD,
+			TxType:    "adjustment",
+			IPAddress: c.IP(),
+		})
+		if fErr == nil && eval != nil && !eval.Allowed {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+				"error":   "تم رفض العملية آلياً: " + eval.Reason,
+				"action":  eval.ActionTaken,
+			})
+		}
 	}
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "could not update wallet balance"})
+
+	var newBalance float64
+	if h.LedgerSvc != nil {
+		entries, lErr := h.LedgerSvc.RecordAdminAdjustment(c.Context(), tx, id, amountIQD, adminID, note, idempotencyKey)
+		if lErr != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": lErr.Error()})
+		}
+		for _, e := range entries {
+			if e.AccountID == id {
+				newBalance = float64(e.BalanceAfter)
+			}
+		}
+	} else {
+		err = tx.QueryRow(c.Context(),
+			`UPDATE users
+			 SET wallet_balance = COALESCE(wallet_balance, 0) + $1,
+			     updated_at = now()
+			 WHERE id = $2
+			 RETURNING wallet_balance`, req.Amount, id,
+		).Scan(&newBalance)
+		if err == pgx.ErrNoRows {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "user not found"})
+		}
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "could not update wallet balance"})
+		}
 	}
 
 	absAmount := req.Amount
@@ -606,7 +642,7 @@ func (h *AdminHandler) AdminAdjustWallet(c *fiber.Ctx) error {
 		"user_id":        id,
 		"wallet_balance": newBalance,
 		"amount":         req.Amount,
-		"message":        "تم تعديل الرصيد بنجاح",
+		"message":        "تم تعديل الرصيد بنجاح وتسجيل قيد دفتر الأستاذ المحاسبي",
 	})
 }
 
