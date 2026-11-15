@@ -14,9 +14,13 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"venus_backend/internal/fraud"
+	"venus_backend/internal/hierarchy"
 	"venus_backend/internal/ledger"
 	"venus_backend/internal/middleware"
+	"venus_backend/internal/pricing"
+	"venus_backend/internal/radar"
 	"venus_backend/internal/reconcile"
+	"venus_backend/internal/vault"
 )
 
 type FintechHandler struct {
@@ -25,15 +29,33 @@ type FintechHandler struct {
 	LedgerSvc    *ledger.Service
 	FraudEngine  *fraud.Engine
 	ReconcileSvc *reconcile.Service
+	VaultMgr     *vault.VaultManager
+	PricingSvc   *pricing.Service
+	HierarchySvc *hierarchy.Service
+	RadarSvc     *radar.Service
 }
 
-func NewFintechHandler(pool *pgxpool.Pool, hub *WSHub, ledgerSvc *ledger.Service, fraudEngine *fraud.Engine, reconcileSvc *reconcile.Service) *FintechHandler {
+func NewFintechHandler(
+	pool *pgxpool.Pool,
+	hub *WSHub,
+	ledgerSvc *ledger.Service,
+	fraudEngine *fraud.Engine,
+	reconcileSvc *reconcile.Service,
+	vaultMgr *vault.VaultManager,
+	pricingSvc *pricing.Service,
+	hierarchySvc *hierarchy.Service,
+	radarSvc *radar.Service,
+) *FintechHandler {
 	return &FintechHandler{
 		Pool:         pool,
 		Hub:          hub,
 		LedgerSvc:    ledgerSvc,
 		FraudEngine:  fraudEngine,
 		ReconcileSvc: reconcileSvc,
+		VaultMgr:     vaultMgr,
+		PricingSvc:   pricingSvc,
+		HierarchySvc: hierarchySvc,
+		RadarSvc:     radarSvc,
 	}
 }
 
@@ -698,4 +720,349 @@ func (h *FintechHandler) GetAccountStatement(c *fiber.Ctx) error {
 		"entries":       entries,
 		"generated_at":  time.Now().UTC(),
 	})
+}
+
+// =============================================================================
+// PHASE 2 HANDLERS: PRICING TIERS, AGENT COMMISSIONS, INVENTORY RADAR
+// =============================================================================
+
+// ListPriceTiers returns all pricing tiers with assigned product rates.
+// GET /api/admin/pricing/tiers
+func (h *FintechHandler) ListPriceTiers(c *fiber.Ctx) error {
+	tiers, err := h.PricingSvc.ListTiers(c.Context())
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	rows, err := h.Pool.Query(c.Context(),
+		`SELECT tier_id, product_id, price FROM tier_prices ORDER BY product_id ASC`,
+	)
+	tierPricesMap := make(map[int64][]fiber.Map)
+	if err == nil {
+		defer rows.Close()
+		for rows.Next() {
+			var tid int64
+			var pid string
+			var price int64
+			if err := rows.Scan(&tid, &pid, &price); err == nil {
+				tierPricesMap[tid] = append(tierPricesMap[tid], fiber.Map{
+					"product_id": pid,
+					"price":      price,
+				})
+			}
+		}
+	}
+
+	var result []fiber.Map
+	for _, t := range tiers {
+		prices := tierPricesMap[t.ID]
+		if prices == nil {
+			prices = []fiber.Map{}
+		}
+		result = append(result, fiber.Map{
+			"id":          t.ID,
+			"code":        t.Code,
+			"name_ar":     t.NameAr,
+			"description": t.Description,
+			"is_default":  t.IsDefault,
+			"prices":      prices,
+		})
+	}
+
+	return c.JSON(result)
+}
+
+// SetTierPrice sets a specific price for a product under a tier.
+// POST /api/admin/pricing/tiers/:id/prices
+func (h *FintechHandler) SetTierPrice(c *fiber.Ctx) error {
+	tierID, err := strconv.ParseInt(c.Params("id"), 10, 64)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid tier id"})
+	}
+
+	var req struct {
+		ProductID string `json:"product_id"`
+		Price     int64  `json:"price"`
+	}
+	if err := c.BodyParser(&req); err != nil || req.ProductID == "" || req.Price < 0 {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid product_id or price"})
+	}
+
+	if err := h.PricingSvc.SetTierPrice(c.Context(), tierID, req.ProductID, req.Price); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	h.audit(c, "SET_TIER_PRICE", "tier_prices", fmt.Sprintf("%d:%s", tierID, req.ProductID), map[string]any{
+		"tier_id":    tierID,
+		"product_id": req.ProductID,
+		"price":      req.Price,
+	})
+
+	return c.JSON(fiber.Map{"success": true})
+}
+
+// SetSubscriberPriceOverride configures an exclusive custom price for a subscriber.
+// POST /api/admin/pricing/subscribers/:id/overrides
+func (h *FintechHandler) SetSubscriberPriceOverride(c *fiber.Ctx) error {
+	userID, err := strconv.ParseInt(c.Params("id"), 10, 64)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid user id"})
+	}
+
+	var req struct {
+		ProductID   string `json:"product_id"`
+		CustomPrice int64  `json:"custom_price"`
+	}
+	if err := c.BodyParser(&req); err != nil || req.ProductID == "" || req.CustomPrice < 0 {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid product_id or custom_price"})
+	}
+
+	if err := h.PricingSvc.SetSubscriberOverride(c.Context(), userID, req.ProductID, req.CustomPrice); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	h.audit(c, "SET_PRICE_OVERRIDE", "subscriber_price_overrides", fmt.Sprintf("%d:%s", userID, req.ProductID), map[string]any{
+		"user_id":      userID,
+		"product_id":   req.ProductID,
+		"custom_price": req.CustomPrice,
+	})
+
+	return c.JSON(fiber.Map{"success": true})
+}
+
+// RemoveSubscriberPriceOverride removes a custom price override.
+// DELETE /api/admin/pricing/subscribers/:id/overrides/:productId
+func (h *FintechHandler) RemoveSubscriberPriceOverride(c *fiber.Ctx) error {
+	userID, err := strconv.ParseInt(c.Params("id"), 10, 64)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid user id"})
+	}
+	productID := c.Params("productId")
+
+	if err := h.PricingSvc.RemoveSubscriberOverride(c.Context(), userID, productID); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	h.audit(c, "REMOVE_PRICE_OVERRIDE", "subscriber_price_overrides", fmt.Sprintf("%d:%s", userID, productID), nil)
+
+	return c.JSON(fiber.Map{"success": true})
+}
+
+// ListSubscriberPriceOverrides returns all custom price overrides.
+// GET /api/admin/pricing/overrides
+func (h *FintechHandler) ListSubscriberPriceOverrides(c *fiber.Ctx) error {
+	rows, err := h.Pool.Query(c.Context(),
+		`SELECT spo.id, spo.user_id, u.email, COALESCE(u.store_name, u.full_name, ''),
+		        spo.product_id, spo.custom_price, spo.updated_at
+		 FROM subscriber_price_overrides spo
+		 JOIN users u ON u.id = spo.user_id
+		 ORDER BY spo.updated_at DESC`,
+	)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+	}
+	defer rows.Close()
+
+	var list []fiber.Map
+	for rows.Next() {
+		var (
+			id, uid          int64
+			email, name, pid string
+			price            int64
+			updatedAt        time.Time
+		)
+		if err := rows.Scan(&id, &uid, &email, &name, &pid, &price, &updatedAt); err == nil {
+			list = append(list, fiber.Map{
+				"id":           id,
+				"user_id":      uid,
+				"email":        email,
+				"store_name":   name,
+				"product_id":   pid,
+				"custom_price": price,
+				"updated_at":   updatedAt,
+			})
+		}
+	}
+	if list == nil {
+		list = []fiber.Map{}
+	}
+	return c.JSON(list)
+}
+
+// ResolveSubscriberPrice evaluates the exact resolved price for a subscriber.
+// GET /api/admin/pricing/resolve/:userId/:productId
+func (h *FintechHandler) ResolveSubscriberPrice(c *fiber.Ctx) error {
+	userID, err := strconv.ParseInt(c.Params("userId"), 10, 64)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid user id"})
+	}
+	productID := c.Params("productId")
+	defaultPrice, _ := strconv.ParseInt(c.Query("default_price", "0"), 10, 64)
+
+	res, err := h.PricingSvc.ResolvePrice(c.Context(), userID, productID, defaultPrice)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+	}
+	return c.JSON(res)
+}
+
+// SetParentAgent assigns a parent agent with DAG cycle prevention.
+// POST /api/admin/hierarchy/users/:id/parent
+func (h *FintechHandler) SetParentAgent(c *fiber.Ctx) error {
+	childID, err := strconv.ParseInt(c.Params("id"), 10, 64)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid child id"})
+	}
+
+	var req struct {
+		ParentAgentID *int64 `json:"parent_agent_id"`
+	}
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid request"})
+	}
+
+	if req.ParentAgentID != nil && *req.ParentAgentID > 0 {
+		if err := h.HierarchySvc.CheckCyclePreventsInfiniteLoop(c.Context(), childID, *req.ParentAgentID); err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+		}
+	}
+
+	_, err = h.Pool.Exec(c.Context(),
+		`UPDATE users SET parent_agent_id = $1 WHERE id = $2`,
+		req.ParentAgentID, childID,
+	)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	h.audit(c, "SET_PARENT_AGENT", "users", strconv.FormatInt(childID, 10), map[string]any{
+		"child_id":        childID,
+		"parent_agent_id": req.ParentAgentID,
+	})
+
+	return c.JSON(fiber.Map{"success": true})
+}
+
+// SetAgentCommission configures an agent's commission rate.
+// POST /api/admin/hierarchy/agents/:id/commissions
+func (h *FintechHandler) SetAgentCommission(c *fiber.Ctx) error {
+	agentID, err := strconv.ParseInt(c.Params("id"), 10, 64)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid agent id"})
+	}
+
+	var req struct {
+		ProductID       string  `json:"product_id"`
+		CommissionType  string  `json:"commission_type"`
+		CommissionValue float64 `json:"commission_value"`
+	}
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid request body"})
+	}
+	if req.ProductID == "" {
+		req.ProductID = "*"
+	}
+	if req.CommissionType != "percentage" && req.CommissionType != "fixed" {
+		req.CommissionType = "percentage"
+	}
+
+	_, err = h.Pool.Exec(c.Context(),
+		`INSERT INTO agent_commissions (agent_id, product_id, commission_type, commission_value)
+		 VALUES ($1, $2, $3, $4)
+		 ON CONFLICT (agent_id, product_id)
+		 DO UPDATE SET commission_type = EXCLUDED.commission_type, commission_value = EXCLUDED.commission_value`,
+		agentID, req.ProductID, req.CommissionType, req.CommissionValue,
+	)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	h.audit(c, "SET_AGENT_COMMISSION", "agent_commissions", fmt.Sprintf("%d:%s", agentID, req.ProductID), map[string]any{
+		"agent_id":         agentID,
+		"product_id":       req.ProductID,
+		"commission_type":  req.CommissionType,
+		"commission_value": req.CommissionValue,
+	})
+
+	return c.JSON(fiber.Map{"success": true})
+}
+
+// ListAgentCommissions returns active commission rules.
+// GET /api/admin/hierarchy/commissions
+func (h *FintechHandler) ListAgentCommissions(c *fiber.Ctx) error {
+	rows, err := h.Pool.Query(c.Context(),
+		`SELECT ac.id, ac.agent_id, u.email, COALESCE(u.store_name, u.full_name, ''),
+		        ac.product_id, ac.commission_type, ac.commission_value, ac.created_at
+		 FROM agent_commissions ac
+		 JOIN users u ON u.id = ac.agent_id
+		 ORDER BY ac.id DESC`,
+	)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+	}
+	defer rows.Close()
+
+	var list []fiber.Map
+	for rows.Next() {
+		var id, aid int64
+		var email, name, pid, cType string
+		var cVal float64
+		var cAt time.Time
+		if err := rows.Scan(&id, &aid, &email, &name, &pid, &cType, &cVal, &cAt); err == nil {
+			list = append(list, fiber.Map{
+				"id":               id,
+				"agent_id":         aid,
+				"agent_email":      email,
+				"agent_name":       name,
+				"product_id":       pid,
+				"commission_type":  cType,
+				"commission_value": cVal,
+				"created_at":       cAt,
+			})
+		}
+	}
+	return c.JSON(list)
+}
+
+// GetInventoryRadar returns real-time inventory levels, burn rates, and low stock alarms.
+// GET /api/admin/radar/summary
+func (h *FintechHandler) GetInventoryRadar(c *fiber.Ctx) error {
+	if h.RadarSvc == nil {
+		return c.JSON(fiber.Map{"has_low_stock": false, "categories": []any{}})
+	}
+	summary, err := h.RadarSvc.GetRadarSummary(c.Context())
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+	}
+	return c.JSON(summary)
+}
+
+// SetCategoryThreshold configures a minimum stock alarm threshold for a category.
+// POST /api/admin/radar/thresholds
+func (h *FintechHandler) SetCategoryThreshold(c *fiber.Ctx) error {
+	var req struct {
+		CategoryID   string `json:"category_id"`
+		MinThreshold int    `json:"min_threshold"`
+	}
+	if err := c.BodyParser(&req); err != nil || req.CategoryID == "" || req.MinThreshold < 0 {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid category_id or min_threshold"})
+	}
+
+	_, err := h.Pool.Exec(c.Context(),
+		`INSERT INTO category_thresholds (category_id, min_threshold, updated_at)
+		 VALUES ($1, $2, now())
+		 ON CONFLICT (category_id)
+		 DO UPDATE SET min_threshold = EXCLUDED.min_threshold, updated_at = now()`,
+		req.CategoryID, req.MinThreshold,
+	)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	h.audit(c, "SET_CATEGORY_THRESHOLD", "category_thresholds", req.CategoryID, map[string]any{
+		"category_id":   req.CategoryID,
+		"min_threshold": req.MinThreshold,
+	})
+
+	return c.JSON(fiber.Map{"success": true})
 }

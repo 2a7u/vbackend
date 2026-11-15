@@ -632,6 +632,85 @@ CREATE TABLE IF NOT EXISTS idempotency_keys (
 );
 CREATE INDEX IF NOT EXISTS idx_idempotency_keys_user ON idempotency_keys (user_id, created_at DESC);
 
+-- =============================================================================
+-- PHASE 2: VAULT ENCRYPTION, MULTI-TIER PRICING, AGENT COMMISSIONS & RADAR
+-- =============================================================================
+
+-- 2.1 Encrypted Code Vault & Permanent Duplicate Guard
+ALTER TABLE vouchers_vault ADD COLUMN IF NOT EXISTS pin_encrypted TEXT NOT NULL DEFAULT '';
+ALTER TABLE vouchers_vault ADD COLUMN IF NOT EXISTS nonce TEXT NOT NULL DEFAULT '';
+ALTER TABLE vouchers_vault ADD COLUMN IF NOT EXISTS key_version INT NOT NULL DEFAULT 1;
+ALTER TABLE vouchers_vault ADD COLUMN IF NOT EXISTS pin_hmac TEXT NOT NULL DEFAULT '';
+ALTER TABLE vouchers_vault ADD COLUMN IF NOT EXISTS net_profit BIGINT NOT NULL DEFAULT 0;
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_vouchers_vault_pin_hmac ON vouchers_vault (pin_hmac) WHERE pin_hmac <> '';
+
+-- 2.2 Multi-Tier Pricing & Custom Subscriber Overrides
+CREATE TABLE IF NOT EXISTS price_tiers (
+    id          BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    code        TEXT NOT NULL UNIQUE,
+    name_ar     TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    is_default  BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- Seed baseline pricing tiers
+INSERT INTO price_tiers (code, name_ar, description, is_default)
+VALUES 
+    ('regular_pos', 'نقطة بيع اعتيادية', 'التسعير القياسي لعموم نقاط البيع والمتاجر', TRUE),
+    ('wholesale', 'وكيل جملة', 'تسعير مخصص لموزعي الجملة والكميات الكبيرة', FALSE),
+    ('main_vip', 'كبار الوكلاء VIP', 'أفضل أسعار تفضيلية للموزعين الرئيسيين المعتمدين', FALSE)
+ON CONFLICT (code) DO NOTHING;
+
+CREATE TABLE IF NOT EXISTS tier_prices (
+    id          BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    tier_id     BIGINT NOT NULL REFERENCES price_tiers(id) ON DELETE CASCADE,
+    product_id  TEXT NOT NULL,
+    price       BIGINT NOT NULL CHECK (price >= 0),
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE(tier_id, product_id)
+);
+CREATE INDEX IF NOT EXISTS idx_tier_prices_lookup ON tier_prices (tier_id, product_id);
+
+CREATE TABLE IF NOT EXISTS subscriber_price_overrides (
+    id           BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    user_id      BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    product_id   TEXT NOT NULL,
+    custom_price BIGINT NOT NULL CHECK (custom_price >= 0),
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE(user_id, product_id)
+);
+CREATE INDEX IF NOT EXISTS idx_sub_price_overrides ON subscriber_price_overrides (user_id, product_id);
+
+-- 2.3 Agent Hierarchy & Commissions
+ALTER TABLE users ADD COLUMN IF NOT EXISTS parent_agent_id BIGINT REFERENCES users(id) ON DELETE SET NULL;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS price_tier_id BIGINT REFERENCES price_tiers(id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS idx_users_parent_agent ON users (parent_agent_id);
+
+CREATE TABLE IF NOT EXISTS agent_commissions (
+    id               BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    agent_id         BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    product_id       TEXT NOT NULL DEFAULT '*',
+    commission_type  TEXT NOT NULL DEFAULT 'fixed' CHECK (commission_type IN ('fixed', 'percentage')),
+    commission_value NUMERIC(10,2) NOT NULL DEFAULT 0 CHECK (commission_value >= 0),
+    created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE(agent_id, product_id)
+);
+CREATE INDEX IF NOT EXISTS idx_agent_commissions_lookup ON agent_commissions (agent_id, product_id);
+
+-- 2.4 Inventory Radar & Thresholds
+CREATE TABLE IF NOT EXISTS category_thresholds (
+    id            BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    category_id   TEXT NOT NULL UNIQUE,
+    min_threshold INT NOT NULL DEFAULT 5 CHECK (min_threshold >= 0),
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+
 
 
 

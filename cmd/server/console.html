@@ -256,6 +256,19 @@
           <i class="fa-solid fa-stamp w-5 text-center text-slate-400"></i>
           <span>الإقفال وكشوف الحساب</span>
         </button>
+        <button onclick="switchTab('pricing')" id="nav-pricing"
+          class="nav-tab-btn flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-50 transition active:scale-[0.99]">
+          <i class="fa-solid fa-tags w-5 text-center text-slate-400"></i>
+          <span>التسعير وشجرة الوكلاء</span>
+        </button>
+        <button onclick="switchTab('radar')" id="nav-radar"
+          class="nav-tab-btn flex items-center justify-between w-full px-3 py-2.5 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-50 transition active:scale-[0.99]">
+          <div class="flex items-center gap-3">
+            <i class="fa-solid fa-tower-broadcast w-5 text-center text-slate-400"></i>
+            <span>رادار الخزنة والمخزون</span>
+          </div>
+          <span id="badge-radar-low" class="hidden px-1.5 py-0.5 rounded-full text-[9px] font-black bg-rose-500 text-white animate-pulse">حرج</span>
+        </button>
 
         <!-- System Health Box -->
         <div class="mt-auto pt-4 border-t border-slate-100">
@@ -333,10 +346,34 @@
           <i class="fa-solid fa-stamp w-5 text-brand"></i>
           <span>الإقفال وكشوف الحساب</span>
         </button>
+        <button onclick="switchTab('pricing'); toggleMobileSidebar()" class="flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-sm font-bold text-slate-700 hover:bg-slate-50">
+          <i class="fa-solid fa-tags w-5 text-brand"></i>
+          <span>التسعير وشجرة الوكلاء</span>
+        </button>
+        <button onclick="switchTab('radar'); toggleMobileSidebar()" class="flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-sm font-bold text-slate-700 hover:bg-slate-50">
+          <i class="fa-solid fa-tower-broadcast w-5 text-brand"></i>
+          <span>رادار الخزنة والمخزون</span>
+        </button>
       </div>
 
       <!-- Content Area -->
       <main class="flex-1 overflow-y-auto p-4 lg:p-8 space-y-6">
+
+        <!-- PERMANENT RED ALERT BAR FOR LOW INVENTORY RADAR -->
+        <div id="radar-alert-bar" class="hidden bg-rose-600 text-white rounded-2xl p-4 shadow-lg shadow-rose-600/20 border border-rose-500 flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-pulse">
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center text-lg font-black shrink-0">
+              <i class="fa-solid fa-triangle-exclamation"></i>
+            </div>
+            <div>
+              <div class="font-black text-sm">إنذار رادار الخزنة: فئات قاربت على النفاد الفوري!</div>
+              <div class="text-xs text-rose-100 font-medium" id="radar-alert-bar-text">جاري فحص حالة المخزون...</div>
+            </div>
+          </div>
+          <button onclick="switchTab('radar')" class="px-4 py-2 bg-white text-rose-700 hover:bg-rose-50 rounded-xl text-xs font-black shadow transition shrink-0 flex items-center justify-center gap-1.5">
+            <i class="fa-solid fa-tower-broadcast"></i><span>فتح رادار الخزنة</span>
+          </button>
+        </div>
 
         <!-- =================================================================== -->
         <!-- TAB 1: DASHBOARD STATS                                              -->
@@ -1291,6 +1328,127 @@
           </div>
         </section>
 
+        <!-- =================================================================== -->
+        <!-- TAB 12: MULTI-TIER PRICING & AGENT COMMISSIONS                      -->
+        <!-- =================================================================== -->
+        <section id="tab-content-pricing" class="tab-pane hidden space-y-6">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <h2 class="text-xl font-black text-slate-800">استوديو التسعير المتعدد وشجرة الوكلاء والعمولات</h2>
+              <p class="text-xs text-slate-400 font-medium mt-0.5">إدارة فئات الجملة وVIP، وتخصيص أسعار حصرية للمشتركين، وشجرة عمولات الوكلاء</p>
+            </div>
+            <div class="flex items-center gap-2">
+              <button onclick="loadPricingData()" class="px-3.5 py-2 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 rounded-xl font-bold text-xs shadow-sm flex items-center gap-2 transition">
+                <i class="fa-solid fa-rotate-right"></i><span>تحديث البيانات</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Pricing Tiers Grid -->
+          <div class="space-y-3">
+            <div class="flex items-center justify-between">
+              <h3 class="text-sm font-black text-slate-800 flex items-center gap-2">
+                <i class="fa-solid fa-layer-group text-brand"></i>
+                <span>فئات التسعير المعتمدة (Price Tiers)</span>
+              </h3>
+              <button onclick="openSetTierPriceModal()" class="px-3 py-1.5 bg-brand hover:bg-brand-dark text-white rounded-xl text-xs font-bold shadow-sm transition flex items-center gap-1.5">
+                <i class="fa-solid fa-plus"></i><span>تسعير منتج لفئة</span>
+              </button>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4" id="pricing-tiers-grid">
+              <div class="col-span-full py-8 text-center text-slate-400 font-bold">جاري تحميل فئات التسعير...</div>
+            </div>
+          </div>
+
+          <!-- Subscriber Price Overrides Table -->
+          <div class="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm space-y-4">
+            <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div>
+                <h3 class="text-sm font-black text-slate-800">التسعير الحصري للمشتركين (Subscriber Overrides)</h3>
+                <p class="text-xs text-slate-400 font-medium">الأسعار الخاصة الفردية التي تتجاوز الفئة والتسعير العام</p>
+              </div>
+              <button onclick="openSetSubscriberOverrideModal()" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-sm transition flex items-center gap-1.5">
+                <i class="fa-solid fa-user-tag"></i><span>تخصيص سعر لمشترك</span>
+              </button>
+            </div>
+            <div class="overflow-x-auto">
+              <table class="w-full text-right border-collapse text-xs">
+                <thead>
+                  <tr class="bg-slate-50/80 border-b border-slate-200 text-slate-500 font-bold">
+                    <th class="py-3 px-3">المشترك</th>
+                    <th class="py-3 px-3">معرف المنتج</th>
+                    <th class="py-3 px-3">السعر الحصري</th>
+                    <th class="py-3 px-3">تاريخ التحديث</th>
+                    <th class="py-3 px-3 text-left">إجراءات</th>
+                  </tr>
+                </thead>
+                <tbody id="sub-overrides-table-body" class="divide-y divide-slate-100 font-medium">
+                  <tr><td colspan="5" class="py-8 text-center text-slate-400">جاري تحميل الأسعار المخصصة...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Agent Hierarchy & Commissions Table -->
+          <div class="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm space-y-4">
+            <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div>
+                <h3 class="text-sm font-black text-slate-800">شجرة عمولات الوكلاء (Agent Commissions DAG)</h3>
+                <p class="text-xs text-slate-400 font-medium">تسجيل العمولات الفورية في قيود دفتر الأستاذ للوكيل الأعلى عند مبيعات نقاط البيع الفرعية</p>
+              </div>
+              <div class="flex items-center gap-2">
+                <button onclick="openSetParentAgentModal()" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition flex items-center gap-1.5">
+                  <i class="fa-solid fa-sitemap text-brand"></i><span>ربط نقطة بوكيل أعلى</span>
+                </button>
+                <button onclick="openSetAgentCommissionModal()" class="px-3 py-1.5 bg-brand hover:bg-brand-dark text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5">
+                  <i class="fa-solid fa-percent"></i><span>ضبط نسبة / عمولة</span>
+                </button>
+              </div>
+            </div>
+            <div class="overflow-x-auto">
+              <table class="w-full text-right border-collapse text-xs">
+                <thead>
+                  <tr class="bg-slate-50/80 border-b border-slate-200 text-slate-500 font-bold">
+                    <th class="py-3 px-3">الوكيل المستفيد</th>
+                    <th class="py-3 px-3">المنتج المستهدف</th>
+                    <th class="py-3 px-3">نوع العمولة</th>
+                    <th class="py-3 px-3">قيمة العمولة</th>
+                    <th class="py-3 px-3">تاريخ الإضافة</th>
+                  </tr>
+                </thead>
+                <tbody id="agent-commissions-table-body" class="divide-y divide-slate-100 font-medium">
+                  <tr><td colspan="5" class="py-8 text-center text-slate-400">جاري تحميل شجرة العمولات...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- =================================================================== -->
+        <!-- TAB 13: VAULT RADAR & INVENTORY FORECASTING                         -->
+        <!-- =================================================================== -->
+        <section id="tab-content-radar" class="tab-pane hidden space-y-6">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <h2 class="text-xl font-black text-slate-800">رادار الخزنة والتنبؤ بنفاد المخزون اللحظي</h2>
+              <p class="text-xs text-slate-400 font-medium mt-0.5">مراقبة حية لسرعة الاستهلاك (Burn-Rate) والتنبؤ الدقيق بالساعات والدقائق قبل نفاد الكروت</p>
+            </div>
+            <div class="flex items-center gap-2">
+              <button onclick="openSetCategoryThresholdModal()" class="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-xs shadow-sm flex items-center gap-1.5 transition">
+                <i class="fa-solid fa-sliders text-brand"></i><span>تعديل حدود الإنذار</span>
+              </button>
+              <button onclick="loadRadarData()" class="px-3.5 py-2 bg-brand hover:bg-brand-dark text-white rounded-xl font-bold text-xs shadow-sm flex items-center gap-2 transition">
+                <i class="fa-solid fa-rotate-right"></i><span>تحديث الرادار</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Radar Inventory Grid -->
+          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" id="radar-categories-grid">
+            <div class="col-span-full py-12 text-center text-slate-400 font-bold">جاري مسح الخزنة واحتساب معدلات الحرق...</div>
+          </div>
+        </section>
+
       </main>
     </div>
   </div>
@@ -1832,6 +1990,189 @@
     </div>
   </div>
 
+  <!-- PHASE 2 MODAL 1: SET TIER PRICE -->
+  <div id="modal-set-tier-price" class="fixed inset-0 z-50 flex items-center justify-center p-4 modal-backdrop hidden">
+    <div class="w-full max-w-md bg-white rounded-3xl shadow-2xl border border-slate-100 p-6 space-y-4">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 rounded-xl bg-blue-50 text-brand flex items-center justify-center text-sm font-black">
+            <i class="fa-solid fa-tags"></i>
+          </div>
+          <h3 class="text-sm font-black text-slate-800">تسعير منتج لفئة معينة</h3>
+        </div>
+        <button onclick="closeModal('modal-set-tier-price')" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
+      </div>
+
+      <form onsubmit="handleSaveTierPrice(event)" class="space-y-3.5">
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">فئة التسعير</label>
+          <select id="tier-price-tier-select" required class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-brand">
+            <!-- Populated dynamically -->
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">معرف المنتج أو البطاقة (Product / Voucher ID)</label>
+          <input type="text" id="tier-price-product-id" required placeholder="مثال: asia_5000 أو zain_10000" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono font-bold text-slate-800 outline-none focus:border-brand">
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">السعر المعتمد لهذه الفئة (بالدينار العراقي)</label>
+          <input type="number" id="tier-price-amount" required min="0" placeholder="مثال: 4850" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-black text-brand outline-none focus:border-brand">
+        </div>
+        <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+          <button type="button" onclick="closeModal('modal-set-tier-price')" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-xs font-bold">إلغاء</button>
+          <button type="submit" class="px-5 py-2 bg-brand hover:bg-brand-dark text-white rounded-xl text-xs font-bold shadow-md shadow-brand/20 transition">حفظ السعر</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- PHASE 2 MODAL 2: SET SUBSCRIBER OVERRIDE -->
+  <div id="modal-set-subscriber-override" class="fixed inset-0 z-50 flex items-center justify-center p-4 modal-backdrop hidden">
+    <div class="w-full max-w-md bg-white rounded-3xl shadow-2xl border border-slate-100 p-6 space-y-4">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center text-sm font-black">
+            <i class="fa-solid fa-user-tag"></i>
+          </div>
+          <h3 class="text-sm font-black text-slate-800">تخصيص سعر حصري لمشترك</h3>
+        </div>
+        <button onclick="closeModal('modal-set-subscriber-override')" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
+      </div>
+
+      <form onsubmit="handleSaveSubscriberOverride(event)" class="space-y-3.5">
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">المشترك المستهدف</label>
+          <select id="sub-override-user-select" required class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-brand">
+            <!-- Populated dynamically -->
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">معرف المنتج</label>
+          <input type="text" id="sub-override-product-id" required placeholder="مثال: asia_5000" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono font-bold text-slate-800 outline-none focus:border-brand">
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">السعر الحصري (بالدينار العراقي)</label>
+          <input type="number" id="sub-override-price" required min="0" placeholder="مثال: 4750" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-black text-emerald-600 outline-none focus:border-brand">
+          <p class="text-[10px] text-slate-400 mt-1">هذا السعر يتجاوز أسعار الفئات والتسعير العام لهذا المشترك فقط.</p>
+        </div>
+        <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+          <button type="button" onclick="closeModal('modal-set-subscriber-override')" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-xs font-bold">إلغاء</button>
+          <button type="submit" class="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-md shadow-emerald-600/20 transition">تطبيق السعر الحصري</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- PHASE 2 MODAL 3: SET PARENT AGENT -->
+  <div id="modal-set-parent-agent" class="fixed inset-0 z-50 flex items-center justify-center p-4 modal-backdrop hidden">
+    <div class="w-full max-w-md bg-white rounded-3xl shadow-2xl border border-slate-100 p-6 space-y-4">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 rounded-xl bg-purple-50 text-purple-700 flex items-center justify-center text-sm font-black">
+            <i class="fa-solid fa-sitemap"></i>
+          </div>
+          <h3 class="text-sm font-black text-slate-800">ربط نقطة بيع بوكيل أعلى (Hierarchy)</h3>
+        </div>
+        <button onclick="closeModal('modal-set-parent-agent')" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
+      </div>
+
+      <form onsubmit="handleSaveParentAgent(event)" class="space-y-3.5">
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">نقطة البيع الفرعية (التابع)</label>
+          <select id="parent-agent-child-select" required class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-brand">
+            <!-- Populated dynamically -->
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">الوكيل الأعلى (المتبوع - الحاصل على العمولة)</label>
+          <select id="parent-agent-parent-select" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-brand">
+            <option value="">-- فك الارتباط (جعله مستقلاً) --</option>
+            <!-- Populated dynamically -->
+          </select>
+          <p class="text-[10px] text-amber-600 font-bold mt-1">يمنع النظام آلياً أي حلقات مغلقة أو إسناد دائري (Cycle Prevention).</p>
+        </div>
+        <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+          <button type="button" onclick="closeModal('modal-set-parent-agent')" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-xs font-bold">إلغاء</button>
+          <button type="submit" class="px-5 py-2 bg-brand hover:bg-brand-dark text-white rounded-xl text-xs font-bold shadow-md shadow-brand/20 transition">حفظ الارتباط</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- PHASE 2 MODAL 4: SET AGENT COMMISSION -->
+  <div id="modal-set-agent-commission" class="fixed inset-0 z-50 flex items-center justify-center p-4 modal-backdrop hidden">
+    <div class="w-full max-w-md bg-white rounded-3xl shadow-2xl border border-slate-100 p-6 space-y-4">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 rounded-xl bg-amber-50 text-amber-700 flex items-center justify-center text-sm font-black">
+            <i class="fa-solid fa-percent"></i>
+          </div>
+          <h3 class="text-sm font-black text-slate-800">ضبط نسبة / عمولة للوكيل</h3>
+        </div>
+        <button onclick="closeModal('modal-set-agent-commission')" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
+      </div>
+
+      <form onsubmit="handleSaveAgentCommission(event)" class="space-y-3.5">
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">الوكيل المستفيد</label>
+          <select id="agent-comm-user-select" required class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-brand">
+            <!-- Populated dynamically -->
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">المنتج المستهدف</label>
+          <input type="text" id="agent-comm-product-id" value="*" placeholder="ضع * لجميع المنتجات، أو حدد معرف المنتج" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono font-bold text-slate-800 outline-none focus:border-brand">
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">نوع العمولة</label>
+          <select id="agent-comm-type" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-brand">
+            <option value="percentage">نسبة مئوية من قيمة البيع (%)</option>
+            <option value="fixed">مبلغ ثابت بالدينار العراقي (IQD)</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">قيمة العمولة</label>
+          <input type="number" step="0.1" id="agent-comm-value" required min="0" placeholder="مثال: 2.5 أو 500" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-black text-slate-800 outline-none focus:border-brand">
+        </div>
+        <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+          <button type="button" onclick="closeModal('modal-set-agent-commission')" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-xs font-bold">إلغاء</button>
+          <button type="submit" class="px-5 py-2 bg-brand hover:bg-brand-dark text-white rounded-xl text-xs font-bold shadow-md shadow-brand/20 transition">حفظ العمولة</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- PHASE 2 MODAL 5: SET CATEGORY THRESHOLD -->
+  <div id="modal-set-category-threshold" class="fixed inset-0 z-50 flex items-center justify-center p-4 modal-backdrop hidden">
+    <div class="w-full max-w-md bg-white rounded-3xl shadow-2xl border border-slate-100 p-6 space-y-4">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center text-sm font-black">
+            <i class="fa-solid fa-sliders"></i>
+          </div>
+          <h3 class="text-sm font-black text-slate-800">ضبط الحد الأدنى لإنذار الفئة</h3>
+        </div>
+        <button onclick="closeModal('modal-set-category-threshold')" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
+      </div>
+
+      <form onsubmit="handleSaveCategoryThreshold(event)" class="space-y-3.5">
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">الفئة / الشركة (Category ID)</label>
+          <input type="text" id="threshold-cat-id" required placeholder="مثال: آسيا سيل، زين، كورك" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-brand">
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">الحد الأدنى لعدد الكروت المتاحة</label>
+          <input type="number" id="threshold-min-count" required min="1" value="5" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-black text-rose-600 outline-none focus:border-brand">
+          <p class="text-[10px] text-slate-400 mt-1">يطلق النظام شريط إنذار أحمر عاجل وتنبيه Webhook عند انخفاض الرصيد عن هذا الرقم.</p>
+        </div>
+        <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+          <button type="button" onclick="closeModal('modal-set-category-threshold')" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-xs font-bold">إلغاء</button>
+          <button type="submit" class="px-5 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold shadow-md shadow-rose-600/20 transition">حفظ الحد الأدنى</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <!-- Global Toast Notification -->
   <div id="toast" class="fixed bottom-5 left-5 z-50 transform translate-y-20 opacity-0 transition-all duration-300 pointer-events-none">
     <div id="toast-inner" class="flex items-center gap-2.5 px-4 py-3 rounded-2xl shadow-xl text-xs font-bold text-white bg-slate-900 border border-slate-800">
@@ -2039,6 +2380,8 @@
       if (tabId === 'reconcile') { loadReconciliationData(); loadReconciliationReports(); }
       if (tabId === 'debts') loadAgentDebts();
       if (tabId === 'close') { loadFinancialCloses(); populateStatementUsers(); }
+      if (tabId === 'pricing') { loadPricingData(); loadHierarchyData(); }
+      if (tabId === 'radar') loadRadarData();
     }
 
     function toggleMobileSidebar() {
@@ -3613,6 +3956,450 @@
       }
     }
 
+    // =========================================================================
+    // ESCAPE HTML HELPER
+    // =========================================================================
+    function escapeHtml(str) {
+      if (str === null || str === undefined) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    // =========================================================================
+    // PHASE 2: PRICING TIERS, AGENT COMMISSIONS & INVENTORY RADAR LOGIC
+    // =========================================================================
+
+    let cachedPricingTiers = [];
+
+    async function populateUserDropdowns(selectIds, defaultText) {
+      try {
+        const res = await apiFetch('/api/admin/users');
+        const users = await res.json();
+        if (!res.ok || !Array.isArray(users)) return;
+
+        selectIds.forEach(id => {
+          const el = document.getElementById(id);
+          if (!el) return;
+          const currentVal = el.value;
+          el.innerHTML = (defaultText ? `<option value="">${defaultText}</option>` : '') +
+            users.map(u => `<option value="${u.id}">${escapeHtml(u.store_name || u.full_name || u.email)} (#${u.id})</option>`).join('');
+          if (currentVal) el.value = currentVal;
+        });
+      } catch (e) {
+        console.error('populateUserDropdowns error:', e);
+      }
+    }
+
+    // 1. PRICING TIERS & CUSTOM OVERRIDES
+    async function loadPricingData() {
+      const grid = document.getElementById('pricing-tiers-grid');
+      const tableBody = document.getElementById('sub-overrides-table-body');
+
+      // 1.1 Load Tiers
+      try {
+        const res = await apiFetch('/api/admin/pricing/tiers');
+        const tiers = await res.json();
+        if (res.ok && Array.isArray(tiers)) {
+          cachedPricingTiers = tiers;
+          const tierSelect = document.getElementById('tier-price-tier-select');
+          if (tierSelect) {
+            tierSelect.innerHTML = tiers.map(t => `<option value="${t.id}">${escapeHtml(t.name_ar)} (${t.code})</option>`).join('');
+          }
+
+          if (tiers.length === 0) {
+            grid.innerHTML = '<div class="col-span-full py-8 text-center text-slate-400 font-bold">لا توجد فئات تسعير مسجلة</div>';
+          } else {
+            grid.innerHTML = tiers.map(t => {
+              const pricesHtml = (t.prices && t.prices.length > 0)
+                ? t.prices.map(p => `
+                    <div class="flex items-center justify-between text-xs py-1.5 px-2 bg-slate-50 rounded-lg">
+                      <span class="font-mono text-slate-600 font-bold">${escapeHtml(p.product_id)}</span>
+                      <span class="font-black text-brand">${formatIQD(p.price)}</span>
+                    </div>
+                  `).join('')
+                : '<div class="text-[11px] text-slate-400 py-2 text-center">لا توجد أسعار مخصصة (يستخدم الافتراضي)</div>';
+
+              return `
+                <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm flex flex-col justify-between space-y-4">
+                  <div>
+                    <div class="flex items-center justify-between gap-2 mb-2">
+                      <div class="flex items-center gap-2">
+                        <span class="font-black text-sm text-slate-800">${escapeHtml(t.name_ar)}</span>
+                        ${t.is_default ? '<span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-blue-50 text-brand">الفئة الافتراضية</span>' : ''}
+                      </div>
+                      <span class="text-[10px] font-mono text-slate-400 font-bold">${escapeHtml(t.code)}</span>
+                    </div>
+                    <p class="text-xs text-slate-400 mb-3">${escapeHtml(t.description || 'فئة تسعير معتمدة')}</p>
+                    <div class="space-y-1.5 border-t border-slate-100 pt-3">
+                      <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">الأسعار المسجلة لهذه الفئة:</div>
+                      ${pricesHtml}
+                    </div>
+                  </div>
+                  <button onclick="openSetTierPriceModal(${t.id})" class="w-full py-2 bg-slate-50 hover:bg-brand hover:text-white text-slate-700 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5">
+                    <i class="fa-solid fa-tags"></i><span>تسعير منتج لهذه الفئة</span>
+                  </button>
+                </div>
+              `;
+            }).join('');
+          }
+        }
+      } catch (err) {
+        grid.innerHTML = `<div class="col-span-full py-8 text-center text-rose-500 font-bold">خطأ في تحميل فئات التسعير: ${err.message}</div>`;
+      }
+
+      // 1.2 Load Subscriber Overrides
+      try {
+        const res = await apiFetch('/api/admin/pricing/overrides');
+        const overrides = await res.json();
+        if (res.ok && Array.isArray(overrides)) {
+          if (overrides.length === 0) {
+            tableBody.innerHTML = '<tr><td colspan="5" class="py-8 text-center text-slate-400 font-bold">لا توجد أسعار حصرية مخصصة لمشتركين بعد</td></tr>';
+          } else {
+            tableBody.innerHTML = overrides.map(o => `
+              <tr class="hover:bg-slate-50 transition">
+                <td class="py-3 px-3">
+                  <div class="font-bold text-slate-800">${escapeHtml(o.store_name || o.email)}</div>
+                  <div class="text-[10px] text-slate-400 font-mono">ID: ${o.user_id} - ${escapeHtml(o.email)}</div>
+                </td>
+                <td class="py-3 px-3 font-mono font-bold text-slate-700">${escapeHtml(o.product_id)}</td>
+                <td class="py-3 px-3 font-black text-emerald-600 text-sm">${formatIQD(o.custom_price)}</td>
+                <td class="py-3 px-3 text-[11px] text-slate-500">${formatBaghdad(o.updated_at)}</td>
+                <td class="py-3 px-3 text-left">
+                  <button onclick="deleteSubscriberOverride(${o.user_id}, '${escapeHtml(o.product_id)}')" class="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg text-xs font-bold transition flex items-center gap-1">
+                    <i class="fa-solid fa-trash-can"></i><span>إلغاء الحصري</span>
+                  </button>
+                </td>
+              </tr>
+            `).join('');
+          }
+        }
+      } catch (err) {
+        tableBody.innerHTML = `<tr><td colspan="5" class="py-8 text-center text-rose-500 font-bold">خطأ في تحميل التخصيصات: ${err.message}</td></tr>`;
+      }
+    }
+
+    function openSetTierPriceModal(tierId) {
+      if (tierId) {
+        const select = document.getElementById('tier-price-tier-select');
+        if (select) select.value = tierId;
+      }
+      document.getElementById('tier-price-product-id').value = '';
+      document.getElementById('tier-price-amount').value = '';
+      openModal('modal-set-tier-price');
+    }
+
+    async function handleSaveTierPrice(e) {
+      e.preventDefault();
+      const tierId = document.getElementById('tier-price-tier-select').value;
+      const productId = document.getElementById('tier-price-product-id').value.trim();
+      const amount = parseInt(document.getElementById('tier-price-amount').value, 10);
+
+      try {
+        const res = await apiFetch(`/api/admin/pricing/tiers/${tierId}/prices`, {
+          method: 'POST',
+          body: JSON.stringify({ product_id: productId, price: amount })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'فشل حفظ سعر الفئة');
+
+        closeModal('modal-set-tier-price');
+        showToast('تم حفظ سعر المنتج للفئة بنجاح');
+        loadPricingData();
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    }
+
+    async function openSetSubscriberOverrideModal() {
+      await populateUserDropdowns(['sub-override-user-select'], '-- اختر المشترك المستهدف --');
+      document.getElementById('sub-override-product-id').value = '';
+      document.getElementById('sub-override-price').value = '';
+      openModal('modal-set-subscriber-override');
+    }
+
+    async function handleSaveSubscriberOverride(e) {
+      e.preventDefault();
+      const userId = document.getElementById('sub-override-user-select').value;
+      const productId = document.getElementById('sub-override-product-id').value.trim();
+      const price = parseInt(document.getElementById('sub-override-price').value, 10);
+
+      try {
+        const res = await apiFetch(`/api/admin/pricing/subscribers/${userId}/overrides`, {
+          method: 'POST',
+          body: JSON.stringify({ product_id: productId, custom_price: price })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'فشل تطبيق السعر الحصري');
+
+        closeModal('modal-set-subscriber-override');
+        showToast('تم تطبيق السعر الحصري للمشترك بنجاح');
+        loadPricingData();
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    }
+
+    async function deleteSubscriberOverride(userId, productId) {
+      if (!confirm(`هل أنت متأكد من إلغاء السعر الحصري للمنتج (${productId}) لهذا المشترك؟ سيعود للنظام التدرجي التلقائي.`)) return;
+
+      try {
+        const res = await apiFetch(`/api/admin/pricing/subscribers/${userId}/overrides/${encodeURIComponent(productId)}`, {
+          method: 'DELETE'
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'فشل إلغاء السعر الحصري');
+
+        showToast('تم إلغاء السعر الحصري وعاد المشترك لسعر فئته');
+        loadPricingData();
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    }
+
+    // 2. AGENT HIERARCHY & COMMISSIONS
+    async function loadHierarchyData() {
+      const tableBody = document.getElementById('agent-commissions-table-body');
+      try {
+        const res = await apiFetch('/api/admin/hierarchy/commissions');
+        const comms = await res.json();
+        if (res.ok && Array.isArray(comms)) {
+          if (comms.length === 0) {
+            tableBody.innerHTML = '<tr><td colspan="5" class="py-8 text-center text-slate-400 font-bold">لا توجد قواعد عمولات مسجلة في الشجرة بعد</td></tr>';
+          } else {
+            tableBody.innerHTML = comms.map(c => `
+              <tr class="hover:bg-slate-50 transition">
+                <td class="py-3 px-3">
+                  <div class="font-bold text-slate-800">${escapeHtml(c.store_name || c.email)}</div>
+                  <div class="text-[10px] text-slate-400 font-mono">Agent #${c.agent_id}</div>
+                </td>
+                <td class="py-3 px-3 font-mono font-bold text-slate-700">${c.product_id === '*' ? '<span class="text-brand font-black">كافة المنتجات (*)</span>' : escapeHtml(c.product_id)}</td>
+                <td class="py-3 px-3">
+                  <span class="px-2 py-0.5 rounded-full text-[10px] font-black ${c.commission_type === 'percentage' ? 'bg-amber-50 text-amber-700' : 'bg-blue-50 text-brand'}">
+                    ${c.commission_type === 'percentage' ? 'نسبة مئوية (%)' : 'مبلغ ثابت (IQD)'}
+                  </span>
+                </td>
+                <td class="py-3 px-3 font-black text-slate-800 text-sm">
+                  ${c.commission_type === 'percentage' ? c.commission_value + '%' : formatIQD(c.commission_value)}
+                </td>
+                <td class="py-3 px-3 text-[11px] text-slate-500">${formatBaghdad(c.created_at)}</td>
+              </tr>
+            `).join('');
+          }
+        }
+      } catch (err) {
+        tableBody.innerHTML = `<tr><td colspan="5" class="py-8 text-center text-rose-500 font-bold">خطأ في تحميل العمولات: ${err.message}</td></tr>`;
+      }
+    }
+
+    async function openSetParentAgentModal() {
+      await populateUserDropdowns(['parent-agent-child-select'], '-- اختر نقطة البيع التابعة --');
+      await populateUserDropdowns(['parent-agent-parent-select'], '-- فك الارتباط (جعله مستقلاً) --');
+      openModal('modal-set-parent-agent');
+    }
+
+    async function handleSaveParentAgent(e) {
+      e.preventDefault();
+      const childId = document.getElementById('parent-agent-child-select').value;
+      const parentVal = document.getElementById('parent-agent-parent-select').value;
+      const parentId = parentVal ? parseInt(parentVal, 10) : 0;
+
+      try {
+        const res = await apiFetch(`/api/admin/hierarchy/users/${childId}/parent`, {
+          method: 'POST',
+          body: JSON.stringify({ parent_agent_id: parentId })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'فشل تحديث الارتباط الهرمي');
+
+        closeModal('modal-set-parent-agent');
+        showToast('تم تحديث شجرة الوكلاء والارتباط بنجاح');
+        loadHierarchyData();
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    }
+
+    async function openSetAgentCommissionModal() {
+      await populateUserDropdowns(['agent-comm-user-select'], '-- اختر الوكيل المستفيد --');
+      document.getElementById('agent-comm-product-id').value = '*';
+      document.getElementById('agent-comm-value').value = '';
+      openModal('modal-set-agent-commission');
+    }
+
+    async function handleSaveAgentCommission(e) {
+      e.preventDefault();
+      const agentId = document.getElementById('agent-comm-user-select').value;
+      const productId = document.getElementById('agent-comm-product-id').value.trim() || '*';
+      const commType = document.getElementById('agent-comm-type').value;
+      const commVal = parseFloat(document.getElementById('agent-comm-value').value);
+
+      try {
+        const res = await apiFetch(`/api/admin/hierarchy/agents/${agentId}/commissions`, {
+          method: 'POST',
+          body: JSON.stringify({ product_id: productId, commission_type: commType, commission_value: commVal })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'فشل حفظ عمولة الوكيل');
+
+        closeModal('modal-set-agent-commission');
+        showToast('تم حفظ عمولة الوكيل وتسجيلها للشجرة');
+        loadHierarchyData();
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    }
+
+    // 3. VAULT RADAR & INVENTORY FORECASTING
+    async function loadRadarData() {
+      const grid = document.getElementById('radar-categories-grid');
+      try {
+        const res = await apiFetch('/api/admin/radar/summary');
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'فشل قراءة بيانات الرادار');
+
+        updateRadarAlertUI(data);
+
+        const cats = data.categories || [];
+        if (cats.length === 0) {
+          grid.innerHTML = '<div class="col-span-full py-12 text-center text-slate-400 font-bold">لا توجد بطاقات أو فئات مسجلة في الخزنة</div>';
+          return;
+        }
+
+        grid.innerHTML = cats.map(c => {
+          const isLow = c.is_low_stock;
+          const statusBadge = c.available_count === 0 
+            ? '<span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-rose-600 text-white animate-pulse">نفد بالكامل (0)</span>'
+            : isLow
+              ? '<span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-rose-50 text-rose-600 border border-rose-200">مخزون حرج</span>'
+              : '<span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-50 text-emerald-600 border border-emerald-200">المخزون آمن</span>';
+
+          return `
+            <div class="bg-white rounded-3xl p-6 border ${isLow ? 'border-rose-300 shadow-rose-100' : 'border-slate-200'} shadow-sm space-y-4 flex flex-col justify-between">
+              <div class="space-y-3">
+                <div class="flex items-center justify-between">
+                  <div class="flex items-center gap-2">
+                    <div class="w-8 h-8 rounded-xl ${isLow ? 'bg-rose-50 text-rose-600' : 'bg-blue-50 text-brand'} flex items-center justify-center text-sm font-black">
+                      <i class="fa-solid fa-tower-broadcast"></i>
+                    </div>
+                    <div>
+                      <h4 class="font-black text-sm text-slate-800">${escapeHtml(c.category_name_ar)}</h4>
+                      <span class="text-[10px] font-mono text-slate-400 font-bold">${escapeHtml(c.category_id)}</span>
+                    </div>
+                  </div>
+                  ${statusBadge}
+                </div>
+
+                <!-- Stock Counter -->
+                <div class="p-3 bg-slate-50 rounded-2xl flex items-center justify-between">
+                  <div>
+                    <span class="text-[10px] text-slate-400 block font-bold">المتاح في الخزنة</span>
+                    <span class="text-2xl font-black ${isLow ? 'text-rose-600' : 'text-slate-800'}">${c.available_count.toLocaleString()} كارت</span>
+                  </div>
+                  <div class="text-left">
+                    <span class="text-[10px] text-slate-400 block font-bold">الحد الأدنى</span>
+                    <span class="text-xs font-bold text-slate-600">${c.min_threshold} كارت</span>
+                  </div>
+                </div>
+
+                <!-- Burn Rate & Forecast -->
+                <div class="grid grid-cols-3 gap-2 text-center text-xs">
+                  <div class="p-2 bg-slate-50/60 rounded-xl">
+                    <span class="text-[9px] text-slate-400 block font-bold">آخر 1 ساعة</span>
+                    <span class="font-black text-slate-700">${c.sales_last_1h}</span>
+                  </div>
+                  <div class="p-2 bg-slate-50/60 rounded-xl">
+                    <span class="text-[9px] text-slate-400 block font-bold">آخر 6 ساعات</span>
+                    <span class="font-black text-slate-700">${c.sales_last_6h}</span>
+                  </div>
+                  <div class="p-2 bg-slate-50/60 rounded-xl">
+                    <span class="text-[9px] text-slate-400 block font-bold">آخر 24 ساعة</span>
+                    <span class="font-black text-slate-700">${c.sales_last_24h}</span>
+                  </div>
+                </div>
+
+                <!-- Exhaustion Prediction -->
+                <div class="p-3 ${isLow ? 'bg-rose-50 border border-rose-200' : 'bg-slate-50'} rounded-2xl">
+                  <div class="flex items-center justify-between text-xs font-bold mb-1">
+                    <span class="${isLow ? 'text-rose-700' : 'text-slate-600'}">التنبؤ بنفاد الفئة:</span>
+                    <span class="text-[10px] font-mono text-slate-400">معدل الحرق: ${c.burn_rate_per_hour}/ساعة</span>
+                  </div>
+                  <div class="text-xs font-black ${isLow ? 'text-rose-700' : 'text-brand'}">
+                    <i class="fa-regular fa-clock ml-1"></i>${escapeHtml(c.exhaustion_text)}
+                  </div>
+                </div>
+              </div>
+
+              <!-- Button to Adjust Threshold -->
+              <button onclick="openSetCategoryThresholdModal('${escapeHtml(c.category_id)}', ${c.min_threshold})" class="w-full py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5">
+                <i class="fa-solid fa-sliders"></i><span>تعديل حد الإنذار (${c.min_threshold})</span>
+              </button>
+            </div>
+          `;
+        }).join('');
+      } catch (err) {
+        grid.innerHTML = `<div class="col-span-full py-12 text-center text-rose-500 font-bold">خطأ في قراءة رادار الخزنة: ${err.message}</div>`;
+      }
+    }
+
+    function updateRadarAlertUI(data) {
+      const alertBar = document.getElementById('radar-alert-bar');
+      const alertText = document.getElementById('radar-alert-bar-text');
+      const badgeNav = document.getElementById('badge-radar-low');
+
+      if (data && data.has_low_stock) {
+        if (alertBar) alertBar.classList.remove('hidden');
+        const lowCats = (data.categories || []).filter(c => c.is_low_stock).map(c => `${c.category_name_ar} (${c.available_count} كارت متبقي)`).join('، ');
+        if (alertText) alertText.innerText = `الفئات التالية وصلت لمستوى حرج دون الحد الأدنى: ${lowCats}`;
+        if (badgeNav) badgeNav.classList.remove('hidden');
+      } else {
+        if (alertBar) alertBar.classList.add('hidden');
+        if (badgeNav) badgeNav.classList.add('hidden');
+      }
+    }
+
+    async function checkRadarAlerts() {
+      if (!authToken) return;
+      try {
+        const res = await apiFetch('/api/admin/radar/summary');
+        const data = await res.json();
+        if (res.ok) updateRadarAlertUI(data);
+      } catch (e) {
+        // silent background check
+      }
+    }
+
+    function openSetCategoryThresholdModal(catId, currentMin) {
+      document.getElementById('threshold-cat-id').value = catId || '';
+      document.getElementById('threshold-min-count').value = currentMin || 5;
+      openModal('modal-set-category-threshold');
+    }
+
+    async function handleSaveCategoryThreshold(e) {
+      e.preventDefault();
+      const catId = document.getElementById('threshold-cat-id').value.trim();
+      const minCount = parseInt(document.getElementById('threshold-min-count').value, 10);
+
+      try {
+        const res = await apiFetch('/api/admin/radar/thresholds', {
+          method: 'POST',
+          body: JSON.stringify({ category_id: catId, min_threshold: minCount })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'فشل حفظ حد الإنذار');
+
+        closeModal('modal-set-category-threshold');
+        showToast('تم تحديث الحد الأدنى للإنذار بنجاح');
+        loadRadarData();
+        checkRadarAlerts();
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    }
+
     // Connect WebSocket on Admin Login
     function initConsoleWebSocket() {
       if (!authToken) return;
@@ -3632,6 +4419,11 @@
               showToast('تحذير جنائي: تم رصد عدم تطابق في سلاسل دفتر الأستاذ!', 'error');
               if (currentTab === 'ledger') loadIntegritySummary();
             }
+            if (data.event === 'inventory_low') {
+              showToast('إنذار رادار الخزنة: انخفاض مخزون البطاقات دون الحد الأدنى!', 'error');
+              checkRadarAlerts();
+              if (currentTab === 'radar') loadRadarData();
+            }
             if (data.event === 'wallet_updated') {
               if (currentTab === 'wallet') loadUsers();
               if (currentTab === 'debts') loadAgentDebts();
@@ -3649,11 +4441,13 @@
       }
     }
 
-    // Call initConsoleWebSocket on login
+    // Call initConsoleWebSocket & checkRadarAlerts on login
     const origShowApp = showApp;
     showApp = function() {
       origShowApp();
       initConsoleWebSocket();
+      checkRadarAlerts();
+      setInterval(checkRadarAlerts, 30000);
     };
 
   </script>

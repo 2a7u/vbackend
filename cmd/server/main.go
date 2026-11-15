@@ -20,10 +20,14 @@ import (
 	"venus_backend/internal/db"
 	"venus_backend/internal/fraud"
 	"venus_backend/internal/handlers"
+	"venus_backend/internal/hierarchy"
 	"venus_backend/internal/ledger"
 	"venus_backend/internal/middleware"
+	"venus_backend/internal/pricing"
+	"venus_backend/internal/radar"
 	"venus_backend/internal/reconcile"
 	"venus_backend/internal/scheduler"
+	"venus_backend/internal/vault"
 )
 
 func getenv(key, fallback string) string {
@@ -74,7 +78,14 @@ func main() {
 	ledgerSvc := ledger.NewService(pool, hub)
 	fraudEngine := fraud.NewEngine(pool, hub)
 	reconcileSvc := reconcile.NewService(pool)
-	fintechH := handlers.NewFintechHandler(pool, hub, ledgerSvc, fraudEngine, reconcileSvc)
+
+	// Vault, Pricing, Hierarchy & Radar Services (Phase 2)
+	vaultMgr := vault.Default()
+	pricingSvc := pricing.NewService(pool)
+	hierarchySvc := hierarchy.NewService(pool, ledgerSvc)
+	radarSvc := radar.NewService(pool)
+
+	fintechH := handlers.NewFintechHandler(pool, hub, ledgerSvc, fraudEngine, reconcileSvc, vaultMgr, pricingSvc, hierarchySvc, radarSvc)
 
 	// Idempotent Opening-Ledger migration from existing balances
 	if err := ledgerSvc.SeedOpeningBalancesFromLegacy(ctx); err != nil {
@@ -103,7 +114,15 @@ func main() {
 	expensesH := &handlers.ExpensesHandler{Pool: pool, Hub: hub}
 	announcementsH := &handlers.AnnouncementsHandler{Pool: pool, Hub: hub}
 	zainH := &handlers.ZainCashHandler{Pool: pool, Hub: hub, JWTSecret: jwtSecret, LedgerSvc: ledgerSvc, FraudEngine: fraudEngine}
-	vouchersH := &handlers.VouchersHandler{Pool: pool, Hub: hub, LedgerSvc: ledgerSvc, FraudEngine: fraudEngine}
+	vouchersH := &handlers.VouchersHandler{
+		Pool:         pool,
+		Hub:          hub,
+		LedgerSvc:    ledgerSvc,
+		FraudEngine:  fraudEngine,
+		VaultMgr:     vaultMgr,
+		PricingSvc:   pricingSvc,
+		HierarchySvc: hierarchySvc,
+	}
 	syncH := &handlers.SyncHandler{Pool: pool, Hub: hub}
 
 	app := fiber.New(fiber.Config{
@@ -197,6 +216,7 @@ func main() {
 	auth.Post("/vouchers/upload", vouchersH.UploadVouchers)
 	auth.Get("/vouchers", vouchersH.GetVouchers)
 	auth.Post("/vouchers/dispense", idempotencyMw, vouchersH.DispenseVoucher)
+	auth.Get("/pricing/my-price/:productId", fintechH.ResolveSubscriberPrice)
 
 	// Admin-only area.
 	admin := api.Group("/admin", middleware.JWT(jwtSecret), middleware.AdminOnly())
@@ -234,6 +254,23 @@ func main() {
 	fintech.Post("/close/seal", fintechH.SealFinancialClose)
 	fintech.Get("/close/history", fintechH.ListFinancialCloses)
 	fintech.Get("/statements/:id", fintechH.GetAccountStatement)
+
+	// Phase 2: Pricing Tiers & Custom Overrides
+	admin.Get("/pricing/tiers", fintechH.ListPriceTiers)
+	admin.Post("/pricing/tiers/:id/prices", fintechH.SetTierPrice)
+	admin.Get("/pricing/overrides", fintechH.ListSubscriberPriceOverrides)
+	admin.Post("/pricing/subscribers/:id/overrides", fintechH.SetSubscriberPriceOverride)
+	admin.Delete("/pricing/subscribers/:id/overrides/:productId", fintechH.RemoveSubscriberPriceOverride)
+	admin.Get("/pricing/resolve/:userId/:productId", fintechH.ResolveSubscriberPrice)
+
+	// Phase 2: Agent Hierarchy & Commissions
+	admin.Post("/hierarchy/users/:id/parent", fintechH.SetParentAgent)
+	admin.Post("/hierarchy/agents/:id/commissions", fintechH.SetAgentCommission)
+	admin.Get("/hierarchy/commissions", fintechH.ListAgentCommissions)
+
+	// Phase 2: Inventory Radar & Thresholds
+	admin.Get("/radar/summary", fintechH.GetInventoryRadar)
+	admin.Post("/radar/thresholds", fintechH.SetCategoryThreshold)
 
 	// Admin Activation Codes management
 	admin.Post("/activation-codes/generate", adminH.GenerateActivationCodes)

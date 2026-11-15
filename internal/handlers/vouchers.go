@@ -10,16 +10,22 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"venus_backend/internal/fraud"
+	"venus_backend/internal/hierarchy"
 	"venus_backend/internal/ledger"
 	"venus_backend/internal/middleware"
+	"venus_backend/internal/pricing"
+	"venus_backend/internal/vault"
 )
 
 // VouchersHandler owns the encrypted digital voucher vault endpoints.
 type VouchersHandler struct {
-	Pool        *pgxpool.Pool
-	Hub         *WSHub
-	LedgerSvc   *ledger.Service
-	FraudEngine *fraud.Engine
+	Pool         *pgxpool.Pool
+	Hub          *WSHub
+	LedgerSvc    *ledger.Service
+	FraudEngine  *fraud.Engine
+	VaultMgr     *vault.VaultManager
+	PricingSvc   *pricing.Service
+	HierarchySvc *hierarchy.Service
 }
 
 type rawPinItem struct {
@@ -35,7 +41,7 @@ type uploadVouchersRequest struct {
 	SellingPrice float64      `json:"selling_price"`
 }
 
-// UploadVouchers handles bulk uploading of voucher codes to the vault.
+// UploadVouchers handles bulk uploading of voucher codes to the encrypted vault with duplicate prevention.
 // POST /api/vouchers/upload
 func (h *VouchersHandler) UploadVouchers(c *fiber.Ctx) error {
 	uid := middleware.UserID(c)
@@ -56,6 +62,11 @@ func (h *VouchersHandler) UploadVouchers(c *fiber.Ctx) error {
 		})
 	}
 
+	vm := h.VaultMgr
+	if vm == nil {
+		vm = vault.Default()
+	}
+
 	tx, err := h.Pool.Begin(c.Context())
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
@@ -65,29 +76,61 @@ func (h *VouchersHandler) UploadVouchers(c *fiber.Ctx) error {
 	}
 	defer tx.Rollback(c.Context())
 
-	inserted := 0
-	for _, p := range req.RawPins {
+	succeeded := 0
+	invalid := 0
+	var duplicates []string
+
+	for idx, p := range req.RawPins {
 		pin := strings.TrimSpace(p.PIN)
 		serial := strings.TrimSpace(p.Serial)
 		if pin == "" {
+			invalid++
 			continue
 		}
 		if serial == "" {
-			serial = fmt.Sprintf("SN%s%04d", time.Now().Format("20060102150405"), inserted+1)
+			serial = fmt.Sprintf("SN%s%04d", time.Now().Format("20060102150405"), idx+1)
+		}
+
+		// 1. Permanent global duplicate check via HMAC-SHA256
+		hmacHash := vm.ComputeHMAC(pin)
+		var exists bool
+		_ = tx.QueryRow(c.Context(),
+			`SELECT EXISTS(SELECT 1 FROM vouchers_vault WHERE pin_hmac = $1)`,
+			hmacHash,
+		).Scan(&exists)
+
+		if exists {
+			duplicates = append(duplicates, serial)
+			continue
+		}
+
+		// 2. Encrypt PIN using AES-256-GCM
+		encHex, nonceHex, keyVer, encErr := vm.EncryptPIN(pin)
+		if encErr != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"success": false,
+				"error":   "فشل تشفير البطاقة رقمياً: " + encErr.Error(),
+			})
+		}
+
+		// Masked PIN for safe display (never store plaintext)
+		maskedPIN := pin
+		if len(pin) > 4 {
+			maskedPIN = strings.Repeat("*", len(pin)-4) + pin[len(pin)-4:]
 		}
 
 		_, err := tx.Exec(c.Context(),
-			`INSERT INTO vouchers_vault (user_id, brand_id, voucher_id, pin, serial_number, cost_price, selling_price, is_sold)
-			 VALUES ($1, $2, $3, $4, $5, $6, $7, FALSE)`,
-			uid, req.BrandID, req.VoucherID, pin, serial, req.CostPrice, req.SellingPrice,
+			`INSERT INTO vouchers_vault (user_id, brand_id, voucher_id, pin, pin_encrypted, nonce, key_version, pin_hmac, serial_number, cost_price, selling_price, is_sold)
+			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, FALSE)`,
+			uid, req.BrandID, req.VoucherID, maskedPIN, encHex, nonceHex, keyVer, hmacHash, serial, req.CostPrice, req.SellingPrice,
 		)
 		if err != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 				"success": false,
-				"error":   "فشل حفظ الأكواد: " + err.Error(),
+				"error":   "فشل حفظ الأكواد في الخزنة: " + err.Error(),
 			})
 		}
-		inserted++
+		succeeded++
 	}
 
 	if err := tx.Commit(c.Context()); err != nil {
@@ -98,14 +141,31 @@ func (h *VouchersHandler) UploadVouchers(c *fiber.Ctx) error {
 	}
 
 	writeAudit(c.Context(), h.Pool, uid, cl.Email, "VOUCHERS_UPLOAD", "vouchers_vault", req.VoucherID, map[string]any{
-		"brand_id":   req.BrandID,
-		"voucher_id": req.VoucherID,
-		"count":      inserted,
+		"brand_id":         req.BrandID,
+		"voucher_id":       req.VoucherID,
+		"succeeded_count":  succeeded,
+		"duplicates_count": len(duplicates),
+		"invalid_count":    invalid,
 	}, c.IP())
 
+	if succeeded == 0 && len(duplicates) > 0 {
+		return c.Status(fiber.StatusConflict).JSON(fiber.Map{
+			"success":           false,
+			"error":             fmt.Sprintf("تم رفض الرفع: تم رصد %d بطاقة مكررة مسجلة مسبقاً في الخزنة", len(duplicates)),
+			"succeeded":         0,
+			"duplicates":        len(duplicates),
+			"duplicate_serials": duplicates,
+			"invalid":           invalid,
+		})
+	}
+
 	return c.JSON(fiber.Map{
-		"success": true,
-		"count":   inserted,
+		"success":           true,
+		"succeeded":         succeeded,
+		"duplicates":        len(duplicates),
+		"duplicate_serials": duplicates,
+		"invalid":           invalid,
+		"count":             succeeded,
 	})
 }
 
@@ -221,7 +281,7 @@ type dispenseVoucherRequest struct {
 	CustomerPhone string  `json:"customer_phone"`
 }
 
-// DispenseVoucher atomically claims and sells voucher PINs.
+// DispenseVoucher atomically claims and sells voucher PINs with dynamic pricing and commission processing.
 // POST /api/vouchers/dispense
 func (h *VouchersHandler) DispenseVoucher(c *fiber.Ctx) error {
 	uid := middleware.UserID(c)
@@ -239,6 +299,11 @@ func (h *VouchersHandler) DispenseVoucher(c *fiber.Ctx) error {
 		req.Quantity = 1
 	}
 
+	vm := h.VaultMgr
+	if vm == nil {
+		vm = vault.Default()
+	}
+
 	tx, err := h.Pool.Begin(c.Context())
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
@@ -248,9 +313,18 @@ func (h *VouchersHandler) DispenseVoucher(c *fiber.Ctx) error {
 	}
 	defer tx.Rollback(c.Context())
 
-	// Select available PINs with SKIP LOCKED
+	// 1. Resolve unit selling price for this specific subscriber (Resolution order: Override -> Tier -> Catalog Default)
+	unitSellingPrice := int64(req.SellingPrice)
+	if h.PricingSvc != nil && uid > 0 {
+		resolved, pErr := h.PricingSvc.ResolvePrice(c.Context(), uid, req.VoucherID, unitSellingPrice)
+		if pErr == nil && resolved.Price > 0 {
+			unitSellingPrice = resolved.Price
+		}
+	}
+
+	// 2. Select available PINs with SKIP LOCKED
 	rows, err := tx.Query(c.Context(),
-		`SELECT id, pin, serial_number, cost_price, selling_price
+		`SELECT id, pin, pin_encrypted, nonce, key_version, serial_number, cost_price, selling_price
 		 FROM vouchers_vault
 		 WHERE voucher_id = $1 AND is_sold = FALSE
 		 ORDER BY id ASC
@@ -261,21 +335,24 @@ func (h *VouchersHandler) DispenseVoucher(c *fiber.Ctx) error {
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"success": false,
-			"error":   "خطأ في قراءة الأكواد: " + err.Error(),
+			"error":   "خطأ في قراءة الأكواد من الخزنة: " + err.Error(),
 		})
 	}
 
 	type claimedPin struct {
-		ID     int64
-		PIN    string
-		Serial string
-		Cost   float64
-		Sell   float64
+		ID           int64
+		LegacyPIN    string
+		EncryptedPIN string
+		Nonce        string
+		KeyVer       int
+		Serial       string
+		Cost         float64
+		Sell         float64
 	}
 	var claimed []claimedPin
 	for rows.Next() {
 		var cp claimedPin
-		if err := rows.Scan(&cp.ID, &cp.PIN, &cp.Serial, &cp.Cost, &cp.Sell); err == nil {
+		if err := rows.Scan(&cp.ID, &cp.LegacyPIN, &cp.EncryptedPIN, &cp.Nonce, &cp.KeyVer, &cp.Serial, &cp.Cost, &cp.Sell); err == nil {
 			claimed = append(claimed, cp)
 		}
 	}
@@ -292,15 +369,37 @@ func (h *VouchersHandler) DispenseVoucher(c *fiber.Ctx) error {
 
 	var ids []int64
 	var resultPins []fiber.Map
+	var auditSerials []string
+	var totalNetProfit int64
+
 	for _, cp := range claimed {
 		ids = append(ids, cp.ID)
+		auditSerials = append(auditSerials, cp.Serial)
+
+		// Decrypt PIN at actual sale time only
+		var revealedPIN string
+		if cp.EncryptedPIN != "" && cp.Nonce != "" {
+			decrypted, dErr := vm.DecryptPIN(cp.EncryptedPIN, cp.Nonce, cp.KeyVer)
+			if dErr == nil {
+				revealedPIN = decrypted
+			} else {
+				revealedPIN = cp.LegacyPIN
+			}
+		} else {
+			revealedPIN = cp.LegacyPIN
+		}
+
+		unitCost := int64(cp.Cost)
+		itemProfit := pricing.ComputeProfit(unitCost, unitSellingPrice)
+		totalNetProfit += itemProfit
+
 		resultPins = append(resultPins, fiber.Map{
 			"id":            cp.ID,
-			"pin":           cp.PIN,
+			"pin":           revealedPIN,
 			"serial":        cp.Serial,
 			"serial_number": cp.Serial,
 			"cost_price":    cp.Cost,
-			"selling_price": cp.Sell,
+			"selling_price": unitSellingPrice,
 		})
 	}
 
@@ -309,7 +408,7 @@ func (h *VouchersHandler) DispenseVoucher(c *fiber.Ctx) error {
 		storeName = cl.Email
 	}
 
-	totalPrice := int64(req.SellingPrice) * int64(len(claimed))
+	totalPrice := unitSellingPrice * int64(len(claimed))
 	if totalPrice > 0 {
 		// Risk & Fraud Check
 		if h.FraudEngine != nil {
@@ -347,14 +446,21 @@ func (h *VouchersHandler) DispenseVoucher(c *fiber.Ctx) error {
 		)
 	}
 
-	// Update rows to sold
+	// 3. Process agent hierarchy commission in the SAME transaction
+	if h.HierarchySvc != nil && uid > 0 && totalPrice > 0 {
+		_, _ = h.HierarchySvc.ProcessSaleCommission(c.Context(), tx, uid, req.VoucherID, totalPrice, fmt.Sprintf("%d", ids[0]))
+	}
+
+	// 4. Update rows to sold, saving actual sell_price and computed net_profit
 	batch := &pgx.Batch{}
-	for _, id := range ids {
+	for _, cp := range claimed {
+		unitCost := int64(cp.Cost)
+		itemProfit := pricing.ComputeProfit(unitCost, unitSellingPrice)
 		batch.Queue(
 			`UPDATE vouchers_vault
-			 SET is_sold = TRUE, sold_to_user_id = $1, sold_to_store_name = $2, sold_at = now(), sold_price = $3
-			 WHERE id = $4`,
-			uid, storeName, req.SellingPrice, id,
+			 SET is_sold = TRUE, sold_to_user_id = $1, sold_to_store_name = $2, sold_at = now(), sold_price = $3, net_profit = $4
+			 WHERE id = $5`,
+			uid, storeName, unitSellingPrice, itemProfit, cp.ID,
 		)
 	}
 	br := tx.SendBatch(c.Context(), batch)
@@ -363,7 +469,7 @@ func (h *VouchersHandler) DispenseVoucher(c *fiber.Ctx) error {
 			br.Close()
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 				"success": false,
-				"error":   "فشل تحديث حالة الكود: " + err.Error(),
+				"error":   "فشل تحديث حالة الكود في الخزنة: " + err.Error(),
 			})
 		}
 	}
@@ -376,11 +482,14 @@ func (h *VouchersHandler) DispenseVoucher(c *fiber.Ctx) error {
 		})
 	}
 
-	writeAudit(c.Context(), h.Pool, uid, cl.Email, "VOUCHER_DISPENSE", "vouchers_vault", req.VoucherID, map[string]any{
-		"brand_id":    req.BrandID,
-		"voucher_id":  req.VoucherID,
-		"quantity":    req.Quantity,
-		"pins_count":  len(resultPins),
+	// Audit PIN reveal WITHOUT logging plaintext PIN
+	writeAudit(c.Context(), h.Pool, uid, cl.Email, "VOUCHER_PIN_REVEAL", "vouchers_vault", req.VoucherID, map[string]any{
+		"brand_id":     req.BrandID,
+		"voucher_id":   req.VoucherID,
+		"quantity":     len(resultPins),
+		"serials":      auditSerials,
+		"total_price":  totalPrice,
+		"net_profit":   totalNetProfit,
 		"voucher_name": req.VoucherName,
 	}, c.IP())
 
