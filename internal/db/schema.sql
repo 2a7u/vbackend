@@ -350,8 +350,14 @@ CREATE TABLE IF NOT EXISTS zaincash_transactions (
     created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
     completed_at   TIMESTAMPTZ
 );
-ALTER TABLE zaincash_transactions ADD COLUMN IF NOT EXISTS purpose TEXT NOT NULL DEFAULT 'WALLET_TOPUP';
+ALTER TABLE zaincash_transactions ADD COLUMN IF NOT EXISTS amount_iqd BIGINT NOT NULL DEFAULT 0;
+ALTER TABLE zaincash_transactions ADD COLUMN IF NOT EXISTS purpose TEXT NOT NULL DEFAULT 'wallet_topup';
+ALTER TABLE zaincash_transactions ADD COLUMN IF NOT EXISTS order_type TEXT NOT NULL DEFAULT '';
 ALTER TABLE zaincash_transactions ADD COLUMN IF NOT EXISTS plan_key TEXT NOT NULL DEFAULT '';
+ALTER TABLE zaincash_transactions ADD COLUMN IF NOT EXISTS plan_name TEXT NOT NULL DEFAULT '';
+ALTER TABLE zaincash_transactions ADD COLUMN IF NOT EXISTS duration_days INT NOT NULL DEFAULT 0;
+ALTER TABLE zaincash_transactions ADD COLUMN IF NOT EXISTS msisdn TEXT NOT NULL DEFAULT '';
+ALTER TABLE zaincash_transactions ADD COLUMN IF NOT EXISTS completed_at TIMESTAMPTZ;
 CREATE INDEX IF NOT EXISTS idx_zaincash_tx ON zaincash_transactions (transaction_id, order_id);
 
 -- -----------------------------------------------------------------------------
@@ -407,8 +413,12 @@ ALTER TABLE wallet_ledger DROP CONSTRAINT IF EXISTS wallet_ledger_kind_check;
 ALTER TABLE wallet_ledger ADD CONSTRAINT wallet_ledger_kind_check CHECK (kind IN ('topup', 'payment', 'refund', 'subscription', 'admin_credit', 'admin_debit'));
 CREATE INDEX IF NOT EXISTS idx_wallet_ledger_provider_ref ON wallet_ledger (provider_ref);
 
-ALTER TABLE zaincash_transactions ADD COLUMN IF NOT EXISTS purpose TEXT NOT NULL DEFAULT 'WALLET_TOPUP';
+ALTER TABLE zaincash_transactions ADD COLUMN IF NOT EXISTS amount_iqd BIGINT NOT NULL DEFAULT 0;
+ALTER TABLE zaincash_transactions ADD COLUMN IF NOT EXISTS purpose TEXT NOT NULL DEFAULT 'wallet_topup';
+ALTER TABLE zaincash_transactions ADD COLUMN IF NOT EXISTS order_type TEXT NOT NULL DEFAULT '';
 ALTER TABLE zaincash_transactions ADD COLUMN IF NOT EXISTS plan_key TEXT NOT NULL DEFAULT '';
+ALTER TABLE zaincash_transactions ADD COLUMN IF NOT EXISTS plan_name TEXT NOT NULL DEFAULT '';
+ALTER TABLE zaincash_transactions ADD COLUMN IF NOT EXISTS duration_days INT NOT NULL DEFAULT 0;
 ALTER TABLE zaincash_transactions ADD COLUMN IF NOT EXISTS msisdn TEXT NOT NULL DEFAULT '';
 ALTER TABLE zaincash_transactions ADD COLUMN IF NOT EXISTS completed_at TIMESTAMPTZ;
 CREATE INDEX IF NOT EXISTS idx_zaincash_tx ON zaincash_transactions (transaction_id, order_id);

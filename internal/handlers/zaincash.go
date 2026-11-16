@@ -108,8 +108,11 @@ type zainInitRequest struct {
 	UserID        int64   `json:"user_id"`
 	Email         string  `json:"email"`
 	Amount        float64 `json:"amount"`
-	Purpose       string  `json:"purpose"`     // "WALLET_TOPUP" or "SUBSCRIPTION"
-	Plan          string  `json:"plan"`        // e.g. "monthly_15k", "biannual_55k", "annual_125k"
+	Purpose       string  `json:"purpose"` // "wallet_topup" or "subscription"
+	Plan          string  `json:"plan"`    // e.g. "monthly_15k", "biannual_55k", "annual_125k"
+	PlanKey       string  `json:"plan_key"`
+	PlanName      string  `json:"plan_name"`
+	DurationDays  int     `json:"duration_days"`
 	Description   string  `json:"description"` // shown to the payer
 	ClientRequest string  `json:"client_request_id"`
 }
@@ -179,13 +182,42 @@ func (h *ZainCashHandler) InitZainCash(c *fiber.Ctx) error {
 
 	cfg := zainCfg()
 
-	purpose := strings.ToUpper(strings.TrimSpace(req.Purpose))
-	if purpose == "" {
-		if req.Plan != "" {
-			purpose = "SUBSCRIPTION"
-		} else {
-			purpose = "WALLET_TOPUP"
+	rawPurpose := strings.ToLower(strings.TrimSpace(req.Purpose))
+	var purpose string
+	if rawPurpose == "subscription" || rawPurpose == "sub" {
+		purpose = "subscription"
+	} else if rawPurpose == "wallet_topup" || rawPurpose == "topup" {
+		purpose = "wallet_topup"
+	} else if req.Plan != "" || req.PlanKey != "" {
+		purpose = "subscription"
+	} else {
+		purpose = "wallet_topup"
+	}
+
+	planKey := req.PlanKey
+	if planKey == "" {
+		planKey = req.Plan
+	}
+	planName := req.PlanName
+	subDays := req.DurationDays
+
+	if purpose == "subscription" {
+		if subDays <= 0 || planName == "" {
+			if strings.Contains(planKey, "annual") || strings.Contains(planName, "أعمال") || req.Amount >= 120000 {
+				planName = "أعمال"
+				subDays = 365
+			} else if strings.Contains(planKey, "biannual") || strings.Contains(planKey, "semi") || strings.Contains(planName, "بلص") || req.Amount >= 50000 {
+				planName = "بلص"
+				subDays = 180
+			} else {
+				planName = "سوبر اقتصادي"
+				subDays = 30
+			}
 		}
+	} else {
+		planKey = ""
+		planName = ""
+		subDays = 0
 	}
 
 	// 1. externalReferenceId MUST be a valid lowercase UUID v4 per ZainCash v2 UAT
@@ -193,29 +225,31 @@ func (h *ZainCashHandler) InitZainCash(c *fiber.Ctx) error {
 	// 2. orderId clean string with unambiguous user ID: venus_<uid>_<timestamp>
 	orderID := fmt.Sprintf("venus_%d_%d", uid, time.Now().UnixMilli())
 
-	// Record a pending ledger row (idempotent on provider_ref).
 	var ledgerID int64
-	err := h.Pool.QueryRow(c.Context(),
-		`INSERT INTO wallet_ledger (user_id, amount, kind, provider, provider_ref, status, note)
-		 VALUES ($1, $2, 'topup', 'zaincash', $3, 'pending', $4)
-		 ON CONFLICT (provider_ref) DO NOTHING RETURNING id`,
-		uid, req.Amount, externalRefUUID, req.Description,
-	).Scan(&ledgerID)
-	if err != nil && err.Error() != "no rows in result set" {
-		// ignore ErrNoRows
-	}
-	if ledgerID == 0 {
-		_ = h.Pool.QueryRow(c.Context(),
-			`SELECT id FROM wallet_ledger WHERE provider_ref = $1`, externalRefUUID,
+	// Record a pending ledger row ONLY if this is a wallet topup
+	if purpose == "wallet_topup" {
+		err := h.Pool.QueryRow(c.Context(),
+			`INSERT INTO wallet_ledger (user_id, amount, kind, provider, provider_ref, status, note)
+			 VALUES ($1, $2, 'topup', 'zaincash', $3, 'pending', $4)
+			 ON CONFLICT (provider_ref) DO NOTHING RETURNING id`,
+			uid, req.Amount, externalRefUUID, req.Description,
 		).Scan(&ledgerID)
+		if err != nil && err.Error() != "no rows in result set" {
+			// ignore ErrNoRows
+		}
+		if ledgerID == 0 {
+			_ = h.Pool.QueryRow(c.Context(),
+				`SELECT id FROM wallet_ledger WHERE provider_ref = $1`, externalRefUUID,
+			).Scan(&ledgerID)
+		}
 	}
 
 	// Record pending transaction in zaincash_transactions table
 	_, _ = h.Pool.Exec(c.Context(),
-		`INSERT INTO zaincash_transactions (user_id, amount, order_id, transaction_id, purpose, plan_key, status)
-		 VALUES ($1, $2, $3, $4, $5, $6, 'PENDING')
+		`INSERT INTO zaincash_transactions (user_id, amount, amount_iqd, order_id, transaction_id, purpose, order_type, plan_key, plan_name, duration_days, status)
+		 VALUES ($1, $2, $3, $4, $5, $6, $6, $7, $8, $9, 'PENDING')
 		 ON CONFLICT DO NOTHING`,
-		uid, req.Amount, orderID, externalRefUUID, purpose, req.Plan,
+		uid, req.Amount, int64(req.Amount), orderID, externalRefUUID, purpose, planKey, planName, subDays,
 	)
 
 	// 3. Request OAuth2 token from ZainCash v2 UAT.
@@ -485,8 +519,8 @@ func (h *ZainCashHandler) ConfirmCheckoutZainCash(c *fiber.Ctx) error {
 
 	log.Printf("[ZainCash UAT] Confirming checkout tx=%s, order=%s, amount=%.0f, msisdn=%s", txID, orderID, amount, msisdn)
 
-	// Mark transaction success in DB, credit wallet balance & activate subscription
-	if err := h.markPaymentSuccess(c.Context(), txID, orderID, amount, msisdn, 0); err != nil {
+	// Mark transaction success in DB, credit wallet balance or activate subscription
+	if err := h.markPaymentSuccess(c.Context(), txID, orderID, amount, msisdn, 0, "", "", "", 0); err != nil {
 		log.Printf("[ZainCash UAT] markPaymentSuccess warning: %v", err)
 	}
 
@@ -534,7 +568,7 @@ func (h *ZainCashHandler) RedirectZainCash(c *fiber.Ctx) error {
 	c.Set("Content-Type", "text/html; charset=utf-8")
 
 	if status == "SUCCESS" || status == "PAID" || status == "COMPLETED" {
-		_ = h.markPaymentSuccess(c.Context(), txID, orderID, amount, "", 0)
+		_ = h.markPaymentSuccess(c.Context(), txID, orderID, amount, "", 0, "", "", "", 0)
 
 		html := fmt.Sprintf(`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
@@ -679,7 +713,7 @@ func (h *ZainCashHandler) WebhookZainCash(c *fiber.Ctx) error {
 		return c.JSON(fiber.Map{"received": true, "status": status})
 	}
 
-	if err := h.markPaymentSuccess(c.Context(), txID, orderID, 0, "", 0); err != nil {
+	if err := h.markPaymentSuccess(c.Context(), txID, orderID, 0, "", 0, "", "", "", 0); err != nil {
 		log.Printf("[ZainCash Webhook] markPaymentSuccess error: %v", err)
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 	}
@@ -761,30 +795,42 @@ func verifyZainJWT(tokenStr, secret string) bool {
 
 // markPaymentSuccess credits the wallet or activates the subscription and
 // broadcasts payment_success. Idempotent on provider_ref / transaction_id.
-func (h *ZainCashHandler) markPaymentSuccess(ctx context.Context, txID, orderID string, customAmount float64, msisdn string, preferredUID int64) error {
+func (h *ZainCashHandler) markPaymentSuccess(
+	ctx context.Context,
+	txID, orderID string,
+	customAmount float64,
+	msisdn string,
+	preferredUID int64,
+	explicitPurpose string,
+	explicitPlanKey string,
+	explicitPlanName string,
+	explicitDurationDays int,
+) error {
 	if txID == "" && orderID == "" {
 		return fmt.Errorf("empty transaction identifier")
 	}
 
 	var (
-		txRowID  int64
-		uid      int64
-		amount   float64
-		purpose  string
-		planKey  string
-		txStatus string
+		txRowID    int64
+		uid        int64
+		amount     float64
+		dbPurpose  string
+		dbPlanKey  string
+		dbPlanName string
+		dbDuration int
+		txStatus   string
 	)
 
 	// 1. Check zaincash_transactions table first
 	err := h.Pool.QueryRow(ctx,
-		`SELECT id, user_id, amount, COALESCE(purpose, 'WALLET_TOPUP'), COALESCE(plan_key, ''), status
+		`SELECT id, user_id, amount, COALESCE(purpose, ''), COALESCE(plan_key, ''), COALESCE(plan_name, ''), COALESCE(duration_days, 0), status
 		 FROM zaincash_transactions
 		 WHERE (transaction_id = $1 AND transaction_id != '') 
 		    OR (order_id = $2 AND order_id != '') 
 		    OR (transaction_id = $2 AND transaction_id != '') 
 		    OR (order_id = $1 AND order_id != '')
 		 LIMIT 1`, txID, orderID,
-	).Scan(&txRowID, &uid, &amount, &purpose, &planKey, &txStatus)
+	).Scan(&txRowID, &uid, &amount, &dbPurpose, &dbPlanKey, &dbPlanName, &dbDuration, &txStatus)
 
 	if err == nil {
 		if strings.EqualFold(txStatus, "SUCCESS") {
@@ -807,7 +853,7 @@ func (h *ZainCashHandler) markPaymentSuccess(ctx context.Context, txID, orderID 
 			if strings.EqualFold(lStatus, "success") {
 				return nil // idempotent: already processed
 			}
-			purpose = "WALLET_TOPUP"
+			dbPurpose = "wallet_topup"
 		}
 	}
 
@@ -821,7 +867,6 @@ func (h *ZainCashHandler) markPaymentSuccess(ctx context.Context, txID, orderID 
 	}
 
 	if uid <= 0 {
-		// Extract from orderID or txID (e.g. venus_3_1731658492 or VENUS-3-1794641860812314711)
 		idCandidate := orderID
 		if idCandidate == "" {
 			idCandidate = txID
@@ -851,23 +896,59 @@ func (h *ZainCashHandler) markPaymentSuccess(ctx context.Context, txID, orderID 
 	if amount <= 0 {
 		amount = 15000
 	}
+	amountIQD := int64(amount)
 
-	// 5. Determine Purpose & Plan
-	if purpose == "SUBSCRIPTION" || amount == 15000 || amount == 55000 || amount == 125000 || planKey != "" {
-		purpose = "SUBSCRIPTION"
+	// 5. Strict Purpose & Plan Resolution (Zero leakage between wallet topup and subscription)
+	purposeCandidate := explicitPurpose
+	if purposeCandidate == "" {
+		purposeCandidate = dbPurpose
+	}
+	pLower := strings.ToLower(strings.TrimSpace(purposeCandidate))
+	var purpose string
+	if pLower == "subscription" || pLower == "sub" {
+		purpose = "subscription"
+	} else if pLower == "wallet_topup" || pLower == "topup" {
+		purpose = "wallet_topup"
+	} else if explicitPlanKey != "" || explicitPlanName != "" || dbPlanKey != "" || dbPlanName != "" {
+		purpose = "subscription"
+	} else {
+		purpose = "wallet_topup"
 	}
 
+	var planKey string
 	var planName string
-	var subDays int
-	if amount >= 120000 || planKey == "annual_125k" || planKey == "annual" || planKey == "أعمال" {
-		planName = "أعمال"
-		subDays = 365
-	} else if amount >= 50000 || planKey == "biannual_55k" || planKey == "semi_annual" || planKey == "بلص" {
-		planName = "بلص"
-		subDays = 180
+	var durationDays int
+
+	if purpose == "subscription" {
+		planKey = explicitPlanKey
+		if planKey == "" {
+			planKey = dbPlanKey
+		}
+		planName = explicitPlanName
+		if planName == "" {
+			planName = dbPlanName
+		}
+		durationDays = explicitDurationDays
+		if durationDays <= 0 {
+			durationDays = dbDuration
+		}
+
+		if durationDays <= 0 || planName == "" {
+			if strings.Contains(planKey, "annual") || strings.Contains(planName, "أعمال") || amount >= 120000 {
+				planName = "أعمال"
+				durationDays = 365
+			} else if strings.Contains(planKey, "biannual") || strings.Contains(planKey, "semi") || strings.Contains(planName, "بلص") || amount >= 50000 {
+				planName = "بلص"
+				durationDays = 180
+			} else {
+				planName = "سوبر اقتصادي"
+				durationDays = 30
+			}
+		}
 	} else {
-		planName = "سوبر اقتصادي"
-		subDays = 30
+		planKey = ""
+		planName = ""
+		durationDays = 0
 	}
 
 	// 6. Begin Postgres Transaction
@@ -877,30 +958,40 @@ func (h *ZainCashHandler) markPaymentSuccess(ctx context.Context, txID, orderID 
 	}
 	defer tx.Rollback(ctx)
 
-	if purpose == "WALLET_TOPUP" {
+	var (
+		updatedWalletBal float64
+		uPlanName        string
+		uEndsAt          *time.Time
+		uStatus          string
+	)
+
+	if purpose == "wallet_topup" {
+		// WALLET TOP-UP ONLY:
+		// Execute ONLY:
+		// UPDATE users SET wallet_balance = COALESCE(wallet_balance, 0) + $1 WHERE id = $2 RETURNING ...
+		// DO NOT touch plan_name or subscription_ends_at at all! Zero subscription days added!
+		err = tx.QueryRow(ctx,
+			`UPDATE users 
+			 SET wallet_balance = COALESCE(wallet_balance, 0) + $1, 
+			     updated_at = now() 
+			 WHERE id = $2
+			 RETURNING wallet_balance, plan_name, subscription_ends_at, status`,
+			amount, uid,
+		).Scan(&updatedWalletBal, &uPlanName, &uEndsAt, &uStatus)
+		if err != nil {
+			return fmt.Errorf("update user wallet_balance: %w", err)
+		}
+
 		if h.FraudEngine != nil {
 			_, _ = h.FraudEngine.Evaluate(ctx, tx, fraud.CheckRequest{
 				UserID:    uid,
-				AmountIQD: int64(amount),
+				AmountIQD: amountIQD,
 				TxType:    "topup",
 			})
 		}
 
 		if h.LedgerSvc != nil {
-			_, err = h.LedgerSvc.RecordTopup(ctx, tx, uid, int64(amount), "zaincash_topup", txID, orderID)
-			if err != nil {
-				return fmt.Errorf("record double-entry topup: %w", err)
-			}
-		} else {
-			_, err = tx.Exec(ctx,
-				`UPDATE users 
-				 SET wallet_balance = COALESCE(wallet_balance, 0) + $1, 
-				     status = 'active',
-				     updated_at = now() 
-				 WHERE id = $2`, amount, uid)
-			if err != nil {
-				return fmt.Errorf("update user wallet_balance: %w", err)
-			}
+			_, _ = h.LedgerSvc.RecordTopup(ctx, tx, uid, amountIQD, "zaincash_topup", txID, orderID)
 		}
 
 		var existingLedgerID int64
@@ -922,7 +1013,24 @@ func (h *ZainCashHandler) markPaymentSuccess(ctx context.Context, txID, orderID 
 			}
 		}
 	} else {
-		// SUBSCRIPTION: Record double-entry settlement -> revenue and extend subscription period
+		// SUBSCRIPTION ACTIVATION ONLY:
+		// Execute ONLY:
+		// UPDATE users SET plan_name = $1, status = 'active', subscription_ends_at = GREATEST(COALESCE(subscription_ends_at, NOW()), NOW()) + ($2 || ' days')::INTERVAL WHERE id = $3 RETURNING ...
+		// DO NOT add amount_iqd to wallet_balance! Wallet balance remains unchanged!
+		err = tx.QueryRow(ctx,
+			`UPDATE users 
+			 SET plan_name = $1, 
+			     status = 'active',
+			     subscription_ends_at = GREATEST(COALESCE(subscription_ends_at, now()), now()) + ($2 || ' days')::interval,
+			     updated_at = now() 
+			 WHERE id = $3
+			 RETURNING wallet_balance, plan_name, subscription_ends_at, status`,
+			planName, strconv.Itoa(durationDays), uid,
+		).Scan(&updatedWalletBal, &uPlanName, &uEndsAt, &uStatus)
+		if err != nil {
+			return fmt.Errorf("update user subscription: %w", err)
+		}
+
 		if h.LedgerSvc != nil && amount > 0 {
 			settlementID, sErr := h.LedgerSvc.GetSystemAccountID(ctx, ledger.SystemEmailSettlement)
 			revenueID, rErr := h.LedgerSvc.GetSystemAccountID(ctx, ledger.SystemEmailRevenue)
@@ -932,22 +1040,11 @@ func (h *ZainCashHandler) markPaymentSuccess(ctx context.Context, txID, orderID 
 					RefType: "subscription_payment",
 					RefID:   txID,
 					Legs: []ledger.Leg{
-						{AccountID: settlementID, Debit: int64(amount), Credit: 0},
-						{AccountID: revenueID, Debit: 0, Credit: int64(amount)},
+						{AccountID: settlementID, Debit: amountIQD, Credit: 0},
+						{AccountID: revenueID, Debit: 0, Credit: amountIQD},
 					},
 				})
 			}
-		}
-
-		_, err = tx.Exec(ctx,
-			`UPDATE users 
-			 SET plan_name = $1, 
-			     subscription_ends_at = GREATEST(COALESCE(subscription_ends_at, now()), now()) + ($2 || ' days')::interval,
-			     status = 'active',
-			     updated_at = now() 
-			 WHERE id = $3`, planName, itoa(int64(subDays)), uid)
-		if err != nil {
-			return fmt.Errorf("update user subscription: %w", err)
 		}
 
 		var existingLedgerID int64
@@ -990,16 +1087,16 @@ func (h *ZainCashHandler) markPaymentSuccess(ctx context.Context, txID, orderID 
 	if zainID > 0 {
 		_, err = tx.Exec(ctx,
 			`UPDATE zaincash_transactions 
-			 SET status = 'SUCCESS', msisdn = $1, completed_at = now(), amount = $2, purpose = $3, plan_key = $4 
-			 WHERE id = $5`, msisdn, amount, purpose, planKey, zainID)
+			 SET status = 'SUCCESS', msisdn = $1, completed_at = now(), amount = $2, amount_iqd = $3, purpose = $4, order_type = $4, plan_key = $5, plan_name = $6, duration_days = $7 
+			 WHERE id = $8`, msisdn, amount, amountIQD, purpose, planKey, planName, durationDays, zainID)
 		if err != nil {
 			return fmt.Errorf("update zaincash_transactions: %w", err)
 		}
 	} else {
 		_, err = tx.Exec(ctx,
-			`INSERT INTO zaincash_transactions (user_id, amount, order_id, transaction_id, msisdn, purpose, plan_key, status, completed_at)
-			 VALUES ($1, $2, $3, $4, $5, $6, $7, 'SUCCESS', now())`,
-			uid, amount, orderID, txID, msisdn, purpose, planKey)
+			`INSERT INTO zaincash_transactions (user_id, amount, amount_iqd, order_id, transaction_id, msisdn, purpose, order_type, plan_key, plan_name, duration_days, status, completed_at)
+			 VALUES ($1, $2, $3, $4, $5, $6, $7, $7, $8, $9, $10, 'SUCCESS', now())`,
+			uid, amount, amountIQD, orderID, txID, msisdn, purpose, planKey, planName, durationDays)
 		if err != nil {
 			return fmt.Errorf("insert zaincash_transactions: %w", err)
 		}
@@ -1009,22 +1106,37 @@ func (h *ZainCashHandler) markPaymentSuccess(ctx context.Context, txID, orderID 
 		return fmt.Errorf("commit tx: %w", err)
 	}
 
-	writeAudit(ctx, h.Pool, uid, "", "PAYMENT_SUCCESS", "zaincash_transactions", txID, map[string]any{
-		"provider": "zaincash", "transaction_id": txID, "order_id": orderID, "amount": amount,
-		"purpose": purpose, "plan_name": planName, "at": time.Now(),
-	}, "")
+	// 8. Audit Log & Realtime WebSocket broadcast strictly isolated per purpose & subscriber (uid)
+	if purpose == "wallet_topup" {
+		writeAudit(ctx, h.Pool, uid, "", "WALLET_TOPUP", "wallet_ledger", txID, map[string]any{
+			"provider": "zaincash", "transaction_id": txID, "order_id": orderID, "amount_iqd": amountIQD,
+			"wallet_balance": updatedWalletBal, "at": time.Now(),
+		}, "")
 
-	if h.Hub != nil {
-		h.Hub.Broadcast(uid, "wallet_updated", fiber.Map{
-			"amount": amount, "purpose": purpose, "transaction_id": txID,
-		})
-		h.Hub.Broadcast(uid, "subscription_updated", fiber.Map{
-			"plan_name": planName, "duration_days": subDays, "status": "active",
-		})
-		h.Hub.Broadcast(uid, "payment_success", fiber.Map{
-			"provider": "zaincash", "transaction_id": txID, "order_id": orderID, "amount": amount,
-			"purpose": purpose, "plan_name": planName,
-		})
+		if h.Hub != nil {
+			h.Hub.Broadcast(uid, "wallet_updated", fiber.Map{
+				"amount": amount, "wallet_balance": updatedWalletBal, "purpose": "wallet_topup", "transaction_id": txID,
+			})
+			h.Hub.Broadcast(uid, "payment_success", fiber.Map{
+				"provider": "zaincash", "transaction_id": txID, "order_id": orderID, "amount": amount,
+				"purpose": "wallet_topup", "wallet_balance": updatedWalletBal,
+			})
+		}
+	} else {
+		writeAudit(ctx, h.Pool, uid, "", "SUBSCRIPTION_ACTIVATED", "users", strconv.FormatInt(uid, 10), map[string]any{
+			"provider": "zaincash", "transaction_id": txID, "order_id": orderID, "amount_iqd": amountIQD,
+			"plan_name": planName, "duration_days": durationDays, "subscription_ends_at": uEndsAt, "at": time.Now(),
+		}, "")
+
+		if h.Hub != nil {
+			h.Hub.Broadcast(uid, "subscription_updated", fiber.Map{
+				"plan_name": planName, "duration_days": durationDays, "subscription_ends_at": uEndsAt, "status": "active",
+			})
+			h.Hub.Broadcast(uid, "payment_success", fiber.Map{
+				"provider": "zaincash", "transaction_id": txID, "order_id": orderID, "amount": amount,
+				"purpose": "subscription", "plan_name": planName, "duration_days": durationDays, "subscription_ends_at": uEndsAt,
+			})
+		}
 	}
 	return nil
 }
@@ -1050,6 +1162,8 @@ func (h *ZainCashHandler) ConfirmInAppZainCash(c *fiber.Ctx) error {
 		Purpose       string  `json:"purpose"`
 		PlanKey       string  `json:"plan_key"`
 		Plan          string  `json:"plan"`
+		PlanName      string  `json:"plan_name"`
+		DurationDays  int     `json:"duration_days"`
 	}
 	if err := c.BodyParser(&req); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid JSON body"})
@@ -1072,36 +1186,70 @@ func (h *ZainCashHandler) ConfirmInAppZainCash(c *fiber.Ctx) error {
 		txID = fmt.Sprintf("inapp-%d-%s", time.Now().Unix(), orderID)
 	}
 
+	rawPurpose := strings.ToLower(strings.TrimSpace(req.Purpose))
+	var purpose string
+	if rawPurpose == "subscription" || rawPurpose == "sub" {
+		purpose = "subscription"
+	} else if rawPurpose == "wallet_topup" || rawPurpose == "topup" {
+		purpose = "wallet_topup"
+	} else if req.Plan != "" || req.PlanKey != "" {
+		purpose = "subscription"
+	} else {
+		purpose = "wallet_topup"
+	}
+
 	planKey := req.PlanKey
 	if planKey == "" {
 		planKey = req.Plan
 	}
+	planName := req.PlanName
+	subDays := req.DurationDays
 
-	if err := h.markPaymentSuccess(c.Context(), txID, orderID, req.Amount, req.MSISDN, uid); err != nil {
+	if purpose == "subscription" {
+		if subDays <= 0 || planName == "" {
+			if strings.Contains(planKey, "annual") || strings.Contains(planName, "أعمال") || req.Amount >= 120000 {
+				planName = "أعمال"
+				subDays = 365
+			} else if strings.Contains(planKey, "biannual") || strings.Contains(planKey, "semi") || strings.Contains(planName, "بلص") || req.Amount >= 50000 {
+				planName = "بلص"
+				subDays = 180
+			} else {
+				planName = "سوبر اقتصادي"
+				subDays = 30
+			}
+		}
+	} else {
+		planKey = ""
+		planName = ""
+		subDays = 0
+	}
+
+	if err := h.markPaymentSuccess(c.Context(), txID, orderID, req.Amount, req.MSISDN, uid, purpose, planKey, planName, subDays); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "خطأ في إتمام الدفع: " + err.Error()})
 	}
 
 	var (
 		bal       float64
-		planName  string
+		pName     string
 		endsAt    *time.Time
 		statusVal string
 	)
 	_ = h.Pool.QueryRow(c.Context(),
 		`SELECT COALESCE(wallet_balance, 0), COALESCE(plan_name, 'مشترك تجريبي'), subscription_ends_at, COALESCE(status, 'active')
 		 FROM users WHERE id = $1`, uid,
-	).Scan(&bal, &planName, &endsAt, &statusVal)
+	).Scan(&bal, &pName, &endsAt, &statusVal)
 
 	return c.JSON(fiber.Map{
 		"success":        true,
 		"message":        "تم تأكيد الدفع بنجاح!",
 		"transaction_id": txID,
 		"order_id":       orderID,
+		"purpose":        purpose,
 		"user": fiber.Map{
 			"id":                      uid,
 			"wallet_balance":          bal,
-			"plan_name":               planName,
-			"subscription_plan":       planName,
+			"plan_name":               pName,
+			"subscription_plan":       pName,
 			"subscription_ends_at":    endsAt,
 			"subscription_expires_at": endsAt,
 			"status":                  statusVal,
