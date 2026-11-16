@@ -49,6 +49,7 @@ import (
 	"venus_backend/internal/subscribers"
 	syncPkg "venus_backend/internal/sync"
 	"venus_backend/internal/surge"
+	"venus_backend/internal/tenant"
 	"venus_backend/internal/tills"
 	"venus_backend/internal/vault"
 )
@@ -266,7 +267,7 @@ func main() {
 	idempotencyMw := middleware.Idempotency(pool)
 
 	// Authenticated subscriber area.
-	auth := api.Group("", middleware.JWT(jwtSecret))
+	auth := api.Group("", middleware.JWT(jwtSecret), tenant.Middleware(pool))
 	auth.Get("/auth/me", authH.Me)
 	auth.Put("/auth/credentials", authH.ChangeCredentials)
 	auth.Get("/sync/state", syncH.GetSyncState)

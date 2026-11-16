@@ -84,30 +84,33 @@ func (h *AuthHandler) Login(c *fiber.Ctx) error {
 		status             string
 		planName           string
 		subscriptionEndsAt *time.Time
+		merchantID         string
 	)
 	err := h.Pool.QueryRow(c.Context(),
-		`SELECT id, email, password_hash, COALESCE(full_name, ''), COALESCE(store_name, ''), COALESCE(phone, ''),
+		`SELECT id, COALESCE(merchant_id::text, ''), email, password_hash, COALESCE(full_name, ''), COALESCE(store_name, ''), COALESCE(phone, ''),
 		        role, is_approved, COALESCE(wallet_balance, 0), COALESCE(status, 'active'),
 		        COALESCE(plan_name, 'مشترك تجريبي'), subscription_ends_at
 		 FROM users WHERE email = $1`, req.Email,
-	).Scan(&id, &email, &passwordHash, &fullName, &storeName, &phone, &role, &isApproved, &walletBalance, &status, &planName, &subscriptionEndsAt)
+	).Scan(&id, &merchantID, &email, &passwordHash, &fullName, &storeName, &phone, &role, &isApproved, &walletBalance, &status, &planName, &subscriptionEndsAt)
 	if err == pgx.ErrNoRows {
 		// R1: re-seed the Super Admin if the clean reset removed it.
 		if h.SuperAdminEmail != "" && req.Email == strings.ToLower(strings.TrimSpace(h.SuperAdminEmail)) {
 			if hash, herr := hashPassword(req.Password); herr == nil {
 				var newID int64
+				var newMerchantID string
 				if ierr := h.Pool.QueryRow(c.Context(),
 					`INSERT INTO users (email, password_hash, full_name, store_name, role, is_approved, status, plan_name, subscription_ends_at)
 					 VALUES ($1, $2, 'Super Admin', 'VENUS POS', 'admin', TRUE, 'active', 'vip', now() + interval '3650 days')
 					 ON CONFLICT (email) DO UPDATE SET role = 'admin', is_approved = TRUE, status = 'active', plan_name = 'vip'
-					 RETURNING id`, req.Email, hash,
-				).Scan(&newID); ierr == nil {
+					 RETURNING id, COALESCE(merchant_id::text, '')`, req.Email, hash,
+				).Scan(&newID, &newMerchantID); ierr == nil {
 					id, email, role, isApproved, status, planName = newID, req.Email, "admin", true, "active", "vip"
+					merchantID = newMerchantID
 					fullName, storeName = "Super Admin", "VENUS POS"
 					passwordHash = hash
 					recordLoginHistory(c.Context(), h.Pool, id, email, true, c.IP())
 					writeAudit(c.Context(), h.Pool, id, email, "LOGIN", "auth", itoa(id), map[string]any{"note": "super admin re-seeded", "at": time.Now()}, c.IP())
-					token, terr := middleware.SignToken(h.JWTSecret, id, email, role, h.TokenTTL)
+					token, terr := middleware.SignTokenWithMerchant(h.JWTSecret, id, email, role, merchantID, h.TokenTTL)
 					if terr != nil {
 						return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "could not sign token"})
 					}
@@ -115,6 +118,7 @@ func (h *AuthHandler) Login(c *fiber.Ctx) error {
 						"token": token,
 						"user": fiber.Map{
 							"id":                   id,
+							"merchant_id":          merchantID,
 							"uid":                  fmt.Sprintf("V%06d", id),
 							"email":                email,
 							"name":                 fullName,
@@ -148,7 +152,7 @@ func (h *AuthHandler) Login(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "account pending admin approval"})
 	}
 
-	token, err := middleware.SignToken(h.JWTSecret, id, email, role, h.TokenTTL)
+	token, err := middleware.SignTokenWithMerchant(h.JWTSecret, id, email, role, merchantID, h.TokenTTL)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "could not sign token"})
 	}
@@ -156,6 +160,7 @@ func (h *AuthHandler) Login(c *fiber.Ctx) error {
 	writeAudit(c.Context(), h.Pool, id, email, "LOGIN", "auth", itoa(id), map[string]any{"role": role, "at": time.Now()}, c.IP())
 	userMap := fiber.Map{
 		"id":                      id,
+		"merchant_id":             merchantID,
 		"uid":                     fmt.Sprintf("V%06d", id),
 		"email":                   email,
 		"name":                    fullName,
@@ -210,16 +215,17 @@ func (h *AuthHandler) Register(c *fiber.Ctx) error {
 
 	var (
 		id                 int64
+		merchantID         string
 		subscriptionEndsAt time.Time
 	)
 	err = h.Pool.QueryRow(c.Context(),
 		`INSERT INTO users (email, password_hash, full_name, store_name, phone, role, is_approved, status, plan_name, subscription_ends_at)
 		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, now() + interval '`+trialInterval+`')
 		 ON CONFLICT (email) DO NOTHING
-		 RETURNING id, subscription_ends_at`,
+		 RETURNING id, COALESCE(merchant_id::text, ''), subscription_ends_at`,
 		req.Email, hash, strings.TrimSpace(req.FullName), strings.TrimSpace(req.StoreName),
 		strings.TrimSpace(req.Phone), role, approved, status, planName,
-	).Scan(&id, &subscriptionEndsAt)
+	).Scan(&id, &merchantID, &subscriptionEndsAt)
 	if err == pgx.ErrNoRows {
 		return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": "email already registered"})
 	}
@@ -227,12 +233,13 @@ func (h *AuthHandler) Register(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "database error"})
 	}
 
-	token, _ := middleware.SignToken(h.JWTSecret, id, req.Email, role, h.TokenTTL)
+	token, _ := middleware.SignTokenWithMerchant(h.JWTSecret, id, req.Email, role, merchantID, h.TokenTTL)
 
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
 		"token": token,
 		"user": fiber.Map{
 			"id":                     id,
+			"merchant_id":            merchantID,
 			"email":                  req.Email,
 			"full_name":              strings.TrimSpace(req.FullName),
 			"store_name":             strings.TrimSpace(req.StoreName),
@@ -247,6 +254,7 @@ func (h *AuthHandler) Register(c *fiber.Ctx) error {
 			"subscription_expires_at": subscriptionEndsAt,
 		},
 		"id":                      id,
+		"merchant_id":             merchantID,
 		"email":                   req.Email,
 		"full_name":               strings.TrimSpace(req.FullName),
 		"store_name":              strings.TrimSpace(req.StoreName),
@@ -270,6 +278,7 @@ func (h *AuthHandler) Me(c *fiber.Ctx) error {
 	}
 	var (
 		id                 int64
+		merchantID         string
 		email              string
 		fullName           string
 		storeName          string
@@ -285,11 +294,11 @@ func (h *AuthHandler) Me(c *fiber.Ctx) error {
 		subscriptionEndsAt *time.Time
 	)
 	err := h.Pool.QueryRow(c.Context(),
-		`SELECT id, email, full_name, store_name, phone, role, is_approved, created_at,
+		`SELECT id, COALESCE(merchant_id::text, ''), email, full_name, store_name, phone, role, is_approved, created_at,
 		        COALESCE(avatar_url, ''), COALESCE(address, ''), COALESCE(wallet_balance, 0),
 		        COALESCE(status, 'active'), COALESCE(plan_name, 'مشترك تجريبي'), subscription_ends_at
 		 FROM users WHERE id = $1`, cl.UserID,
-	).Scan(&id, &email, &fullName, &storeName, &phone, &role, &approved, &createdAt,
+	).Scan(&id, &merchantID, &email, &fullName, &storeName, &phone, &role, &approved, &createdAt,
 		&avatarURL, &address, &walletBalance, &status, &planName, &subscriptionEndsAt)
 	if err == pgx.ErrNoRows {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "user not found"})
@@ -299,6 +308,7 @@ func (h *AuthHandler) Me(c *fiber.Ctx) error {
 	}
 	resp := fiber.Map{
 		"id":             id,
+		"merchant_id":    merchantID,
 		"email":          email,
 		"full_name":      fullName,
 		"store_name":     storeName,

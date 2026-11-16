@@ -15,6 +15,7 @@ import (
 // Claims is the JWT payload carried by every authenticated request.
 type Claims struct {
 	UserID         int64  `json:"uid"`
+	MerchantID     string `json:"mid,omitempty"` // Tenant UUID (strictly authoritative)
 	Email          string `json:"email"`
 	Role           string `json:"role"` // "subscriber" | "admin" | "superadmin" | "finance" | "support"
 	Scope          string `json:"scope,omitempty"` // "read_only" for impersonation
@@ -24,11 +25,17 @@ type Claims struct {
 
 // SignToken issues a signed JWT valid for the given duration.
 func SignToken(secret string, userID int64, email, role string, ttl time.Duration) (string, error) {
+	return SignTokenWithMerchant(secret, userID, "", email, role, ttl)
+}
+
+// SignTokenWithMerchant issues a signed JWT with strict tenant isolation merchant_id claim.
+func SignTokenWithMerchant(secret string, userID int64, merchantID string, email, role string, ttl time.Duration) (string, error) {
 	now := time.Now()
 	claims := Claims{
-		UserID: userID,
-		Email:  email,
-		Role:   role,
+		UserID:     userID,
+		MerchantID: merchantID,
+		Email:      email,
+		Role:       role,
 		RegisteredClaims: jwt.RegisteredClaims{
 			IssuedAt:  jwt.NewNumericDate(now),
 			ExpiresAt: jwt.NewNumericDate(now.Add(ttl)),
