@@ -69,8 +69,10 @@ func TestLoginJWTClaimsAndQueryTokenExportSubscribers(t *testing.T) {
 	api := app.Group("/api")
 	api.Post("/auth/login", authH.Login)
 
+	adminH := &handlers.AdminHandler{Pool: pool}
 	admin := api.Group("/admin", middleware.JWT(jwtSecret), middleware.AdminOnly())
 	admin.Get("/export/subscribers", enterpriseH.ExportSubscribersCSV)
+	admin.Post("/system/factory-reset", adminH.FactoryReset)
 
 	// 1. Login as SuperAdmin (re-seeds with role='admin' and merchant_id UUID)
 	loginBody, _ := json.Marshal(map[string]string{
@@ -130,5 +132,43 @@ func TestLoginJWTClaimsAndQueryTokenExportSubscribers(t *testing.T) {
 	ct := exportResp.Header.Get(fiber.HeaderContentType)
 	if !strings.Contains(ct, "text/csv") {
 		t.Fatalf("expected text/csv content type, got %q", ct)
+	}
+
+	// 4. Test POST /api/admin/system/factory-reset -> wipes non-admin subscribers, preserves SuperAdmin, re-seeds plans
+	_, _ = pool.Exec(ctx,
+		`INSERT INTO users (email, password_hash, full_name, role, wallet_balance)
+		 VALUES ('dummy_reset_test@venus.iq', 'hash', 'Dummy Sub', 'subscriber', 50000)
+		 ON CONFLICT (email) DO NOTHING`,
+	)
+	resetReq := httptest.NewRequest(http.MethodPost, "/api/admin/system/factory-reset", nil)
+	resetReq.Header.Set("Authorization", "Bearer "+loginData.Token)
+	resetResp, err := app.Test(resetReq, 5000)
+	if err != nil {
+		t.Fatalf("factory reset request failed: %v", err)
+	}
+	if resetResp.StatusCode != http.StatusOK {
+		raw, _ := io.ReadAll(resetResp.Body)
+		t.Fatalf("expected 200 OK from /api/admin/system/factory-reset, got %d: %s", resetResp.StatusCode, string(raw))
+	}
+
+	var dummyExists bool
+	_ = pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM users WHERE email = 'dummy_reset_test@venus.iq')`).Scan(&dummyExists)
+	if dummyExists {
+		t.Fatal("expected dummy subscriber to be wiped by factory reset")
+	}
+
+	var adminBal int64
+	var adminRole string
+	if err := pool.QueryRow(ctx, `SELECT wallet_balance, role FROM users WHERE email = $1`, adminEmail).Scan(&adminBal, &adminRole); err != nil {
+		t.Fatalf("expected SuperAdmin to be preserved after factory reset: %v", err)
+	}
+	if adminBal != 0 || adminRole != "admin" {
+		t.Fatalf("expected SuperAdmin balance=0 and role=admin after reset, got balance=%d role=%s", adminBal, adminRole)
+	}
+
+	var plansCount int
+	_ = pool.QueryRow(ctx, `SELECT COUNT(*) FROM subscription_plans`).Scan(&plansCount)
+	if plansCount < 3 {
+		t.Fatalf("expected at least 3 default subscription_plans after factory reset, got %d", plansCount)
 	}
 }

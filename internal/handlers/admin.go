@@ -83,53 +83,161 @@ func toJSON(m map[string]any) string {
 }
 
 // ---------------------------------------------------------------------------
-// R1: One-time factory reset (runs ONCE per deploy via system_meta marker)
+// R1: Safe Factory Data Reset Engine (Zero-State Production Wipe)
 // ---------------------------------------------------------------------------
 
-// RunOneTimeResets executes any pending one-time migrations recorded in
-// system_meta. Currently: reset_v2_clean truncates all transactional tables.
-func (h *AdminHandler) RunOneTimeResets(ctx context.Context) error {
-	var exists bool
-	err := h.Pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM system_meta WHERE key = 'reset_v2_clean')`).Scan(&exists)
-	if err != nil {
-		return err
+// FactoryResetDatabase executes an atomic zero-state production wipe inside a single
+// PostgreSQL transaction: disables append-only triggers on ledger tables, truncates
+// all transactional/test tables, deletes non-admin subscribers, resets the Super Admin
+// balance to 0 IQD, resets sequences, and re-seeds default subscription plans.
+func FactoryResetDatabase(ctx context.Context, pool *pgxpool.Pool) error {
+	if pool == nil {
+		return fmt.Errorf("database pool is nil")
 	}
-	if exists {
-		return nil // already ran once — never wipe again on restart
-	}
-	tx, err := h.Pool.Begin(ctx)
+	tx, err := pool.Begin(ctx)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback(ctx)
-	stmts := []string{
-		`TRUNCATE sim_sales, credit_sales, sim_inventory, debt_payments, debt_contracts, store_expenses, support_tickets, subscriber_backups, wallet_ledger, subscriptions, audit_logs, login_history RESTART IDENTITY CASCADE`,
-		// Keep users but reset every account except the super admin to a clean pending state.
-		`UPDATE users SET is_approved = FALSE, role = 'subscriber', wallet_balance = 0 WHERE email <> $1`,
-		`INSERT INTO system_meta (key) VALUES ('reset_v2_clean') ON CONFLICT (key) DO NOTHING`,
+
+	wipeBlocks := `
+	DO $$
+	DECLARE
+		t TEXT;
+		tables_to_wipe TEXT[] := ARRAY[
+			'wallet_ledger', 'ledger_entries', 'zaincash_transactions',
+			'activation_codes', 'vouchers_vault', 'digital_card_vouchers',
+			'digital_cards', 'audit_logs', 'fraud_events', 'fraud_alerts',
+			'integrity_alerts', 'sim_sales', 'credit_sales', 'sim_inventory',
+			'debt_payments', 'debt_contracts', 'store_expenses',
+			'support_tickets', 'subscriber_backups', 'subscriptions',
+			'login_history', 'reconciliation_reports', 'financial_closes',
+			'idempotency_keys', 'idem_keys', 'tills_shifts', 'sync_tombstones',
+			'limits_blocks', 'bulk_actions_log', 'subscriber_price_overrides'
+		];
+	BEGIN
+		IF EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'wallet_ledger') THEN
+			EXECUTE 'ALTER TABLE wallet_ledger DISABLE TRIGGER ALL';
+		END IF;
+		IF EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'ledger_entries') THEN
+			EXECUTE 'ALTER TABLE ledger_entries DISABLE TRIGGER ALL';
+		END IF;
+
+		FOREACH t IN ARRAY tables_to_wipe LOOP
+			IF EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = t) THEN
+				EXECUTE format('TRUNCATE TABLE %I RESTART IDENTITY CASCADE', t);
+			END IF;
+		END LOOP;
+
+		IF EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'wallet_ledger') THEN
+			EXECUTE 'ALTER TABLE wallet_ledger ENABLE TRIGGER ALL';
+		END IF;
+		IF EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'ledger_entries') THEN
+			EXECUTE 'ALTER TABLE ledger_entries ENABLE TRIGGER ALL';
+		END IF;
+	END $$;`
+
+	if _, err := tx.Exec(ctx, wipeBlocks); err != nil {
+		return fmt.Errorf("truncate tables: %w", err)
 	}
-	for i, s := range stmts {
-		if i == 1 {
-			if _, err := tx.Exec(ctx, s, superAdminEmail()); err != nil {
-				return err
-			}
-			continue
-		}
-		if _, err := tx.Exec(ctx, s); err != nil {
-			return err
-		}
+
+	adminEmail := strings.ToLower(strings.TrimSpace(superAdminEmail()))
+
+	// Delete all test subscribers while preserving the Super Admin and internal system ledger accounts
+	if _, err := tx.Exec(ctx,
+		`DELETE FROM users WHERE role != 'admin' AND role != 'system' AND LOWER(email) != $1`,
+		adminEmail,
+	); err != nil {
+		return fmt.Errorf("delete subscribers: %w", err)
 	}
+
+	// Reset Super Admin account balance and ensure active admin status
+	if _, err := tx.Exec(ctx,
+		`UPDATE users
+		 SET wallet_balance = 0,
+		     role = 'admin',
+		     is_approved = TRUE,
+		     status = 'active',
+		     wallet_status = 'active'
+		 WHERE LOWER(email) = $1 OR role = 'admin'`,
+		adminEmail,
+	); err != nil {
+		return fmt.Errorf("reset super admin: %w", err)
+	}
+
+	// Reset system ledger accounts balance to 0
+	_, _ = tx.Exec(ctx, `UPDATE users SET wallet_balance = 0 WHERE role = 'system'`)
+
+	// Reset users ID sequence so the next new subscriber starts cleanly
+	_, _ = tx.Exec(ctx,
+		`SELECT setval(pg_get_serial_sequence('users', 'id'), GREATEST(COALESCE((SELECT MAX(id) FROM users), 1), 1), true)`,
+	)
+
+	// Re-seed default subscription_plans
+	if _, err := tx.Exec(ctx, `
+		INSERT INTO subscription_plans (plan_key, title, original_price_iqd, price_iqd, discount_percent, duration_days, badge_text)
+		VALUES
+		  ('super_economy', 'سوبر اقتصادي', 15000, 15000, 0, 30, 'الأوفر'),
+		  ('plus', 'بلص', 55000, 55000, 0, 180, 'الأكثر شعبية'),
+		  ('business', 'أعمال', 125000, 125000, 0, 365, 'أفضل قيمة')
+		ON CONFLICT (plan_key) DO UPDATE SET
+		  title = EXCLUDED.title,
+		  original_price_iqd = EXCLUDED.original_price_iqd,
+		  price_iqd = EXCLUDED.price_iqd,
+		  discount_percent = EXCLUDED.discount_percent,
+		  duration_days = EXCLUDED.duration_days,
+		  badge_text = EXCLUDED.badge_text,
+		  updated_at = now()
+	`); err != nil {
+		return fmt.Errorf("re-seed subscription_plans: %w", err)
+	}
+
+	// Re-seed default system_settings
+	_, _ = tx.Exec(ctx, `
+		INSERT INTO system_settings (key, value) VALUES ('vault_required_key_version', '1')
+		ON CONFLICT (key) DO NOTHING
+	`)
+
 	return tx.Commit(ctx)
 }
 
-// FactoryReset is the admin endpoint that triggers the one-time clean reset.
-// POST /api/admin/factory-reset
-func (h *AdminHandler) FactoryReset(c *fiber.Ctx) error {
-	if err := h.RunOneTimeResets(c.Context()); err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "factory reset failed: " + err.Error()})
+// RunOneTimeResets executes the one-time zero-state production wipe on deploy
+// if 'clean_production_reset_2026_v3' has not yet been recorded in system_meta.
+func (h *AdminHandler) RunOneTimeResets(ctx context.Context) error {
+	if h == nil || h.Pool == nil {
+		return nil
 	}
-	h.audit(c, "FACTORY_RESET", "system", "reset_v2_clean", map[string]any{"at": time.Now()})
-	return c.JSON(fiber.Map{"success": true, "reset": "reset_v2_clean"})
+	const resetKey = "clean_production_reset_2026_v3"
+	var exists bool
+	err := h.Pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM system_meta WHERE key = $1)`, resetKey).Scan(&exists)
+	if err != nil {
+		return err
+	}
+	if exists {
+		return nil // already ran once — never wipe again on subsequent server restarts
+	}
+	if err := FactoryResetDatabase(ctx, h.Pool); err != nil {
+		return err
+	}
+	_, err = h.Pool.Exec(ctx,
+		`INSERT INTO system_meta (key) VALUES ($1) ON CONFLICT (key) DO NOTHING`,
+		resetKey,
+	)
+	return err
+}
+
+// FactoryReset is the admin endpoint that triggers an immediate zero-state factory reset.
+// POST /api/admin/factory-reset & POST /api/admin/system/factory-reset
+func (h *AdminHandler) FactoryReset(c *fiber.Ctx) error {
+	if err := FactoryResetDatabase(c.Context(), h.Pool); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "فشل إعادة ضبط المصنع: " + err.Error()})
+	}
+	h.audit(c, "FACTORY_RESET", "system", "clean_production_reset_2026_v3", map[string]any{"at": time.Now()})
+	return c.JSON(fiber.Map{
+		"success": true,
+		"reset":   "clean_production_reset_2026_v3",
+		"message": "تمت إعادة ضبط المصنع وتصفير جميع البيانات بنجاح",
+	})
 }
 
 // ---------------------------------------------------------------------------

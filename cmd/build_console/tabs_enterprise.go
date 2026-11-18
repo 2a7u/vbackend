@@ -117,6 +117,25 @@ func GetTabsEnterprise() string {
               </div>
               <button onclick="saveFeatureFlagsConfig()" class="px-5 py-2 bg-brand hover:bg-brand-dark text-white rounded-xl font-bold text-xs shadow-sm transition">حفظ الـ Feature Flags</button>
             </div>
+
+            <!-- Safe Factory Data Reset (Zero-State Production Wipe) -->
+            <div class="bg-rose-50/70 p-5 rounded-3xl border border-rose-200 shadow-sm space-y-3 md:col-span-2">
+              <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div class="flex items-start gap-3">
+                  <div class="w-10 h-10 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center text-base font-black flex-shrink-0">
+                    <i class="fa-solid fa-triangle-exclamation"></i>
+                  </div>
+                  <div>
+                    <h3 class="text-sm font-black text-rose-800">إعادة ضبط المصنع وتصفير البيانات (Factory Reset)</h3>
+                    <p class="text-xs text-rose-600/90 mt-0.5">حذف جميع المشتركين التجريبيين، السجلات المالية، البطاقات، والأكواد للبدء من الصفر تماماً مع الحفاظ على حساب المدير العام والباقات الافتراضية.</p>
+                  </div>
+                </div>
+                <button onclick="triggerFactoryReset()" class="px-5 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-2xl font-black text-xs shadow-sm transition flex items-center justify-center gap-2 flex-shrink-0">
+                  <i class="fa-solid fa-rotate-left"></i>
+                  <span>تصفير المنصة إلى الصفر</span>
+                </button>
+              </div>
+            </div>
           </div>
         </section>
 

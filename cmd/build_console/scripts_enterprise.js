@@ -840,6 +840,21 @@
       window.open('/api/admin/bi/backup?token=' + encodeURIComponent(authToken), '_blank');
     }
 
+    async function triggerFactoryReset() {
+      const ok = confirm('تحذير هام: هل أنت متأكد من تصفير جميع بيانات المشتركين والسجلات المالية والبطاقات والعودة إلى الصفر؟ (سيتم الاحتفاظ بحساب المدير العام والباقات الافتراضية فقط)');
+      if (!ok) return;
+      try {
+        const res = await apiFetch('/api/admin/system/factory-reset', { method: 'POST', body: '{}' });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'فشل إعادة ضبط المصنع');
+        showToast(data.message || 'تمت إعادة ضبط المصنع وتصفير جميع البيانات بنجاح');
+        if (typeof loadStats === 'function') loadStats();
+        if (typeof loadUsers === 'function') loadUsers();
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    }
+
     // =========================================================================
     // WEBSOCKET REAL-TIME DISPATCHER
     // =========================================================================

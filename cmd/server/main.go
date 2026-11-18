@@ -118,6 +118,11 @@ func main() {
 	}
 
 	adminH := &handlers.AdminHandler{Pool: pool, Hub: hub, LedgerSvc: ledgerSvc, FraudEngine: fraudEngine}
+	if err := adminH.RunOneTimeResets(ctx); err != nil {
+		log.Printf("one-time production reset notice: %v", err)
+	} else {
+		log.Println("one-time production reset verified")
+	}
 
 	guardSvc := guard.NewService(pool)
 	idemSvc := idem.NewService(pool)
@@ -341,6 +346,7 @@ func main() {
 
 	// R1/R4/R5A: factory reset, audit trail, digital cards management.
 	admin.Post("/factory-reset", adminH.FactoryReset)
+	admin.Post("/system/factory-reset", adminH.FactoryReset)
 	admin.Get("/audit-logs", adminH.ListAuditLogs)
 	admin.Get("/login-history", adminH.ListLoginHistory)
 	admin.Get("/digital-cards", adminH.ListDigitalCards)
