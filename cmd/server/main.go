@@ -17,38 +17,26 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/logger"
 	"github.com/gofiber/fiber/v2/middleware/recover"
 
-	apiPkg "venus_backend/internal/api"
 	"venus_backend/internal/appconfig"
 	"venus_backend/internal/bi"
 	"venus_backend/internal/db"
 	"venus_backend/internal/db/migrations"
-	"venus_backend/internal/deviceradar"
-	"venus_backend/internal/forecast"
 	"venus_backend/internal/fraud"
 	"venus_backend/internal/guard"
 	"venus_backend/internal/handlers"
-	"venus_backend/internal/hierarchy"
 	"venus_backend/internal/idem"
 	"venus_backend/internal/jobs"
 	"venus_backend/internal/ledger"
 	"venus_backend/internal/limits"
 	"venus_backend/internal/middleware"
-	"venus_backend/internal/notify"
 	"venus_backend/internal/pricing"
-	"venus_backend/internal/promotions"
 	"venus_backend/internal/radar"
 	"venus_backend/internal/reconcile"
 	"venus_backend/internal/refund"
-	"venus_backend/internal/reports"
-	"venus_backend/internal/restock"
-	"venus_backend/internal/rewards"
-	"venus_backend/internal/risk"
 	"venus_backend/internal/scheduler"
-	"venus_backend/internal/seal"
 	"venus_backend/internal/security"
 	"venus_backend/internal/subscribers"
 	syncPkg "venus_backend/internal/sync"
-	"venus_backend/internal/surge"
 	"venus_backend/internal/tenant"
 	"venus_backend/internal/tills"
 	"venus_backend/internal/vault"
@@ -115,10 +103,9 @@ func main() {
 		log.Fatalf("CRITICAL SECURITY VIOLATION: %v", err)
 	}
 	pricingSvc := pricing.NewService(pool)
-	hierarchySvc := hierarchy.NewService(pool, ledgerSvc)
 	radarSvc := radar.NewService(pool)
 
-	fintechH := handlers.NewFintechHandler(pool, hub, ledgerSvc, fraudEngine, reconcileSvc, vaultMgr, pricingSvc, hierarchySvc, radarSvc)
+	fintechH := handlers.NewFintechHandler(pool, hub, ledgerSvc, fraudEngine, reconcileSvc, vaultMgr, pricingSvc, radarSvc)
 
 	// Financial cron scheduler: daily integrity check, daily reconciliation, daily/monthly close
 	cronSched := scheduler.NewScheduler(pool, hub, ledgerSvc, reconcileSvc)
@@ -151,15 +138,14 @@ func main() {
 	announcementsH := &handlers.AnnouncementsHandler{Pool: pool, Hub: hub}
 	zainH := &handlers.ZainCashHandler{Pool: pool, Hub: hub, JWTSecret: jwtSecret, LedgerSvc: ledgerSvc, FraudEngine: fraudEngine}
 	vouchersH := &handlers.VouchersHandler{
-		Pool:         pool,
-		Hub:          hub,
-		LedgerSvc:    ledgerSvc,
-		FraudEngine:  fraudEngine,
-		VaultMgr:     vaultMgr,
-		PricingSvc:   pricingSvc,
-		HierarchySvc: hierarchySvc,
-		GuardSvc:     guardSvc,
-		IdemSvc:      idemSvc,
+		Pool:        pool,
+		Hub:         hub,
+		LedgerSvc:   ledgerSvc,
+		FraudEngine: fraudEngine,
+		VaultMgr:    vaultMgr,
+		PricingSvc:  pricingSvc,
+		GuardSvc:    guardSvc,
+		IdemSvc:     idemSvc,
 	}
 
 	// Stage 2: Reliability (jobs, refund, sync)
@@ -178,29 +164,15 @@ func main() {
 	syncH := &handlers.SyncHandler{Pool: pool, Hub: hub, SyncSvc: syncSvc}
 
 	subSvc := subscribers.NewService(pool, hub, jwtSecret, ledgerSvc)
-	promoSvc := promotions.NewService(pool, ledgerSvc)
 	appConfigSvc := appconfig.NewService(pool, hub)
-	deviceRadarSvc := deviceradar.NewService(pool, hub)
 	securitySvc := security.NewService(pool, ledgerSvc)
 	biSvc := bi.NewService(pool)
 
-	enterpriseH := handlers.NewEnterpriseHandler(pool, hub, subSvc, promoSvc, appConfigSvc, deviceRadarSvc, securitySvc, biSvc, guardSvc, idemSvc, limitsSvc)
+	enterpriseH := handlers.NewEnterpriseHandler(pool, hub, subSvc, appConfigSvc, securitySvc, biSvc, guardSvc, idemSvc, limitsSvc)
 
-	// Stage 3: Receipts, Notifications, Reports
-	sealSvc := seal.NewService(pool, getenv("SEAL_HMAC_SECRET", "uruk_seal_secure_secret_2026"), getenv("SERVER_URL", "https://vapi.urukiq.com"))
-	notifySvc := notify.NewService(pool, hub.Broadcast)
-	reportsSvc := reports.NewService(pool, notifySvc)
-	stage3H := handlers.NewStage3Handler(sealSvc, notifySvc, reportsSvc)
-
-	// Stage 4: Growth & Governance
-	rewardsSvc := rewards.NewService(pool, ledgerSvc)
-	restockSvc := restock.NewService(pool, jobsSvc)
-	riskSvc := risk.NewService(pool)
-	forecastSvc := forecast.NewService(pool)
+	// Stage 4: Shift Tills
 	tillsSvc := tills.NewService(pool)
-	apiSvc := apiPkg.NewService(pool)
-	surgeSvc := surge.NewService(pool)
-	stage4H := handlers.NewStage4Handler(rewardsSvc, restockSvc, riskSvc, forecastSvc, tillsSvc, apiSvc, surgeSvc)
+	stage4H := handlers.NewStage4Handler(tillsSvc)
 
 	app := fiber.New(fiber.Config{
 		AppName:      "VENUS POS Backend",
@@ -231,8 +203,6 @@ func main() {
 	})
 	app.Get("/healthz", enterpriseH.Healthz)
 	app.Get("/readyz", enterpriseH.Readyz)
-	app.Get("/verify/:token", stage3H.VerifyReceipt)
-	app.Get("/forecast", stage4H.GetForecast)
 
 	// Realtime WebSocket endpoint (JWT via ?token= or Authorization header).
 	app.Get("/ws", hub.Handler(jwtSecret))
@@ -261,8 +231,6 @@ func main() {
 	api.Post("/zaincash/checkout/confirm", zainH.ConfirmCheckoutZainCash)
 	api.Get("/zaincash/redirect", zainH.RedirectZainCash)
 	api.Post("/zaincash/webhook", zainH.WebhookZainCash)
-	api.Get("/docs/openapi.json", stage4H.GetOpenAPISpec)
-	api.Get("/surge/quote", stage4H.GetSurgeQuote)
 
 	idempotencyMw := middleware.Idempotency(pool)
 
@@ -273,9 +241,6 @@ func main() {
 	auth.Get("/sync/state", syncH.GetSyncState)
 	auth.Get("/sync", syncH.GetDelta)
 	auth.Post("/refund", idempotencyMw, jobsAndRefundH.PostRefund)
-	auth.Post("/seal/create", stage3H.CreateSealToken)
-	auth.Get("/forecast", stage4H.GetForecast)
-	auth.Get("/surge/quote", stage4H.GetSurgeQuote)
 	auth.Get("/tills/active", stage4H.GetActiveShift)
 	auth.Post("/tills/open", stage4H.OpenShift)
 	auth.Post("/tills/close", stage4H.CloseShift)
@@ -359,12 +324,6 @@ func main() {
 	admin.Delete("/pricing/subscribers/:id/overrides/:productId", fintechH.RemoveSubscriberPriceOverride)
 	admin.Get("/pricing/resolve/:userId/:productId", fintechH.ResolveSubscriberPrice)
 
-	// Phase 2: Agent Hierarchy & Commissions
-	admin.Post("/hierarchy/users/:id/parent", fintechH.SetParentAgent)
-	admin.Post("/hierarchy/agents/:id/commissions", fintechH.SetAgentCommission)
-	admin.Get("/hierarchy/commissions", fintechH.ListAgentCommissions)
-	admin.Get("/hierarchy/agents/:id/report", fintechH.GetAgentCommissionReport)
-
 	// Phase 2: Inventory Radar & Thresholds
 	admin.Get("/radar/summary", fintechH.GetInventoryRadar)
 	admin.Post("/radar/thresholds", fintechH.SetCategoryThreshold)
@@ -402,21 +361,13 @@ func main() {
 	auth.Get("/sim/sales", simH.ListSales)
 	auth.Post("/credit/sales", simH.AddCreditSale)
 	auth.Get("/credit/sales", simH.ListCreditSales)
-	auth.Get("/coupons/validate", enterpriseH.ValidateCoupon)
-	auth.Post("/commands/ack", enterpriseH.AckRemoteCommand)
 
 	// Phase 3: CRM & Lifecycle
 	admin.Get("/subscribers/:id/360", enterpriseH.GetSubscriber360)
 	admin.Post("/subscribers/bulk/preview", enterpriseH.BulkSubscribersPreview)
 	admin.Post("/subscribers/bulk/execute", enterpriseH.BulkSubscribersExecute)
-	admin.Post("/users/:id/lock-device", enterpriseH.LockDevice)
-	admin.Post("/users/:id/reset-device", enterpriseH.ResetDevice)
 	admin.Post("/users/:id/kick-sessions", enterpriseH.KickSessions)
 	admin.Post("/users/:id/impersonate", enterpriseH.ImpersonateSubscriber)
-
-	// Phase 4: Promotions & Coupons
-	admin.Get("/coupons", enterpriseH.ListCoupons)
-	admin.Post("/coupons", enterpriseH.CreateCoupon)
 
 	// Phase 5: Remote App Config & Banners
 	admin.Get("/app-config", enterpriseH.GetAllAppConfigs)
@@ -424,10 +375,6 @@ func main() {
 	admin.Get("/banners", enterpriseH.ListBanners)
 	admin.Post("/banners", enterpriseH.SaveBanner)
 	admin.Delete("/banners/:id", enterpriseH.DeleteBanner)
-
-	// Phase 6: Live Radar & Remote Commands
-	admin.Get("/radar/online-devices", enterpriseH.GetOnlineDevices)
-	admin.Post("/commands/queue", enterpriseH.QueueRemoteCommand)
 
 	// Phase 7: Rollback, WAF, API Keys
 	admin.Post("/security/rollback", enterpriseH.RollbackOperation)
@@ -453,27 +400,6 @@ func main() {
 	// Stage 2: Reliability (Jobs & Dead Queue)
 	admin.Get("/jobs/dead", jobsAndRefundH.ListDeadJobs)
 	admin.Post("/jobs/:id/retry", jobsAndRefundH.RetryDeadJob)
-
-	// Stage 3: Receipts, Notifications, Reports
-	admin.Get("/notify/channels", stage3H.ListNotifyChannels)
-	admin.Post("/notify/channels", stage3H.SaveNotifyChannel)
-	admin.Delete("/notify/channels/:id", stage3H.DeleteNotifyChannel)
-	admin.Post("/reports/send-now", stage3H.SendReportsNow)
-
-	// Stage 4: Growth & Governance (Rewards, Restock, Risk, Forecast, Tills, API Keys, Surge)
-	admin.Get("/forecast", stage4H.GetForecast)
-	admin.Get("/rewards/rules", stage4H.ListRewardRules)
-	admin.Post("/rewards/rules", stage4H.SaveRewardRule)
-	admin.Post("/rewards/evaluate/:merchant_id/:rule_id", stage4H.EvaluateReward)
-	admin.Get("/restock/orders", stage4H.ListRestockOrders)
-	admin.Post("/restock/order", stage4H.TriggerRestock)
-	admin.Get("/risk/profiles", stage4H.ListRiskProfiles)
-	admin.Post("/risk/override/:merchant_id", stage4H.OverrideRisk)
-	admin.Get("/surge/config", stage4H.GetSurgeConfig)
-	admin.Post("/surge/config", stage4H.UpdateSurgeConfig)
-	admin.Get("/api-keys-v2", stage4H.ListApiKeys)
-	admin.Post("/api-keys-v2", stage4H.GenerateApiKey)
-	admin.Delete("/api-keys-v2/:id", stage4H.RevokeApiKey)
 
 	// R5B: domain-isolated web console hosting:
 	// - console.urukiq.com: serves Native Go Admin Console (embedded console.html)

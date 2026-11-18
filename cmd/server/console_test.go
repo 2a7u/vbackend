@@ -107,8 +107,8 @@ func TestConsoleDomainIsolation(t *testing.T) {
 		t.Fatalf("console.urukiq.com embedded GET / status expected 200, got %d", resp6.StatusCode)
 	}
 	body6, _ := io.ReadAll(resp6.Body)
-	if !strings.Contains(string(body6), "VENUS POS") || !strings.Contains(string(body6), "لوحة الإدارة السحابية") {
-		t.Errorf("expected embedded console html containing VENUS POS, got %s", string(body6)[:100])
+	if !strings.Contains(string(body6), "فينوس") || !strings.Contains(string(body6), "لوحة التحكم") {
+		t.Errorf("expected embedded console html containing فينوس and لوحة التحكم, got %s", string(body6)[:100])
 	}
 
 	// 7. Logo Endpoint: GET /assets/appicon.png MUST return 200 image/png

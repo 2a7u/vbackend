@@ -4,7 +4,6 @@ import (
 	"encoding/csv"
 	"fmt"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -12,12 +11,10 @@ import (
 
 	"venus_backend/internal/appconfig"
 	"venus_backend/internal/bi"
-	"venus_backend/internal/deviceradar"
 	"venus_backend/internal/guard"
 	"venus_backend/internal/idem"
 	"venus_backend/internal/limits"
 	"venus_backend/internal/middleware"
-	"venus_backend/internal/promotions"
 	"venus_backend/internal/security"
 	"venus_backend/internal/subscribers"
 )
@@ -26,9 +23,7 @@ type EnterpriseHandler struct {
 	Pool          *pgxpool.Pool
 	Hub           *WSHub
 	SubscriberSvc *subscribers.Service
-	PromoSvc      *promotions.Service
 	AppConfigSvc  *appconfig.Service
-	RadarSvc      *deviceradar.Service
 	SecuritySvc   *security.Service
 	BISvc         *bi.Service
 	GuardSvc      *guard.Service
@@ -40,9 +35,7 @@ func NewEnterpriseHandler(
 	pool *pgxpool.Pool,
 	hub *WSHub,
 	subSvc *subscribers.Service,
-	promoSvc *promotions.Service,
 	appCfgSvc *appconfig.Service,
-	radarSvc *deviceradar.Service,
 	secSvc *security.Service,
 	biSvc *bi.Service,
 	guardSvc *guard.Service,
@@ -53,9 +46,7 @@ func NewEnterpriseHandler(
 		Pool:          pool,
 		Hub:           hub,
 		SubscriberSvc: subSvc,
-		PromoSvc:      promoSvc,
 		AppConfigSvc:  appCfgSvc,
-		RadarSvc:      radarSvc,
 		SecuritySvc:   secSvc,
 		BISvc:         biSvc,
 		GuardSvc:      guardSvc,
@@ -108,32 +99,6 @@ func (h *EnterpriseHandler) BulkSubscribersExecute(c *fiber.Ctx) error {
 	return c.JSON(res)
 }
 
-func (h *EnterpriseHandler) LockDevice(c *fiber.Ctx) error {
-	id, err := strconv.ParseInt(c.Params("id"), 10, 64)
-	if err != nil || id <= 0 {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid user id"})
-	}
-	var req struct {
-		Locked bool `json:"locked"`
-	}
-	_ = c.BodyParser(&req)
-	if err := h.SubscriberSvc.SetDeviceLock(c.Context(), id, req.Locked); err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
-	}
-	return c.JSON(fiber.Map{"status": "ok", "locked": req.Locked})
-}
-
-func (h *EnterpriseHandler) ResetDevice(c *fiber.Ctx) error {
-	id, err := strconv.ParseInt(c.Params("id"), 10, 64)
-	if err != nil || id <= 0 {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid user id"})
-	}
-	if err := h.SubscriberSvc.ResetDeviceFingerprint(c.Context(), id); err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
-	}
-	return c.JSON(fiber.Map{"status": "ok", "message": "تم تصفير بصمة الجهاز بنجاح"})
-}
-
 func (h *EnterpriseHandler) KickSessions(c *fiber.Ctx) error {
 	id, err := strconv.ParseInt(c.Params("id"), 10, 64)
 	if err != nil || id <= 0 {
@@ -170,49 +135,6 @@ func (h *EnterpriseHandler) ImpersonateSubscriber(c *fiber.Ctx) error {
 		"expires_in": 3600,
 		"message":    "تم إنشاء جلسة محاكاة الحساب بنجاح (للقراءة فقط - كافة طلبات الكتابة محظورة)",
 	})
-}
-
-// -----------------------------------------------------------------------------
-// Phase 4: Promotions & Coupons
-// -----------------------------------------------------------------------------
-
-func (h *EnterpriseHandler) CreateCoupon(c *fiber.Ctx) error {
-	var cp promotions.Coupon
-	if err := c.BodyParser(&cp); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid JSON"})
-	}
-	created, err := h.PromoSvc.CreateCoupon(c.Context(), cp)
-	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
-	}
-	return c.JSON(created)
-}
-
-func (h *EnterpriseHandler) ListCoupons(c *fiber.Ctx) error {
-	list, err := h.PromoSvc.ListCoupons(c.Context())
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
-	}
-	return c.JSON(list)
-}
-
-func (h *EnterpriseHandler) ValidateCoupon(c *fiber.Ctx) error {
-	code := strings.TrimSpace(c.Query("code"))
-	amount, _ := strconv.ParseInt(c.Query("amount"), 10, 64)
-	uid := middleware.UserID(c)
-
-	tx, err := h.Pool.Begin(c.Context())
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "database error"})
-	}
-	defer tx.Rollback(c.Context())
-
-	res, err := h.PromoSvc.ValidateAndApplyCoupon(c.Context(), tx, code, uid, amount)
-	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
-	}
-	// Note: read-only check does not commit the tx
-	return c.JSON(res)
 }
 
 // -----------------------------------------------------------------------------
@@ -273,50 +195,6 @@ func (h *EnterpriseHandler) SaveBanner(c *fiber.Ctx) error {
 func (h *EnterpriseHandler) DeleteBanner(c *fiber.Ctx) error {
 	id, _ := strconv.ParseInt(c.Params("id"), 10, 64)
 	if err := h.AppConfigSvc.DeleteBanner(c.Context(), id); err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
-	}
-	return c.JSON(fiber.Map{"status": "ok"})
-}
-
-// -----------------------------------------------------------------------------
-// Phase 6: Live Device Radar & Remote Commands
-// -----------------------------------------------------------------------------
-
-func (h *EnterpriseHandler) GetOnlineDevices(c *fiber.Ctx) error {
-	devices := h.RadarSvc.GetOnlineDevices()
-	return c.JSON(devices)
-}
-
-func (h *EnterpriseHandler) QueueRemoteCommand(c *fiber.Ctx) error {
-	var req struct {
-		UserID  int64          `json:"user_id"`
-		Command string         `json:"command"`
-		Payload map[string]any `json:"payload"`
-		Timeout int            `json:"timeout_seconds"`
-	}
-	if err := c.BodyParser(&req); err != nil || req.UserID <= 0 || req.Command == "" {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid command parameters"})
-	}
-
-	timeout := time.Duration(req.Timeout) * time.Second
-	cmd, err := h.RadarSvc.QueueCommand(c.Context(), req.UserID, req.Command, req.Payload, timeout)
-	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
-	}
-	return c.JSON(cmd)
-}
-
-func (h *EnterpriseHandler) AckRemoteCommand(c *fiber.Ctx) error {
-	var req struct {
-		CommandID string         `json:"command_id"`
-		Status    string         `json:"status"`
-		Result    map[string]any `json:"result"`
-	}
-	if err := c.BodyParser(&req); err != nil || req.CommandID == "" {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid ack body"})
-	}
-	uid := middleware.UserID(c)
-	if err := h.RadarSvc.AckCommand(c.Context(), req.CommandID, uid, req.Status, req.Result); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 	}
 	return c.JSON(fiber.Map{"status": "ok"})

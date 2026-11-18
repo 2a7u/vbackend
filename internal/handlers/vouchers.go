@@ -12,7 +12,6 @@ import (
 
 	"venus_backend/internal/fraud"
 	"venus_backend/internal/guard"
-	"venus_backend/internal/hierarchy"
 	"venus_backend/internal/idem"
 	"venus_backend/internal/ledger"
 	"venus_backend/internal/middleware"
@@ -22,15 +21,14 @@ import (
 
 // VouchersHandler owns the encrypted digital voucher vault endpoints.
 type VouchersHandler struct {
-	Pool         *pgxpool.Pool
-	Hub          *WSHub
-	LedgerSvc    *ledger.Service
-	FraudEngine  *fraud.Engine
-	VaultMgr     *vault.VaultManager
-	PricingSvc   *pricing.Service
-	HierarchySvc *hierarchy.Service
-	GuardSvc     *guard.Service
-	IdemSvc      *idem.Service
+	Pool        *pgxpool.Pool
+	Hub         *WSHub
+	LedgerSvc   *ledger.Service
+	FraudEngine *fraud.Engine
+	VaultMgr    *vault.VaultManager
+	PricingSvc  *pricing.Service
+	GuardSvc    *guard.Service
+	IdemSvc     *idem.Service
 }
 
 type rawPinItem struct {
@@ -501,16 +499,7 @@ func (h *VouchersHandler) DispenseVoucher(c *fiber.Ctx) error {
 		)
 	}
 
-	// 3. Process agent hierarchy commission in the SAME transaction (capped to platform margin)
-	if h.HierarchySvc != nil && uid > 0 && totalPrice > 0 {
-		var totalCost int64
-		for _, cp := range claimed {
-			totalCost += int64(cp.Cost)
-		}
-		_, _ = h.HierarchySvc.ProcessSaleCommission(c.Context(), tx, uid, req.VoucherID, totalPrice, totalCost, fmt.Sprintf("%d", ids[0]))
-	}
-
-	// 4. Update rows to sold, saving actual sell_price and computed net_profit
+	// 3. Update rows to sold, saving actual sell_price and computed net_profit
 	batch := &pgx.Batch{}
 	for _, cp := range claimed {
 		unitCost := int64(cp.Cost)

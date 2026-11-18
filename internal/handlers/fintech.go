@@ -5,7 +5,6 @@ import (
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
-	"math"
 	"strconv"
 	"time"
 
@@ -14,7 +13,6 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"venus_backend/internal/fraud"
-	"venus_backend/internal/hierarchy"
 	"venus_backend/internal/ledger"
 	"venus_backend/internal/middleware"
 	"venus_backend/internal/pricing"
@@ -31,7 +29,6 @@ type FintechHandler struct {
 	ReconcileSvc *reconcile.Service
 	VaultMgr     *vault.VaultManager
 	PricingSvc   *pricing.Service
-	HierarchySvc *hierarchy.Service
 	RadarSvc     *radar.Service
 }
 
@@ -43,7 +40,6 @@ func NewFintechHandler(
 	reconcileSvc *reconcile.Service,
 	vaultMgr *vault.VaultManager,
 	pricingSvc *pricing.Service,
-	hierarchySvc *hierarchy.Service,
 	radarSvc *radar.Service,
 ) *FintechHandler {
 	return &FintechHandler{
@@ -54,7 +50,6 @@ func NewFintechHandler(
 		ReconcileSvc: reconcileSvc,
 		VaultMgr:     vaultMgr,
 		PricingSvc:   pricingSvc,
-		HierarchySvc: hierarchySvc,
 		RadarSvc:     radarSvc,
 	}
 }
@@ -919,283 +914,6 @@ func (h *FintechHandler) ResolveSubscriberPrice(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 	}
 	return c.JSON(res)
-}
-
-// SetParentAgent assigns a parent agent with DAG cycle prevention.
-// POST /api/admin/hierarchy/users/:id/parent
-func (h *FintechHandler) SetParentAgent(c *fiber.Ctx) error {
-	childID, err := strconv.ParseInt(c.Params("id"), 10, 64)
-	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid child id"})
-	}
-
-	var req struct {
-		ParentAgentID *int64 `json:"parent_agent_id"`
-	}
-	if err := c.BodyParser(&req); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid request"})
-	}
-
-	if req.ParentAgentID != nil && *req.ParentAgentID > 0 {
-		if err := h.HierarchySvc.CheckCyclePreventsInfiniteLoop(c.Context(), childID, *req.ParentAgentID); err != nil {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
-		}
-	}
-
-	_, err = h.Pool.Exec(c.Context(),
-		`UPDATE users SET parent_agent_id = $1 WHERE id = $2`,
-		req.ParentAgentID, childID,
-	)
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
-	}
-
-	h.audit(c, "SET_PARENT_AGENT", "users", strconv.FormatInt(childID, 10), map[string]any{
-		"child_id":        childID,
-		"parent_agent_id": req.ParentAgentID,
-	})
-
-	return c.JSON(fiber.Map{"success": true})
-}
-
-// SetAgentCommission configures an agent's commission rate.
-// POST /api/admin/hierarchy/agents/:id/commissions
-func (h *FintechHandler) SetAgentCommission(c *fiber.Ctx) error {
-	agentID, err := strconv.ParseInt(c.Params("id"), 10, 64)
-	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid agent id"})
-	}
-
-	var req struct {
-		ProductID             string   `json:"product_id"`
-		CommissionType        string   `json:"commission_type"`
-		CommissionBasisPoints int      `json:"commission_basis_points"`
-		FixedAmount           int64    `json:"fixed_amount"`
-		CapToMargin           *bool    `json:"cap_to_margin"`
-		CommissionValue       float64  `json:"commission_value"`
-	}
-	if err := c.BodyParser(&req); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid request body"})
-	}
-	if req.ProductID == "" {
-		req.ProductID = "*"
-	}
-	if req.CommissionType != "percentage" && req.CommissionType != "fixed" {
-		req.CommissionType = "percentage"
-	}
-
-	capToMargin := true
-	if req.CapToMargin != nil {
-		capToMargin = *req.CapToMargin
-	}
-
-	basisPoints := req.CommissionBasisPoints
-	fixedAmt := req.FixedAmount
-	cVal := req.CommissionValue
-
-	if req.CommissionType == "percentage" {
-		if basisPoints <= 0 && cVal > 0 {
-			basisPoints = int(math.Round(cVal * 100))
-		}
-		if cVal <= 0 && basisPoints > 0 {
-			cVal = float64(basisPoints) / 100.0
-		}
-	} else {
-		if fixedAmt <= 0 && cVal > 0 {
-			fixedAmt = int64(math.Round(cVal))
-		}
-		if cVal <= 0 && fixedAmt > 0 {
-			cVal = float64(fixedAmt)
-		}
-	}
-
-	_, err = h.Pool.Exec(c.Context(),
-		`INSERT INTO agent_commissions (agent_id, product_id, commission_type, commission_value, commission_basis_points, fixed_amount, cap_to_margin)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7)
-		 ON CONFLICT (agent_id, product_id)
-		 DO UPDATE SET commission_type = EXCLUDED.commission_type,
-		               commission_value = EXCLUDED.commission_value,
-		               commission_basis_points = EXCLUDED.commission_basis_points,
-		               fixed_amount = EXCLUDED.fixed_amount,
-		               cap_to_margin = EXCLUDED.cap_to_margin`,
-		agentID, req.ProductID, req.CommissionType, cVal, basisPoints, fixedAmt, capToMargin,
-	)
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
-	}
-
-	h.audit(c, "SET_AGENT_COMMISSION", "agent_commissions", fmt.Sprintf("%d:%s", agentID, req.ProductID), map[string]any{
-		"agent_id":                agentID,
-		"product_id":              req.ProductID,
-		"commission_type":         req.CommissionType,
-		"commission_basis_points": basisPoints,
-		"fixed_amount":            fixedAmt,
-		"cap_to_margin":           capToMargin,
-		"commission_value":        cVal,
-	})
-
-	return c.JSON(fiber.Map{"success": true})
-}
-
-// ListAgentCommissions returns active commission rules.
-// GET /api/admin/hierarchy/commissions
-func (h *FintechHandler) ListAgentCommissions(c *fiber.Ctx) error {
-	rows, err := h.Pool.Query(c.Context(),
-		`SELECT ac.id, ac.agent_id, u.email, COALESCE(u.store_name, u.full_name, ''),
-		        ac.product_id, ac.commission_type, ac.commission_basis_points, ac.fixed_amount, ac.cap_to_margin, ac.commission_value, ac.created_at
-		 FROM agent_commissions ac
-		 JOIN users u ON u.id = ac.agent_id
-		 ORDER BY ac.id DESC`,
-	)
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
-	}
-	defer rows.Close()
-
-	var list []fiber.Map
-	for rows.Next() {
-		var id, aid int64
-		var email, name, pid, cType string
-		var basisPts int
-		var fixedAmt int64
-		var capMargin bool
-		var cVal float64
-		var cAt time.Time
-		if err := rows.Scan(&id, &aid, &email, &name, &pid, &cType, &basisPts, &fixedAmt, &capMargin, &cVal, &cAt); err == nil {
-			list = append(list, fiber.Map{
-				"id":                      id,
-				"agent_id":                aid,
-				"agent_email":             email,
-				"agent_name":              name,
-				"product_id":              pid,
-				"commission_type":         cType,
-				"commission_basis_points": basisPts,
-				"fixed_amount":            fixedAmt,
-				"cap_to_margin":           capMargin,
-				"commission_value":        cVal,
-				"created_at":              cAt,
-			})
-		}
-	}
-	return c.JSON(list)
-}
-
-// GetAgentCommissionReport generates a comprehensive commission statement and activity report for an agent.
-// GET /api/admin/hierarchy/agents/:id/report
-func (h *FintechHandler) GetAgentCommissionReport(c *fiber.Ctx) error {
-	agentID, err := strconv.ParseInt(c.Params("id"), 10, 64)
-	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid agent id"})
-	}
-
-	// 1. Agent profile
-	var (
-		email, fullName, storeName string
-		balance                    int64
-	)
-	err = h.Pool.QueryRow(c.Context(),
-		`SELECT email, COALESCE(full_name, ''), COALESCE(store_name, ''), wallet_balance
-		 FROM users WHERE id = $1`, agentID,
-	).Scan(&email, &fullName, &storeName, &balance)
-	if err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "agent not found"})
-	}
-
-	// 2. Child Points
-	childRows, err := h.Pool.Query(c.Context(),
-		`SELECT id, email, COALESCE(store_name, full_name, ''), wallet_balance, created_at
-		 FROM users WHERE parent_agent_id = $1 ORDER BY id DESC`, agentID,
-	)
-	var childPoints []fiber.Map
-	if err == nil {
-		defer childRows.Close()
-		for childRows.Next() {
-			var (
-				cid           int64
-				cEmail, cName string
-				cBal          int64
-				cCreated      time.Time
-			)
-			if err := childRows.Scan(&cid, &cEmail, &cName, &cBal, &cCreated); err == nil {
-				childPoints = append(childPoints, fiber.Map{
-					"id":             cid,
-					"email":          cEmail,
-					"name":           cName,
-					"wallet_balance": cBal,
-					"created_at":     cCreated,
-				})
-			}
-		}
-	}
-	if childPoints == nil {
-		childPoints = []fiber.Map{}
-	}
-
-	// 3. Totals
-	var totalEarned, totalReversed int64
-	var countEarned, countReversed int64
-	_ = h.Pool.QueryRow(c.Context(),
-		`SELECT COALESCE(SUM(credit), 0), COUNT(*)
-		 FROM ledger_entries
-		 WHERE account_id = $1 AND ref_type = 'agent_commission'`, agentID,
-	).Scan(&totalEarned, &countEarned)
-
-	_ = h.Pool.QueryRow(c.Context(),
-		`SELECT COALESCE(SUM(debit), 0), COUNT(*)
-		 FROM ledger_entries
-		 WHERE account_id = $1 AND ref_type = 'agent_commission_reversal'`, agentID,
-	).Scan(&totalReversed, &countReversed)
-
-	// 4. Recent commission entries
-	entryRows, err := h.Pool.Query(c.Context(),
-		`SELECT tx_id, debit, credit, balance_after, ref_type, ref_id, created_at
-		 FROM ledger_entries
-		 WHERE account_id = $1 AND ref_type IN ('agent_commission', 'agent_commission_reversal')
-		 ORDER BY id DESC LIMIT 50`, agentID,
-	)
-	var entries []fiber.Map
-	if err == nil {
-		defer entryRows.Close()
-		for entryRows.Next() {
-			var (
-				txID, refType, refID string
-				debit, credit, bal   int64
-				createdAt            time.Time
-			)
-			if err := entryRows.Scan(&txID, &debit, &credit, &bal, &refType, &refID, &createdAt); err == nil {
-				entries = append(entries, fiber.Map{
-					"tx_id":         txID,
-					"debit":         debit,
-					"credit":        credit,
-					"balance_after": bal,
-					"ref_type":      refType,
-					"ref_id":        refID,
-					"created_at":    createdAt,
-				})
-			}
-		}
-	}
-	if entries == nil {
-		entries = []fiber.Map{}
-	}
-
-	return c.JSON(fiber.Map{
-		"agent": fiber.Map{
-			"id":             agentID,
-			"email":          email,
-			"full_name":      fullName,
-			"store_name":     storeName,
-			"wallet_balance": balance,
-		},
-		"total_commission_earned":   totalEarned,
-		"total_commission_reversed": totalReversed,
-		"net_commission":            totalEarned - totalReversed,
-		"commission_sales_count":    countEarned,
-		"reversals_count":           countReversed,
-		"child_points_count":        len(childPoints),
-		"child_points":              childPoints,
-		"recent_entries":            entries,
-	})
 }
 
 // GetInventoryRadar returns real-time inventory levels, burn rates, and low stock alarms.

@@ -132,12 +132,32 @@
       checkRadarAlerts();
     }
 
+    function toggleLoginPassword() {
+      const input = document.getElementById('login-password');
+      const eye = document.getElementById('login-password-eye');
+      if (!input || !eye) return;
+      if (input.type === 'password') {
+        input.type = 'text';
+        eye.className = 'fa-regular fa-eye-slash text-sm text-brand';
+      } else {
+        input.type = 'password';
+        eye.className = 'fa-regular fa-eye text-sm';
+      }
+    }
+
     async function handleLogin(e) {
       e.preventDefault();
       const errBox = document.getElementById('login-error');
+      const btn = document.getElementById('btn-login');
+      const btnText = document.getElementById('btn-login-text');
+      const btnIcon = document.getElementById('btn-login-icon');
       errBox.classList.add('hidden');
       const email = document.getElementById('login-email').value.trim();
       const password = document.getElementById('login-password').value;
+
+      if (btn) btn.disabled = true;
+      if (btnText) btnText.innerText = 'جاري تسجيل الدخول...';
+      if (btnIcon) btnIcon.className = 'fa-solid fa-spinner fa-spin text-xs';
 
       try {
         const res = await fetch('/api/auth/login', {
@@ -148,7 +168,7 @@
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'فشل تسجيل الدخول');
         if (data.user && data.user.role !== 'admin' && data.user.role !== 'platform_admin' && data.user.role !== 'superadmin') {
-          throw new Error('هذا الحساب غير مصرح له بالدخول للوحة الإدارة');
+          throw new Error('هذا الحساب غير مصرح له بالدخول إلى لوحة التحكم');
         }
 
         authToken = data.token;
@@ -159,6 +179,10 @@
       } catch (err) {
         errBox.innerText = err.message;
         errBox.classList.remove('hidden');
+      } finally {
+        if (btn) btn.disabled = false;
+        if (btnText) btnText.innerText = 'تسجيل الدخول';
+        if (btnIcon) btnIcon.className = 'fa-solid fa-arrow-left text-xs';
       }
     }
 

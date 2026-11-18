@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>VENUS POS — لوحة الإدارة السحابية والمنظومة المؤسسية</title>
+  <title>فينوس — لوحة التحكم</title>
   <link rel="icon" type="image/png" href="/assets/appicon.png">
   
   <!-- Fonts -->
@@ -54,38 +54,59 @@
 </head>
 <body>
   <!-- LOGIN VIEW -->
-  <div id="view-login" class="min-h-screen bg-slate-50 flex items-center justify-center p-4">
-    <div class="w-full max-w-md bg-white rounded-3xl shadow-xl border border-slate-100 p-8 space-y-6">
-      <div class="text-center space-y-2">
-        <div class="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-brand-light text-brand text-2xl font-black mb-2 shadow-sm overflow-hidden">
-          <img src="/assets/appicon.png" class="w-full h-full object-contain" alt="VENUS POS">
+  <div id="view-login" class="relative min-h-screen overflow-hidden bg-slate-50 flex items-center justify-center p-4 sm:p-6">
+    <!-- Subtle Modern Ambient Background -->
+    <div class="pointer-events-none fixed inset-0 overflow-hidden">
+      <div class="absolute -top-32 -right-32 w-96 h-96 rounded-full bg-brand/10 blur-3xl"></div>
+      <div class="absolute -bottom-32 -left-32 w-96 h-96 rounded-full bg-sky-400/10 blur-3xl"></div>
+    </div>
+
+    <div class="relative w-full max-w-[420px] bg-white/95 backdrop-blur-xl rounded-[28px] shadow-[0_24px_60px_-15px_rgba(0,88,188,0.12),0_4px_20px_-4px_rgba(15,23,42,0.05)] border border-white ring-1 ring-slate-200/70 p-8 sm:p-10 space-y-7">
+      <!-- Brand Header -->
+      <div class="text-center space-y-3">
+        <div class="inline-flex items-center justify-center w-20 h-20 rounded-[22px] bg-gradient-to-b from-white to-slate-50 p-2.5 shadow-lg shadow-brand/10 ring-1 ring-slate-100 mx-auto">
+          <img src="/assets/appicon.png" class="w-full h-full object-contain rounded-xl" alt="فينوس">
         </div>
-        <h1 class="text-2xl font-black text-slate-900 tracking-tight">منصة VENUS POS</h1>
-        <p class="text-xs font-medium text-slate-500">لوحة التحكم السحابية الموحدة — الدخول الإداري الآمن</p>
+        <div class="space-y-1.5">
+          <h1 class="text-2xl sm:text-[26px] font-black text-slate-900 tracking-tight">فينوس</h1>
+          <div>
+            <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-brand/5 border border-brand/10 text-brand text-xs font-bold">
+              <span class="w-1.5 h-1.5 rounded-full bg-brand"></span>
+              <span>لوحة التحكم</span>
+            </span>
+          </div>
+        </div>
       </div>
 
-      <div id="login-error" class="hidden p-3 rounded-2xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold text-center"></div>
+      <div id="login-error" class="hidden p-3.5 rounded-2xl bg-rose-50 border border-rose-200/80 text-rose-700 text-xs font-bold text-center"></div>
 
       <form onsubmit="handleLogin(event)" class="space-y-4">
-        <div>
-          <label class="block text-xs font-bold text-slate-700 mb-1.5">البريد الإلكتروني / الحساب الإداري</label>
+        <div class="group">
+          <label for="login-email" class="block text-[13px] font-bold text-slate-700 mb-2">البريد الإلكتروني</label>
           <div class="relative">
-            <span class="absolute inset-y-0 right-0 flex items-center pr-3.5 text-slate-400"><i class="fa-solid fa-at text-xs"></i></span>
-            <input type="email" id="login-email" required placeholder="admin@uruk.pos" class="w-full pr-10 pl-4 py-2.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-bold text-slate-800 placeholder-slate-400 outline-none focus:border-brand focus:bg-white transition">
+            <span class="absolute inset-y-0 right-0 flex items-center pr-4 text-slate-400 group-focus-within:text-brand transition-colors pointer-events-none">
+              <i class="fa-regular fa-envelope text-sm"></i>
+            </span>
+            <input type="email" id="login-email" required autocomplete="email" placeholder="البريد الإلكتروني" class="w-full pr-11 pl-4 py-3.5 bg-slate-50/80 hover:bg-slate-50 focus:bg-white border border-slate-200/90 rounded-2xl text-sm font-semibold text-slate-800 placeholder:text-slate-400 placeholder:font-medium outline-none focus:border-brand focus:ring-4 focus:ring-brand/10 transition-all duration-200">
           </div>
         </div>
 
-        <div>
-          <label class="block text-xs font-bold text-slate-700 mb-1.5">كلمة المرور المشفرة</label>
+        <div class="group">
+          <label for="login-password" class="block text-[13px] font-bold text-slate-700 mb-2">كلمة المرور</label>
           <div class="relative">
-            <span class="absolute inset-y-0 right-0 flex items-center pr-3.5 text-slate-400"><i class="fa-solid fa-lock text-xs"></i></span>
-            <input type="password" id="login-password" required placeholder="••••••••" class="w-full pr-10 pl-4 py-2.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-bold text-slate-800 placeholder-slate-400 outline-none focus:border-brand focus:bg-white transition">
+            <span class="absolute inset-y-0 right-0 flex items-center pr-4 text-slate-400 group-focus-within:text-brand transition-colors pointer-events-none">
+              <i class="fa-solid fa-lock text-sm"></i>
+            </span>
+            <input type="password" id="login-password" required autocomplete="current-password" placeholder="••••••••" class="w-full pr-11 pl-11 py-3.5 bg-slate-50/80 hover:bg-slate-50 focus:bg-white border border-slate-200/90 rounded-2xl text-sm font-semibold text-slate-800 placeholder:text-slate-400 outline-none focus:border-brand focus:ring-4 focus:ring-brand/10 transition-all duration-200">
+            <button type="button" onclick="toggleLoginPassword()" aria-label="إظهار كلمة المرور" class="absolute inset-y-0 left-0 flex items-center pl-4 text-slate-400 hover:text-slate-600 transition-colors focus:outline-none">
+              <i id="login-password-eye" class="fa-regular fa-eye text-sm"></i>
+            </button>
           </div>
         </div>
 
-        <button type="submit" id="btn-login" class="w-full py-3 bg-brand hover:bg-brand-dark text-white rounded-2xl font-black text-xs shadow-lg shadow-brand/25 transition active:scale-[0.99] flex items-center justify-center gap-2">
-          <span>تسجيل الدخول للنظام</span>
-          <i class="fa-solid fa-arrow-left text-xs"></i>
+        <button type="submit" id="btn-login" class="w-full py-3.5 mt-2 bg-gradient-to-l from-brand to-[#006CE6] hover:from-[#004799] hover:to-brand text-white rounded-2xl font-extrabold text-sm shadow-lg shadow-brand/25 hover:shadow-xl hover:shadow-brand/30 hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.99] transition-all duration-200 flex items-center justify-center gap-2.5 disabled:opacity-70 disabled:cursor-not-allowed disabled:transform-none">
+          <span id="btn-login-text">تسجيل الدخول</span>
+          <i id="btn-login-icon" class="fa-solid fa-arrow-left text-xs"></i>
         </button>
       </form>
     </div>
@@ -98,11 +119,11 @@
         <!-- Logo & Brand Header -->
         <div class="flex items-center gap-3 px-2 py-1">
           <div class="w-10 h-10 rounded-2xl overflow-hidden bg-brand-light flex items-center justify-center shadow-md shadow-brand/20 flex-shrink-0">
-            <img src="/assets/appicon.png" class="w-full h-full object-contain" alt="VENUS">
+            <img src="/assets/appicon.png" class="w-full h-full object-contain" alt="فينوس">
           </div>
           <div>
-            <span class="font-black text-slate-900 text-sm tracking-wide block">VENUS POS</span>
-            <span class="text-[10px] text-slate-400 font-bold block">Enterprise Core v2.0</span>
+            <span class="font-black text-slate-900 text-sm tracking-wide block">فينوس</span>
+            <span class="text-[10px] text-slate-400 font-bold block">لوحة التحكم</span>
           </div>
         </div>
 
@@ -204,9 +225,9 @@
         <div class="flex items-center justify-between pb-2 border-b border-slate-100">
           <div class="flex items-center gap-2">
             <div class="w-9 h-9 rounded-xl overflow-hidden bg-brand-light flex items-center justify-center font-black flex-shrink-0">
-              <img src="/assets/appicon.png" class="w-full h-full object-contain" alt="VENUS">
+              <img src="/assets/appicon.png" class="w-full h-full object-contain" alt="فينوس">
             </div>
-            <span class="font-black text-slate-900 text-sm">VENUS POS</span>
+            <span class="font-black text-slate-900 text-sm">فينوس</span>
           </div>
           <button onclick="toggleMobileSidebar()" class="p-2 text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
         </div>
@@ -2603,12 +2624,32 @@
       checkRadarAlerts();
     }
 
+    function toggleLoginPassword() {
+      const input = document.getElementById('login-password');
+      const eye = document.getElementById('login-password-eye');
+      if (!input || !eye) return;
+      if (input.type === 'password') {
+        input.type = 'text';
+        eye.className = 'fa-regular fa-eye-slash text-sm text-brand';
+      } else {
+        input.type = 'password';
+        eye.className = 'fa-regular fa-eye text-sm';
+      }
+    }
+
     async function handleLogin(e) {
       e.preventDefault();
       const errBox = document.getElementById('login-error');
+      const btn = document.getElementById('btn-login');
+      const btnText = document.getElementById('btn-login-text');
+      const btnIcon = document.getElementById('btn-login-icon');
       errBox.classList.add('hidden');
       const email = document.getElementById('login-email').value.trim();
       const password = document.getElementById('login-password').value;
+
+      if (btn) btn.disabled = true;
+      if (btnText) btnText.innerText = 'جاري تسجيل الدخول...';
+      if (btnIcon) btnIcon.className = 'fa-solid fa-spinner fa-spin text-xs';
 
       try {
         const res = await fetch('/api/auth/login', {
@@ -2619,7 +2660,7 @@
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'فشل تسجيل الدخول');
         if (data.user && data.user.role !== 'admin' && data.user.role !== 'platform_admin' && data.user.role !== 'superadmin') {
-          throw new Error('هذا الحساب غير مصرح له بالدخول للوحة الإدارة');
+          throw new Error('هذا الحساب غير مصرح له بالدخول إلى لوحة التحكم');
         }
 
         authToken = data.token;
@@ -2630,6 +2671,10 @@
       } catch (err) {
         errBox.innerText = err.message;
         errBox.classList.remove('hidden');
+      } finally {
+        if (btn) btn.disabled = false;
+        if (btnText) btnText.innerText = 'تسجيل الدخول';
+        if (btnIcon) btnIcon.className = 'fa-solid fa-arrow-left text-xs';
       }
     }
 
