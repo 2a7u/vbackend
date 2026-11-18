@@ -387,6 +387,7 @@ func main() {
 	// Phase 8: BI Analytics, Backups, Streaming Export
 	admin.Get("/bi/dashboard", enterpriseH.GetBIDashboard)
 	admin.Get("/bi/backup", enterpriseH.DownloadSecureBackup)
+	admin.Get("/backup/export", enterpriseH.DownloadSecureBackup)
 	admin.Get("/export/subscribers", enterpriseH.ExportSubscribersCSV)
 
 	// Stage 1: Financial Security (Guard & Limits)

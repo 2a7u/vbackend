@@ -25,11 +25,11 @@ type Claims struct {
 
 // SignToken issues a signed JWT valid for the given duration.
 func SignToken(secret string, userID int64, email, role string, ttl time.Duration) (string, error) {
-	return SignTokenWithMerchant(secret, userID, "", email, role, ttl)
+	return SignTokenWithMerchant(secret, userID, email, role, "", ttl)
 }
 
 // SignTokenWithMerchant issues a signed JWT with strict tenant isolation merchant_id claim.
-func SignTokenWithMerchant(secret string, userID int64, merchantID string, email, role string, ttl time.Duration) (string, error) {
+func SignTokenWithMerchant(secret string, userID int64, email, role, merchantID string, ttl time.Duration) (string, error) {
 	now := time.Now()
 	claims := Claims{
 		UserID:     userID,
@@ -63,9 +63,31 @@ func SignImpersonationToken(secret string, targetUserID int64, email, role strin
 	return jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString([]byte(secret))
 }
 
-// JWT verifies the Bearer token and stores the claims in the request context.
-// Fallback: If Authorization header is missing, checks X-User-Id / X-User-Email
-// or defaults to UID 1 so local-first POS calls NEVER fail with 401 unauthenticated.
+// extractBearerOrQueryToken retrieves the JWT from:
+// 1. Authorization: Bearer <token> header
+// 2. Query parameter ?token=<token> (used by browser downloads / WebSocket)
+// 3. Cookie venus_admin_token (fallback for browser requests)
+func extractToken(c *fiber.Ctx) (token string, fromCookie bool) {
+	if authHeader := strings.TrimSpace(c.Get(fiber.HeaderAuthorization)); authHeader != "" {
+		parts := strings.SplitN(authHeader, " ", 2)
+		if len(parts) == 2 && strings.EqualFold(parts[0], "Bearer") {
+			if tok := strings.TrimSpace(parts[1]); tok != "" {
+				return tok, false
+			}
+		}
+	}
+	if qToken := strings.TrimSpace(c.Query("token")); qToken != "" {
+		return qToken, false
+	}
+	if cookieToken := strings.TrimSpace(c.Cookies("venus_admin_token")); cookieToken != "" {
+		return cookieToken, true
+	}
+	return "", false
+}
+
+// JWT verifies the Bearer/query/cookie token and stores the claims in the request context.
+// Fallback: If no token is supplied, checks X-User-Id / X-User-Email
+// so local-first POS calls and unit tests NEVER fail unexpectedly when explicitly supplied.
 func JWT(secret string) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		path := c.Path()
@@ -76,30 +98,25 @@ func JWT(secret string) fiber.Handler {
 			return c.Next()
 		}
 
-		authHeader := c.Get(fiber.HeaderAuthorization)
-		if authHeader != "" {
-			parts := strings.SplitN(authHeader, " ", 2)
-			if len(parts) == 2 && strings.EqualFold(parts[0], "Bearer") {
-				claims := &Claims{}
-				token, err := jwt.ParseWithClaims(parts[1], claims, func(t *jwt.Token) (interface{}, error) {
-					if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
-						return nil, fiber.NewError(fiber.StatusUnauthorized, "unexpected signing method")
+		tokenString, fromCookie := extractToken(c)
+		if tokenString != "" {
+			claims, err := ParseToken(secret, tokenString)
+			if err == nil && claims != nil {
+				if claims.Scope == "read_only" {
+					method := c.Method()
+					if method == "POST" || method == "PUT" || method == "PATCH" || method == "DELETE" {
+						return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+							"error": "جلسة محاكاة الحساب مخصصة للقراءة فقط - يمنع إجراء أي عمليات كتابة أو تعديل",
+							"code":  "READ_ONLY_IMPERSONATION",
+						})
 					}
-					return []byte(secret), nil
-				})
-				if err == nil && token.Valid {
-					if claims.Scope == "read_only" {
-						method := c.Method()
-						if method == "POST" || method == "PUT" || method == "PATCH" || method == "DELETE" {
-							return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
-								"error": "جلسة محاكاة الحساب مخصصة للقراءة فقط - يمنع إجراء أي عمليات كتابة أو تعديل",
-								"code":  "READ_ONLY_IMPERSONATION",
-							})
-						}
-					}
-					c.Locals("claims", claims)
-					return c.Next()
 				}
+				c.Locals("claims", claims)
+				return c.Next()
+			}
+			// Explicit header/query token failure should not silently fall back to X-User-Id headers.
+			if !fromCookie {
+				return fiber.NewError(fiber.StatusUnauthorized, "invalid or expired token")
 			}
 		}
 
@@ -185,16 +202,22 @@ func UserID(c *fiber.Ctx) int64 {
 	return 0
 }
 
-// AdminOnly rejects any authenticated user whose role is not "admin".
+// AdminOnly rejects any authenticated user whose role is not an admin role.
 func AdminOnly() fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		cl := ClaimsFrom(c)
 		if cl == nil {
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "unauthenticated"})
 		}
-		if cl.Role != "admin" {
+		role := strings.ToLower(strings.TrimSpace(cl.Role))
+		if role != "admin" && role != "superadmin" && role != "platform_admin" {
 			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "admin role required"})
 		}
 		return c.Next()
 	}
+}
+
+// RequireAdmin is an alias for AdminOnly.
+func RequireAdmin() fiber.Handler {
+	return AdminOnly()
 }
